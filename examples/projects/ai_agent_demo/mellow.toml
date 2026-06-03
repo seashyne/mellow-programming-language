@@ -1,0 +1,7 @@
+name = "ai-agent-demo"
+version = "0.1.0"
+description = "AI agent workflow demo"
+entry = "src/main.mellow"
+
+[dependencies]
+@mellow/std-ai = "^0.1.0"

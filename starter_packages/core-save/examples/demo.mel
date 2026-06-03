@@ -1,0 +1,4 @@
+import "pkg:core-save" as store
+
+store.save_slot("profile", {"score": 10})
+print(store.load_slot("profile"))

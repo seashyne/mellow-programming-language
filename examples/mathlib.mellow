@@ -1,0 +1,16 @@
+# mathlib.mellow — importable module example
+skill add(a, b):
+    return a + b
+
+skill mul(a, b):
+    return a * b
+
+skill pow2(x):
+    return x * x
+
+skill clamp(v, lo, hi):
+    check v < lo:
+        return lo
+    also v > hi:
+        return hi
+    return v

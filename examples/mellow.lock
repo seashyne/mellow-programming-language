@@ -1,0 +1,71 @@
+{
+  "lockfile_version": 1,
+  "registry": "https://mellow-public-registry.jirayut-wh.workers.dev",
+  "packages": {
+    "core-mmg": {
+      "version": "0.1.0",
+      "entry": "src/main.mellow",
+      "dependencies": {},
+      "sha256": null
+    },
+    "core-print": {
+      "version": "0.1.0",
+      "entry": "src/main.mel",
+      "dependencies": {},
+      "sha256": null
+    },
+    "core-strings": {
+      "version": "0.1.0",
+      "entry": "src/main.mel",
+      "dependencies": {
+        "string": "host"
+      },
+      "sha256": null
+    },
+    "core-math": {
+      "version": "0.1.0",
+      "entry": "src/main.mel",
+      "dependencies": {
+        "math": "host"
+      },
+      "sha256": null
+    },
+    "core-workflow": {
+      "version": "0.1.0",
+      "entry": "src/main.mel",
+      "dependencies": {
+        "time": "host",
+        "json": "host"
+      },
+      "sha256": null
+    },
+    "core-window": {
+      "version": "0.1.0",
+      "entry": "src/main.mel",
+      "dependencies": {},
+      "sha256": null
+    }
+  },
+  "root": {
+    "dependencies": {
+      "core-mmg": "0.1.0",
+      "core-print": "0.1.0",
+      "core-strings": "0.1.0",
+      "core-math": "0.1.0",
+      "core-workflow": "0.1.0",
+      "core-window": "0.1.0"
+    },
+    "imports": [
+      "@mellow/std-game",
+      "@mellow/std-http",
+      "@mellow/std-storage",
+      "@mellow/std-ai",
+      "core-mmg",
+      "core-print",
+      "core-strings",
+      "core-math",
+      "core-workflow",
+      "core-window"
+    ]
+  }
+}

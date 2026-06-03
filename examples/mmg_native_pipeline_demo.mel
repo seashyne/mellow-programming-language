@@ -1,0 +1,14 @@
+import "pkg:core-mmg" as mmg
+
+keep title = "MMG Native Pipeline"
+keep count = 1
+keep app = mmg.app(title: title, width: 960, height: 640, clear: "#0f1220")
+mmg.scene(app, "main")
+mmg.camera(app, x: 0, y: 0, zoom: 1.0)
+mmg.texture(app, "hero", source: "assets/hero.png")
+mmg.sprite(app, texture: "hero", x: 64, y: 96, w: 96, h: 96, fill: "#ffffff")
+mmg.rect(app, 220, 96, 180, 96, fill: "#7c3aed")
+mmg.on(app, "key", "Escape", "close")
+mmg.on(app, "key", "Space", "inc:count")
+mmg.frame(app, fps: 60)
+mmg.run(app)

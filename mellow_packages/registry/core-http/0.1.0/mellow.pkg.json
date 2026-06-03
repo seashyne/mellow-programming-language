@@ -1,0 +1,16 @@
+{
+  "name": "core-http",
+  "version": "0.1.0",
+  "entry": "src/main.mellow",
+  "description": "HTTP request wrappers for web/API integration.",
+  "authors": [],
+  "license": "MIT",
+  "dependencies": {
+    "http": "host"
+  },
+  "keywords": [
+    "core",
+    "http",
+    "api"
+  ]
+}

@@ -1,0 +1,8 @@
+name = "@mellow/std-json"
+version = "0.1.0"
+description = "JSON wrappers"
+entry = "src/main.mellow"
+visibility = "public"
+namespace = "@mellow"
+
+[dependencies]

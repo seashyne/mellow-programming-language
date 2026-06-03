@@ -1,0 +1,108 @@
+# ai_v148.mellow — v1.4.8 AI Engine Examples
+
+# ── 1. AI Chat ────────────────────────────────────────────────────────────────
+show "=== AI Chat ==="
+
+keep r1 = call ai.chat("hello")
+show r1
+
+keep r2 = call ai.chat("what is your name")
+show r2
+
+keep r3 = call ai.chat("help me understand mellow")
+show r3
+
+# ── 2. Neural Network: Binary Classification ─────────────────────────────────
+show "=== Binary Classifier ==="
+
+call ai.model_create("binary", [
+    {in: 2, out: 4, activation: "relu"},
+    {in: 4, out: 2, activation: "softmax"}
+], "classify")
+
+keep train_result = call ai.train("binary",
+    [[1,0],[0,1],[1,1],[0,0],[1,0],[0,1]],
+    [0,    1,    0,    1,    0,    1   ],
+    30, 0.05)
+show train_result
+
+keep p0 = call ai.predict("binary", [1,0])
+keep p1 = call ai.predict("binary", [0,1])
+show f"[1,0] → class {p0}"
+show f"[0,1] → class {p1}"
+
+# ── 3. XOR Problem ───────────────────────────────────────────────────────────
+show "=== XOR Network ==="
+
+call ai.model_create("xor", [
+    {in: 2, out: 8, activation: "relu"},
+    {in: 8, out: 4, activation: "relu"},
+    {in: 4, out: 2, activation: "softmax"}
+], "classify")
+
+call ai.train("xor",
+    [[0,0],[0,1],[1,0],[1,1]],
+    [0,   1,   1,   0  ],
+    100, 0.02)
+
+show "XOR predictions:"
+keep xor00 = call ai.predict("xor", [0,0])
+keep xor01 = call ai.predict("xor", [0,1])
+keep xor10 = call ai.predict("xor", [1,0])
+keep xor11 = call ai.predict("xor", [1,1])
+show xor00
+show xor01
+show xor10
+show xor11
+
+# ── 4. Regression ────────────────────────────────────────────────────────────
+show "=== Linear Regression ==="
+
+call ai.model_create("linreg", [
+    {in: 1, out: 4, activation: "relu"},
+    {in: 4, out: 1, activation: "linear"}
+], "regress")
+
+call ai.train("linreg",
+    [[0],[1],[2],[3],[4],[5]],
+    [0.0, 2.0, 4.0, 6.0, 8.0, 10.0],
+    50, 0.01)
+
+keep pred = call ai.predict("linreg", [3])
+show f"f(3) ≈ {pred}"
+
+# ── 5. Text Embedding ────────────────────────────────────────────────────────
+show "=== Text Embeddings ==="
+
+keep emb1 = call ai.embed("MellowLang programming language")
+keep emb2 = call ai.embed("Python programming language")
+keep emb3 = call ai.embed("machine learning")
+
+keep n = get list.len(emb1)
+show f"Embedding dimension: {n}"
+
+# ── 6. Model Management ──────────────────────────────────────────────────────
+show "=== Model Management ==="
+
+keep names = call ai.models_list()
+show f"Active models: {names}"
+
+keep info = call ai.model_info("xor")
+show info
+
+keep hist = call ai.loss_history("xor")
+show "Loss history:"
+show hist
+
+# ── 7. Save & Load ───────────────────────────────────────────────────────────
+show "=== Save & Load ==="
+
+keep save_result = call ai.model_save("xor", "xor_v148")
+show save_result
+
+keep load_result = call ai.model_load("xor_v148")
+show load_result
+
+# After loading, model is available under same name
+keep restored_pred = call ai.predict("xor", [0,1])
+show f"Restored model prediction: {restored_pred}"

@@ -1,0 +1,11 @@
+function encode(value) {
+    return json.encode(value)
+}
+
+function decode(text) {
+    return json.decode(text)
+}
+
+function clone(value) {
+    return json.decode(json.encode(value))
+}

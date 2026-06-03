@@ -1,0 +1,355 @@
+{
+  "filename": "examples/hello.mellow",
+  "pipeline": "ast-ir-opt-bytecode",
+  "bytecode": [
+    [
+      1,
+      "Hello from MellowLang!"
+    ],
+    [
+      9
+    ],
+    [
+      1,
+      0
+    ],
+    [
+      40,
+      "score"
+    ],
+    [
+      1,
+      1
+    ],
+    [
+      41,
+      "score"
+    ],
+    [
+      1,
+      "score = "
+    ],
+    [
+      1,
+      1
+    ],
+    [
+      4
+    ],
+    [
+      9
+    ],
+    [
+      0
+    ]
+  ],
+  "func_table": {},
+  "event_table": {},
+  "cfg": {
+    "entry_label": "block_0",
+    "blocks": [
+      {
+        "id": 0,
+        "label": "block_0",
+        "start": 0,
+        "end": 12,
+        "instructions": [
+          {
+            "op": "PUSH",
+            "args": [
+              "Hello from MellowLang!"
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "PRINT",
+            "args": [
+              1
+            ],
+            "line": 3,
+            "col": 1
+          },
+          {
+            "op": "PUSH",
+            "args": [
+              0
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "STORE_KEEP",
+            "args": [
+              "score"
+            ],
+            "line": 4,
+            "col": 1
+          },
+          {
+            "op": "LOAD",
+            "args": [
+              "score"
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "PUSH",
+            "args": [
+              1
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "ADD",
+            "args": [],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "STORE_AUTO",
+            "args": [
+              "score"
+            ],
+            "line": 5,
+            "col": 1
+          },
+          {
+            "op": "PUSH",
+            "args": [
+              "score = "
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "LOAD",
+            "args": [
+              "score"
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "ADD",
+            "args": [],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "PRINT",
+            "args": [
+              1
+            ],
+            "line": 6,
+            "col": 1
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "line": 0,
+            "col": 1
+          }
+        ],
+        "predecessors": [],
+        "successors": []
+      }
+    ]
+  },
+  "optimized_cfg": {
+    "entry_label": "block_0",
+    "blocks": [
+      {
+        "id": 0,
+        "label": "block_0",
+        "start": 0,
+        "end": 10,
+        "instructions": [
+          {
+            "op": "PUSH",
+            "args": [
+              "Hello from MellowLang!"
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "PRINT",
+            "args": [
+              1
+            ],
+            "line": 3,
+            "col": 1
+          },
+          {
+            "op": "PUSH",
+            "args": [
+              0
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "STORE_KEEP",
+            "args": [
+              "score"
+            ],
+            "line": 4,
+            "col": 1
+          },
+          {
+            "op": "PUSH",
+            "args": [
+              1
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "STORE_AUTO",
+            "args": [
+              "score"
+            ],
+            "line": 5,
+            "col": 1
+          },
+          {
+            "op": "PUSH",
+            "args": [
+              "score = "
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "PUSH",
+            "args": [
+              1
+            ],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "ADD",
+            "args": [],
+            "line": 0,
+            "col": 1
+          },
+          {
+            "op": "PRINT",
+            "args": [
+              1
+            ],
+            "line": 6,
+            "col": 1
+          },
+          {
+            "op": "HALT",
+            "args": [],
+            "line": 0,
+            "col": 1
+          }
+        ],
+        "predecessors": [],
+        "successors": []
+      }
+    ]
+  },
+  "optimization": {
+    "passes": [
+      "constant-propagation"
+    ],
+    "instructions_before": 13,
+    "instructions_after": 11,
+    "labels_removed": 0,
+    "constants_folded": 0,
+    "constants_propagated": 3,
+    "jumps_simplified": 0,
+    "branches_pruned": 0,
+    "dead_instructions_removed": 0,
+    "lvn_rewrites": 0,
+    "gvn_rewrites": 0,
+    "loop_rewrites": 0,
+    "blocks_before": 1,
+    "blocks_after": 1,
+    "ssa_versions": 2
+  },
+  "dominator_tree": {
+    "entry_label": "block_0",
+    "dominators": {
+      "block_0": [
+        "block_0"
+      ]
+    },
+    "immediate_dominators": {
+      "block_0": null
+    },
+    "tree_children": {
+      "block_0": []
+    },
+    "back_edges": [],
+    "natural_loops": {}
+  },
+  "optimized_dominator_tree": {
+    "entry_label": "block_0",
+    "dominators": {
+      "block_0": [
+        "block_0"
+      ]
+    },
+    "immediate_dominators": {
+      "block_0": null
+    },
+    "tree_children": {
+      "block_0": []
+    },
+    "back_edges": [],
+    "natural_loops": {}
+  },
+  "def_use": {
+    "defs_by_var": {
+      "score": [
+        3,
+        7
+      ]
+    },
+    "uses_by_var": {
+      "score": [
+        4,
+        9
+      ]
+    },
+    "ssa_names_by_var": {
+      "score": [
+        "score#1",
+        "score#2"
+      ]
+    },
+    "def_to_uses": {
+      "score#1": [
+        4
+      ],
+      "score#2": [
+        9
+      ]
+    }
+  },
+  "optimized_def_use": {
+    "defs_by_var": {
+      "score": [
+        3,
+        5
+      ]
+    },
+    "uses_by_var": {},
+    "ssa_names_by_var": {
+      "score": [
+        "score#1",
+        "score#2"
+      ]
+    },
+    "def_to_uses": {}
+  }
+}

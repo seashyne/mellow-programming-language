@@ -1,0 +1,27 @@
+function lower(text) {
+    return string.lower(text)
+}
+
+function upper(text) {
+    return string.upper(text)
+}
+
+function trim(text) {
+    return string.trim(text)
+}
+
+function contains(text, needle) {
+    return string.contains(text, needle)
+}
+
+function starts_with(text, prefix) {
+    return string.starts_with(text, prefix)
+}
+
+function ends_with(text, suffix) {
+    return string.ends_with(text, suffix)
+}
+
+function surround(text, left, right) {
+    return left + text + right
+}

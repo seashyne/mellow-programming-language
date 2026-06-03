@@ -1,0 +1,11 @@
+import "pkg:core-mmg" as mmg
+
+keep count = 2
+keep app = mmg.app(title: "MMG Build Parity Demo", width: 960, height: 640, clear: "#101418")
+mmg.scene(app, "main")
+mmg.texture(app, "hero", source: "assets/hero.png")
+mmg.sprite(app, id: "hero-1", texture: "hero", x: 120, y: 120, w: 96, h: 96, fill: "#ffffff")
+mmg.sprite(app, id: "hero-2", texture: "hero", x: 240, y: 120, w: 96, h: 96, fill: "#ffd166")
+mmg.on(app, "key", "Space", "inc:count")
+mmg.on(app, "key", "Escape", "close")
+mmg.frame(app, fps: 60)

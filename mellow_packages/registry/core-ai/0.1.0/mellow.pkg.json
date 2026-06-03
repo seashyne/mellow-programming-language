@@ -1,0 +1,19 @@
+{
+  "name": "core-ai",
+  "version": "0.1.0",
+  "entry": "src/main.mel",
+  "description": "Prompt and retrieval helpers on top of the built-in AI runtime.",
+  "authors": [],
+  "license": "MIT",
+  "dependencies": {
+    "ai": "host"
+  },
+  "keywords": [
+    "ai",
+    "runtime",
+    "rag",
+    "starter"
+  ],
+  "visibility": "public",
+  "namespace": ""
+}

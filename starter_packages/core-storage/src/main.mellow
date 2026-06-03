@@ -1,0 +1,7 @@
+function save_text(key, value) {
+    storage.write(key, value)
+}
+
+function load_text(key) {
+    return storage.read(key)
+}

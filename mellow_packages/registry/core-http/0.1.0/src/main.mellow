@@ -1,0 +1,7 @@
+function get(url) {
+    return http.get(url)
+}
+
+function post(url, body) {
+    return http.post(url, body)
+}

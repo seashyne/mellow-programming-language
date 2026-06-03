@@ -1,0 +1,12 @@
+import "pkg:core-mmg" as mmg
+
+keep count = 0
+keep app = mmg.app(title: "MMG Input Demo", width: 960, height: 640, clear: "#111827")
+mmg.scene(app, "main")
+mmg.texture(app, "hero", source: "assets/hero.png")
+mmg.sprite(app, texture: "hero", id: "hero", x: 120, y: 120, w: 96, h: 96, fill: "#22c55e")
+mmg.text(app, 24, 24, "Press Escape to close", size: 20)
+mmg.on(app, "key", "Escape", "close")
+mmg.on(app, "click", "left", "inc:count")
+mmg.frame(app, fps: 60)
+mmg.run(app)

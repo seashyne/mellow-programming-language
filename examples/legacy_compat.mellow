@@ -1,0 +1,8 @@
+// legacy_compat.mellow — legacy compat (still supported in v1.x)
+keep x = 1
+show("x =", x)
+
+skill mul(a, b):
+    return a * b
+
+show("2*4 =", mul(2, 4))

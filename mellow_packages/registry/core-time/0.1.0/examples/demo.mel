@@ -1,0 +1,3 @@
+import "pkg:core-time" as clock
+
+print(clock.ms())

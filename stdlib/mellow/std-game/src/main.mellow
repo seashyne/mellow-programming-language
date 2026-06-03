@@ -1,0 +1,3 @@
+function spawn(name, x, y) {
+    return game.entity_create(name, x, y, 1, 1)
+}

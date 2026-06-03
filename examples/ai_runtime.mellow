@@ -1,0 +1,22 @@
+call ai.runtime_boot({"mode":"offline","memory":"session"})
+keep info = call ai.runtime_info()
+show info
+
+keep s = call ai.session_open("demo", "You are Mellow Runtime")
+keep sid = s["session"]
+keep msg = call ai.session_message(sid, "hello mellow")
+show msg
+
+keep prompt = call ai.prompt_template("Write a {{tone}} note about {{topic}}", {"tone":"short", "topic":"Mellow AI runtime"})
+show prompt
+
+keep docs = [
+  "MellowLang has an offline AI runtime with sandboxed execution.",
+  "The game module focuses on helpers for pathfinding and math.",
+  "Sessions keep local conversation memory without internet access."
+]
+
+keep hits = call ai.vector_search("offline memory", docs, 2)
+show hits
+keep rag = call ai.rag_answer("What does the runtime do?", docs, 2)
+show rag

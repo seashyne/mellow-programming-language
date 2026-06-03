@@ -1,0 +1,6 @@
+{
+  "name": "core-mmg",
+  "version": "0.2.0",
+  "entry": "src/main.mel",
+  "kind": "starter-package"
+}

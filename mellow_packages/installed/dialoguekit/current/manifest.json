@@ -1,0 +1,13 @@
+{
+  "name": "dialoguekit",
+  "version": "0.1.0",
+  "entry": "src/main.mellow",
+  "description": "Mellow package",
+  "authors": [],
+  "license": "MIT",
+  "keywords": [
+    "mellow",
+    "package"
+  ],
+  "dependencies": {}
+}

@@ -1,0 +1,14 @@
+{
+  "name": "0.1.0",
+  "version": "0.1.0",
+  "entry": "src/main.mellow",
+  "description": "Mellow package",
+  "authors": [],
+  "license": "MIT",
+  "keywords": [
+    "mellow"
+  ],
+  "dependencies": {},
+  "visibility": "public",
+  "namespace": ""
+}

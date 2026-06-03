@@ -1,0 +1,5 @@
+import "pkg:core-workflow" as wf
+import "pkg:core-print" as out
+
+keep job = wf.job("demo.sync", {"ok": true})
+out.kv("job", wf.to_json(job))

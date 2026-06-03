@@ -1,0 +1,23 @@
+function println(text) {
+    print(text)
+}
+
+function spacer() {
+    print("")
+}
+
+function banner(text) {
+    print("=== " + text + " ===")
+}
+
+function kv(key, value) {
+    print(key + ": " + value)
+}
+
+function success(text) {
+    print("[ok] " + text)
+}
+
+function warn(text) {
+    print("[warn] " + text)
+}

@@ -1,0 +1,9 @@
+let xs = [10, 20, 30, 40, 50]
+print(len(xs))
+print(xs[0])
+print(xs[4])
+
+let total = 0
+for x in xs:
+    total = total + x
+print(total)

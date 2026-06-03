@@ -1,0 +1,3 @@
+let scores = {"alice": 95, "bob": 82, "carol": 91}
+print(scores["alice"])
+print(scores["carol"])

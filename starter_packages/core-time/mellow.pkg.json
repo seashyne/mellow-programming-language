@@ -1,0 +1,19 @@
+{
+  "name": "core-time",
+  "version": "0.1.0",
+  "entry": "src/main.mel",
+  "description": "Time helpers for timestamps and lightweight elapsed measurements.",
+  "authors": [],
+  "license": "MIT",
+  "dependencies": {
+    "time": "host"
+  },
+  "keywords": [
+    "core",
+    "time",
+    "clock",
+    "starter"
+  ],
+  "visibility": "public",
+  "namespace": ""
+}

@@ -1,0 +1,5 @@
+keep ai = get("ai")
+show call ai["api_providers"]()
+show call ai["api_configure"]("offline", {"temperature":0})
+show call ai["api_complete"]("offline", "Summarize MellowLang as an AI-native language", {"style":"pitch", "max_words":24})
+show call ai["api_embed"]("offline", "MellowLang")

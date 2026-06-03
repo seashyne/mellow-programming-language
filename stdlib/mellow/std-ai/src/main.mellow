@@ -1,0 +1,3 @@
+function ask(session, prompt) {
+    return ai.session_message(session, prompt)
+}

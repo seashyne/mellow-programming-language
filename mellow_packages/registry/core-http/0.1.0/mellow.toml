@@ -1,0 +1,9 @@
+name = "core-http"
+version = "0.1.0"
+description = "HTTP request wrappers for web/API integration."
+entry = "src/main.mellow"
+license = "MIT"
+keywords = ["core", "http", "api"]
+
+[dependencies]
+http = "host"

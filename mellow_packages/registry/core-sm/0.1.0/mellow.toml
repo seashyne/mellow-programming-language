@@ -1,0 +1,4 @@
+[package]
+name = "core-sm"
+version = "0.1.0"
+description = "Mellow Smallless reversible compression starter package"

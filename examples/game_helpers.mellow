@@ -1,0 +1,55 @@
+# MellowLang v1.4.6 — ตัวอย่าง Game Module (top-level syntax)
+
+# =============================================
+# 1) A* Pathfinding — ไม่ต้อง call(g[...]) อีกต่อไป
+# =============================================
+
+let grid = [
+    [0, 0, 0, 0, 0],
+    [1, 1, 0, 1, 0],
+    [0, 0, 0, 1, 0],
+    [0, 1, 0, 0, 0]
+]
+
+let path = astar(grid, [0,0], [4,3])
+print(f"path: {path}")
+
+# =============================================
+# 2) Grid Neighbors
+# =============================================
+
+let n4 = neighbors4(2, 2, 5, 4)
+print(f"neighbors4 at (2,2): {n4}")
+
+let n8 = neighbors8(2, 2, 5, 4)
+print(f"neighbors8 at (2,2): {n8}")
+
+# =============================================
+# 3) Easing — ครบทุก curve
+# =============================================
+
+let t = 0.5
+
+print(f"t = {t}")
+print(f"ease_linear:       {ease_linear(t)}")
+print(f"ease_in_quad:      {ease_in_quad(t)}")
+print(f"ease_out_quad:     {ease_out_quad(t)}")
+print(f"ease_in_out_quad:  {ease_in_out_quad(t)}")
+print(f"ease_in_cubic:     {ease_in_cubic(t)}")
+print(f"ease_out_cubic:    {ease_out_cubic(t)}")
+print(f"ease_in_back:      {ease_in_back(t)}")
+print(f"ease_out_back:     {ease_out_back(t)}")
+print(f"ease_out_bounce:   {ease_out_bounce(t)}")
+print(f"ease_out_elastic:  {ease_out_elastic(t)}")
+
+# =============================================
+# 4) Tween — สร้าง animation step
+# =============================================
+
+let from_x = 0
+let to_x = 500
+
+for i in range(0, 5):
+    let t2 = i / 4
+    let x = tween(from_x, to_x, t2, "out_back")
+    print(f"frame {i}: x = {x}")

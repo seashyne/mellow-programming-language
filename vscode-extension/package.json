@@ -1,0 +1,91 @@
+{
+  "name": "mellowlang",
+  "displayName": "MellowLang Language Support",
+  "description": "Syntax highlighting + polished LSP for MellowLang (.mellow / .mel)",
+  "version": "1.6.5.1",
+  "publisher": "seashyne",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:mellow",
+    "onCommand:mellowlang.restartLanguageServer",
+    "onCommand:mellowlang.runDoctor"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "mellow",
+        "aliases": [
+          "MellowLang",
+          "mellow"
+        ],
+        "extensions": [
+          ".mellow",
+          ".mel",
+          ".fds",
+          ".frinds",
+          ".frlib"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mellow",
+        "scopeName": "source.mellow",
+        "path": "./syntaxes/mellowlang.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "mellowlang.restartLanguageServer",
+        "title": "MellowLang: Restart Language Server"
+      },
+      {
+        "command": "mellowlang.runDoctor",
+        "title": "MellowLang: Run Doctor"
+      }
+    ],
+    "configuration": {
+      "title": "MellowLang",
+      "properties": {
+        "mellowlang.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Full path to mellow.exe. Leave empty to use PATH and auto-detect common install locations."
+        },
+        "mellowlang.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace communication with the Mellow language server."
+        },
+        "mellowlang.extraArgs": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra arguments passed to `mellow lsp`."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seashyne/mellowlang"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,4 @@
+# core-sm
+keep version = "0.1.0"
+keep host = "mellow-smallless"
+keep supports = ["encode", "decode", "inspect", "dictionary", "roundtrip"]

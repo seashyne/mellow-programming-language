@@ -1,0 +1,2 @@
+-- Namespace ownership in 1.6.1 is enforced from package names (@owner/pkg) and package.owner.
+-- No schema change required.

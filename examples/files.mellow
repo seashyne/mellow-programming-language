@@ -1,0 +1,19 @@
+# files.mellow — file modes + explicit mkdir
+# Default base folder is: mellow_saves/
+# You can change it (Python/Lua-style) with storage_dir("."):
+# storage_dir(".")
+
+# NOTE: the base folder is NOT auto-created unless you call mkdir(".") explicitly.
+mkdir(".")
+
+let data = {"score": 99, "name": "mellow"}
+
+# save/load helpers
+save_data("profile", data)
+let loaded = load_data("profile")
+print("loaded =", loaded)
+
+# raw file modes
+file_write("notes.txt", "hello\n", mode="w")
+file_append("notes.txt", "world\n", mode="a")
+print(file_read("notes.txt", mode="r"))

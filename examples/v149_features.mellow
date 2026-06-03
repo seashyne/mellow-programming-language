@@ -1,0 +1,89 @@
+# MellowLang v1.4.9 Feature Showcase
+
+show "=== Bug Fixes ==="
+
+# Bug 1: loop N times (was infinite in v1.4.8)
+keep count = 0
+loop 5 times:
+    count = count + 1
+show "loop 5 times: count =", count
+
+# Bug 2: negative indexing
+keep nums = [10, 20, 30, 40, 50]
+show "last element:", nums[-1]
+show "second-to-last:", nums[-2]
+
+# Bug 3: default arguments
+skill greet(name, msg="hello"):
+    return msg + " " + name
+show greet("world")
+show greet("alice", "howdy")
+
+show ""
+show "=== First-Class Functions ==="
+
+skill double(x):
+    return x * 2
+
+keep fn = double
+show "fn(5) =", fn(5)
+
+skill apply(f, x):
+    return f(x)
+show "apply(double, 7) =", apply(double, 7)
+
+keep fns = [double, double]
+show "fns[0](3) =", fns[0](3)
+
+show ""
+show "=== Lambda ==="
+
+keep square = skill(x): x * x
+show "square(9) =", square(9)
+
+keep add = skill(x, n=10): x + n
+show "add(5) =", add(5)
+show "add(5, 3) =", add(5, 3)
+
+show ""
+show "=== map / filter / reduce with lambdas ==="
+
+keep doubled = list_map([1, 2, 3, 4, 5], skill(x): x * 2)
+show "doubled:", doubled
+
+keep evens = list_filter([1, 2, 3, 4, 5, 6], skill(x): x % 2 == 0)
+show "evens:", evens
+
+keep total = list_reduce([1, 2, 3, 4, 5], skill(a, b): a + b)
+show "total:", total
+
+show ""
+show "=== String Slicing ==="
+
+keep s = "hello world"
+show "s[0:5] =", s[0:5]
+show "s[6:] =", s[6:]
+show "s[-5:] =", s[-5:]
+
+show ""
+show "=== List Comprehensions ==="
+
+show "[x*2 for x in 1..5] =", [x * 2 for x in [1, 2, 3, 4, 5]]
+show "evens =", [x for x in [1, 2, 3, 4, 5, 6] if x % 2 == 0]
+
+show ""
+show "=== Spread Operator ==="
+
+keep a = [1, 2, 3]
+keep b = [0, *a, 4, 5]
+show "spread:", b
+
+show ""
+show "=== enumerate ==="
+
+loop i, v in enumerate(["apple", "banana", "cherry"]):
+    show i, "->", v
+
+show ""
+show "=== Module Import (see examples/mathlib.mellow) ==="
+show "(run: mellow run v149_features.mellow)"

@@ -1,0 +1,17 @@
+{
+  "name": "core-save",
+  "version": "0.1.0",
+  "entry": "src/main.mel",
+  "description": "Small persistence helpers using built-in save/load APIs.",
+  "authors": [],
+  "license": "MIT",
+  "dependencies": {},
+  "keywords": [
+    "core",
+    "save",
+    "storage",
+    "starter"
+  ],
+  "visibility": "public",
+  "namespace": ""
+}

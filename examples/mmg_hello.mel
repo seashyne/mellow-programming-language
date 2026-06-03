@@ -1,0 +1,8 @@
+import "pkg:core-mmg" as mmg
+
+keep app = mmg.app(title: "MMG Demo", width: 960, height: 640, clear: "#0d1117")
+mmg.rect(app, 80, 80, 240, 140, fill: "#7c3aed")
+mmg.circle(app, 560, 240, 90, fill: "#06b6d4")
+mmg.line(app, 40, 40, 900, 560, stroke: "#ffffff", width: 3)
+mmg.text(app, 40, 590, "Hello from MMG", fill: "#ffffff", size: 22)
+mmg.run(app)

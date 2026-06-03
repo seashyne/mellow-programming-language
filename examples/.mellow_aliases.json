@@ -1,0 +1,18 @@
+{
+  "aliases": {
+    "core_mmg": "core-mmg",
+    "core_print": "core-print",
+    "core_strings": "core-strings",
+    "core_math": "core-math",
+    "core_workflow": "core-workflow",
+    "core_window": "core-window"
+  },
+  "packages": {
+    "core-mmg": "core_mmg",
+    "core-print": "core_print",
+    "core-strings": "core_strings",
+    "core-math": "core_math",
+    "core-workflow": "core_workflow",
+    "core-window": "core_window"
+  }
+}

@@ -1,0 +1,14 @@
+import "math" as math
+import "ai" as ai
+
+keep pos = vec2(0, 0)
+keep target = vec2(10, 0)
+
+global_seed(999)
+
+loop i in range(0, 5):
+    dir = vec_norm(vec_sub(target, pos))
+    pos = vec_add(pos, vec_mul(dir, 1))
+    call(ai["decide"], "move_step", "tick=" + i)
+    show(pos)
+end

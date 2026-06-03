@@ -1,0 +1,10 @@
+# try_catch.mellow — try/catch/finally
+
+try:
+    let x = 1 / 0
+catch err:
+    print("caught: " + err)
+finally:
+    print("finally always runs")
+
+print("after try")

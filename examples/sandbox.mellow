@@ -1,0 +1,12 @@
+# sandbox.mellow — demonstrate limits + permissions (recommended)
+
+print("Sandbox demo")
+let x = 0
+while x < 3:
+    print(x)
+    x = x + 1
+
+# Try storage (requires allow-storage; default on)
+mkdir(".")
+save_data({"hello": "world"}, "demo")
+print(load_data("demo"))

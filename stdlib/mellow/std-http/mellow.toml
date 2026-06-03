@@ -1,0 +1,8 @@
+name = "@mellow/std-http"
+version = "0.1.0"
+description = "HTTP wrappers"
+entry = "src/main.mellow"
+visibility = "public"
+namespace = "@mellow"
+
+[dependencies]

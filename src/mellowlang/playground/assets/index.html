@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mellow Playground Time Travel</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div>
+          <div class="eyebrow">Mellow 2.0</div>
+          <h1>Mellow Playground Time Travel</h1>
+          <p class="muted">Persistent sessions, runtime breakpoints, execution recordings, replay, and watch-state diffs.</p>
+        </div>
+
+        <section class="panel compact">
+          <label for="example-select">Examples</label>
+          <select id="example-select"></select>
+          <button id="load-example" class="ghost">Load example</button>
+        </section>
+
+        <section class="panel compact">
+          <div class="row between gap-sm wrap">
+            <label class="checkbox"><input type="checkbox" id="optimize" checked /> Optimize IR</label>
+            <label class="checkbox"><input type="checkbox" id="allow-net" /> Allow net</label>
+            <label class="checkbox"><input type="checkbox" id="trace" checked /> Trace steps</label>
+          </div>
+          <div class="field-grid">
+            <div>
+              <label for="engine-select">VM</label>
+              <select id="engine-select">
+                <option value="auto">auto</option>
+                <option value="py">python</option>
+                <option value="c">c</option>
+              </select>
+            </div>
+            <div>
+              <label for="watch-input">Watch vars</label>
+              <input id="watch-input" placeholder="hp,pos,target" />
+            </div>
+          </div>
+          <div class="field-grid">
+            <div>
+              <label for="breakpoints-input">Breakpoints</label>
+              <input id="breakpoints-input" placeholder="Click gutter or type 3,8-10" />
+            </div>
+            <div>
+              <label for="recording-id-input">Recording ID</label>
+              <input id="recording-id-input" placeholder="Auto after first run" />
+            </div>
+            <div>
+              <label for="opcode-breakpoints-input">Opcode breaks</label>
+              <input id="opcode-breakpoints-input" placeholder="CALL,RETURN or 12,40" />
+            </div>
+          </div>
+          <div class="row gap-sm wrap">
+            <button id="run-btn" class="primary">Run</button>
+            <button id="debug-start-btn">Debug</button>
+            <button id="compile-btn">Compile only</button>
+            <button id="replay-btn">Replay recording</button>
+            <button id="copy-btn" class="ghost">Copy</button>
+            <button id="share-btn" class="ghost">Share session</button>
+          </div>
+          <p class="hint">Ctrl/Cmd + Enter to run • Click line numbers to toggle breakpoints</p>
+          <div class="share-box" id="share-box">No share link yet.</div>
+          <div class="share-box" id="recording-box">No recording yet.</div>
+        </section>
+
+        <section class="panel compact stats" id="stats">
+          <div><span>Pipeline</span><strong id="stat-pipeline">-</strong></div>
+          <div><span>Compile</span><strong id="stat-compile">-</strong></div>
+          <div><span>Run</span><strong id="stat-run">-</strong></div>
+          <div><span>Bytecode</span><strong id="stat-bytecode">-</strong></div>
+        </section>
+      </aside>
+
+      <main class="main">
+        <section class="editor-panel panel">
+          <div class="panel-header">
+            <div>
+              <h2>Code Editor</h2>
+              <p>Run Mellow scripts with runtime stop-on-hit breakpoints and replayable recordings.</p>
+            </div>
+            <div class="status" id="status-pill">Ready</div>
+          </div>
+          <div class="editor-shell" id="editor-shell">
+            <div class="line-gutter" id="line-gutter"></div>
+            <div class="editor-stack" id="editor-stack">
+              <pre id="highlight-layer" aria-hidden="true"></pre>
+              <textarea id="editor" spellcheck="false"></textarea>
+            </div>
+          </div>
+        </section>
+
+        <section class="middle-grid">
+          <section class="panel timeline-panel">
+            <div class="panel-header small">
+              <h3>Execution Timeline</h3>
+              <div class="subtle" id="timeline-summary">No trace yet</div>
+            </div>
+            <div id="timeline-list" class="timeline-list"></div>
+          </section>
+
+          <section class="panel debugger-panel">
+            <div class="panel-header small">
+              <h3>Debugger + State Diff</h3>
+              <div class="row gap-sm debugger-controls">
+                <button id="debug-prev" class="ghost small-btn">Prev</button>
+                <button id="debug-next" class="ghost small-btn">Next</button>
+                <button id="debug-continue" class="ghost small-btn">Continue</button>
+                <button id="debug-into" class="ghost small-btn">Into</button>
+                <button id="debug-over" class="ghost small-btn">Over</button>
+                <button id="debug-out" class="ghost small-btn">Out</button>
+              </div>
+            </div>
+            <div class="debugger-body">
+              <div class="debugger-meta" id="debugger-meta">Run with trace to inspect steps.</div>
+              <pre id="debugger-watch">No watch values</pre>
+              <pre id="debugger-diff">No state diff</pre>
+              <pre id="debugger-stack">No stack snapshot</pre>
+            </div>
+          </section>
+
+          <section class="panel graph-panel">
+            <div class="panel-header small">
+              <h3>Workflow Graph</h3>
+              <div class="subtle" id="graph-mode">-</div>
+            </div>
+            <div id="graph-canvas" class="graph-canvas"></div>
+          </section>
+        </section>
+
+        <section class="output-grid">
+          <section class="panel">
+            <div class="panel-header small">
+              <h3>Output</h3>
+              <div class="tabbar" data-target="output-tabs">
+                <button class="tab active" data-tab="stdout">stdout</button>
+                <button class="tab" data-tab="result">result</button>
+                <button class="tab" data-tab="optimization">optimization</button>
+              </div>
+            </div>
+            <div class="tab-panels" id="output-tabs">
+              <pre class="tab-panel active" data-panel="stdout" id="stdout-panel"></pre>
+              <pre class="tab-panel" data-panel="result" id="result-panel"></pre>
+              <pre class="tab-panel" data-panel="optimization" id="optimization-panel"></pre>
+            </div>
+          </section>
+
+          <section class="panel inspector">
+            <div class="panel-header small">
+              <h3>Compiler Inspector</h3>
+              <div class="tabbar" data-target="dump-tabs">
+                <button class="tab active" data-tab="ast">AST</button>
+                <button class="tab" data-tab="ir">IR</button>
+                <button class="tab" data-tab="optimized-ir">Optimized IR</button>
+                <button class="tab" data-tab="cfg">CFG</button>
+                <button class="tab" data-tab="optimized-cfg">Optimized CFG</button>
+                <button class="tab" data-tab="ssa">SSA</button>
+                <button class="tab" data-tab="optimized-ssa">Optimized SSA</button>
+              </div>
+            </div>
+            <div class="tab-panels" id="dump-tabs">
+              <pre class="tab-panel active" data-panel="ast" id="dump-ast"></pre>
+              <pre class="tab-panel" data-panel="ir" id="dump-ir"></pre>
+              <pre class="tab-panel" data-panel="optimized-ir" id="dump-optimized-ir"></pre>
+              <pre class="tab-panel" data-panel="cfg" id="dump-cfg"></pre>
+              <pre class="tab-panel" data-panel="optimized-cfg" id="dump-optimized-cfg"></pre>
+              <pre class="tab-panel" data-panel="ssa" id="dump-ssa"></pre>
+              <pre class="tab-panel" data-panel="optimized-ssa" id="dump-optimized-ssa"></pre>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

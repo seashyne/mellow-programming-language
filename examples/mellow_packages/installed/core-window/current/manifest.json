@@ -1,0 +1,14 @@
+{
+  "name": "core-window",
+  "version": "0.1.0",
+  "entry": "src/main.mel",
+  "description": "Desktop window helpers for Mellow app preset",
+  "authors": [],
+  "license": "MIT",
+  "keywords": [
+    "mellow"
+  ],
+  "dependencies": {},
+  "visibility": "public",
+  "namespace": ""
+}

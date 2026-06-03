@@ -1,0 +1,3 @@
+function fetch_text(url) {
+    return http.get(url)
+}

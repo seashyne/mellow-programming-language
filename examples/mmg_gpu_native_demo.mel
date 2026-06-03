@@ -1,0 +1,13 @@
+import "pkg:core-mmg" as mmg
+
+keep app = mmg.app(title: "MMG GPU Native Demo", width: 960, height: 640, clear: "#0b1020")
+mmg.scene(app, "main")
+mmg.camera(app, x: 0, y: 0, zoom: 1.0)
+mmg.texture(app, "hero", source: "assets/hero.bmp")
+mmg.sprite(app, "hero", x: 120, y: 120, w: 128, h: 128, fill: "#ffffff")
+mmg.rect(app, 320, 80, 220, 140, fill: "#7c3aed")
+mmg.circle(app, 700, 220, 90, fill: "#06b6d4")
+mmg.line(app, 40, 40, 900, 560, stroke: "#ffffff", width: 3)
+mmg.on(app, "key", "Escape", "close")
+mmg.frame(app, fps: 60)
+mmg.run(app)

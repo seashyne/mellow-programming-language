@@ -1,0 +1,11 @@
+function unix() {
+    return time.unix()
+}
+
+function ms() {
+    return time.ms()
+}
+
+function elapsed_ms(start_ms) {
+    return time.ms() - start_ms
+}

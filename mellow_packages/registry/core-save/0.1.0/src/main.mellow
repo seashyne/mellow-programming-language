@@ -1,0 +1,8 @@
+function save_slot(name, value) {
+    save value into name
+}
+
+function load_slot(name) {
+    load name into data
+    return data
+}

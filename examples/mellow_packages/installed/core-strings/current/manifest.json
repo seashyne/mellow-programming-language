@@ -1,0 +1,19 @@
+{
+  "name": "core-strings",
+  "version": "0.1.0",
+  "entry": "src/main.mel",
+  "description": "String helpers built on top of the host string module.",
+  "authors": [],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "strings",
+    "text",
+    "starter"
+  ],
+  "dependencies": {
+    "string": "host"
+  },
+  "visibility": "public",
+  "namespace": ""
+}

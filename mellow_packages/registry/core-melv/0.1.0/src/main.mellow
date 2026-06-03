@@ -1,0 +1,4 @@
+# core-melv
+keep version = "0.1.0"
+keep host = "mellow-video"
+keep supports = ["encode", "decode", "inspect", "extract-frames", "melv"]

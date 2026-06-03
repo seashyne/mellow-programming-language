@@ -1,0 +1,10 @@
+name = "core-math"
+version = "0.1.0"
+description = "Friendly math helpers and interpolation wrappers."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+keywords = ["core", "math", "numbers", "starter"]
+
+[dependencies]
+math = "host"

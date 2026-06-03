@@ -1,0 +1,23 @@
+{
+  "mellow_version": "1.2.2",
+  "name": "my-mellow-game",
+  "version": "0.1.0",
+  "entry": "scripts/main.mellow",
+  "global_seed": 12345,
+  "permissions": {
+    "allow_ask": false,
+    "allow_wait": true,
+    "allow_storage": true,
+    "storage_dir": "mellow_saves"
+  },
+  "modules": [
+    "math",
+    "time",
+    "list",
+    "map",
+    "string",
+    "json",
+    "ai"
+  ],
+  "libs_dir": "libs"
+}

@@ -1,0 +1,34 @@
+# examples/online_hybrid_save.mellow
+# Demonstrates Hybrid Save (Level C) patterns:
+#  - local encrypted save (non-critical)
+#  - server-signed snapshot (tamper-detect)
+#  - online calls (HTTP + WebSocket)
+
+# NOTE: This example uses placeholder endpoints.
+# In project mode, you must allowlist them in mellow.json permissions:
+#   "net.http:https://api.example.com/",
+#   "net.ws:wss://ws.example.com/",
+
+let PUBKEY_B64 = "REPLACE_WITH_SERVER_PUBKEY_B64"
+
+save_init("my.game")
+
+# Local (non-critical) data
+save_set("ui.language", "th")
+save_set("ui.volume", 0.8)
+save_commit("local")
+
+# Signed snapshot (tamper-detect)
+# save_commit_signed("slot1", "https://api.example.com/save/sign", PUBKEY_B64)
+
+# Online profile
+# let profile = net_http_get("https://api.example.com/profile")
+# print(profile)
+
+# WebSocket realtime
+# let cid = net_ws_connect("wss://ws.example.com/")
+# net_ws_send(cid, {"type":"hello"})
+# print(net_ws_recv(cid, 1.0))
+# net_ws_close(cid)
+
+print("ok")

@@ -1,0 +1,3 @@
+function encode(value) {
+    return json.encode(value)
+}

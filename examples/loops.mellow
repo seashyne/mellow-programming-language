@@ -1,0 +1,25 @@
+//# loops.mellow — Modern loops (recommended)
+
+let total = 0
+
+# while (Python-style)
+let i = 0
+while i < 5:
+    total = total + i
+    i = i + 1
+
+# for-range (recommended)
+for k in 1..5:
+    print(k)
+
+# foreach list
+let xs = [10, 20, 30]
+for x in xs:
+    print(x)
+
+# foreach map (key, value)
+let m = {"a": 1, "b": 2}
+for key, val in m:
+    print(key + ": " + val)
+
+print("total = " + total)

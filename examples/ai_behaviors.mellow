@@ -1,0 +1,103 @@
+# MellowLang v1.4.6 — ตัวอย่าง AI ครบ
+
+# =============================================
+# 1) Steering Behaviors — ควบคุมการเคลื่อนที่
+# =============================================
+
+let npc = [10, 10]
+let player = [80, 60]
+
+# วิ่งหา
+let vel = ai_seek(npc, player, 3.0)
+print(f"seek -> {vel}")
+
+# วิ่งหนี
+let flee_vel = ai_flee(npc, player, 3.0)
+print(f"flee -> {flee_vel}")
+
+# เดินหาแล้วชะลอเมื่อใกล้ถึง
+let arrive_vel = ai_arrive(npc, player, 3.0, 50.0)
+print(f"arrive -> {arrive_vel}")
+
+# =============================================
+# 2) Patrol — วนไปรอบๆ
+# =============================================
+
+let waypoints = [[0,0],[200,0],[200,200],[0,200]]
+let patrol_idx = 0
+let patrol_pos = [0, 0]
+
+for i in range(0, 4):
+    let result = ai_patrol(patrol_pos, waypoints, patrol_idx, 2.0)
+    patrol_pos = waypoints[result["idx"]]
+    patrol_idx = result["idx"]
+    print(f"patrol tick {i}: heading to wp {patrol_idx}")
+
+# =============================================
+# 3) Perception — มองเห็นและรับรู้
+# =============================================
+
+let guard_pos = [100, 100]
+let guard_facing = 270  # หันขึ้น (270 = up ใน screen coords)
+
+let targets = [
+    {"pos": [100, 50], "name": "player"},
+    {"pos": [200, 200], "name": "ally"},
+    {"pos": [110, 80], "name": "enemy"}
+]
+
+# หาเป้าหมายในระยะ
+let nearby = ai_filter_range(guard_pos, targets, 80)
+print(f"targets in range 80: {nearby}")
+
+# หาเป้าหมายที่ใกล้ที่สุด
+let closest = ai_nearest(guard_pos, targets)
+print(f"nearest: {closest}")
+
+# มองเห็นไหม
+let can_see = ai_in_sight(guard_pos, guard_facing, [100, 50], 120, 100)
+print(f"can see player: {can_see}")
+
+# =============================================
+# 4) Utility AI — เลือก action จาก score
+# =============================================
+
+let hp = 30
+let ammo = 5
+let enemies_visible = 2
+
+# คำนวณ score แต่ละ action
+let score_attack = 0.0
+if ammo > 0 and enemies_visible > 0:
+    score_attack = 1.0 - hp / 100.0  # ยิ่ง hp ต่ำ ยิ่งไม่อยากสู้
+
+let score_heal = 0.0
+if hp < 50:
+    score_heal = 1.0 - hp / 50.0
+
+let score_flee = 0.0
+if hp < 30 and enemies_visible > 1:
+    score_flee = 0.9
+
+let options = [
+    {"score": score_attack, "value": "attack"},
+    {"score": score_heal, "value": "heal"},
+    {"score": score_flee, "value": "flee"}
+]
+
+let chosen = ai_utility(options)
+print(f"utility chose: {chosen}")
+
+# =============================================
+# 5) Behavior Tree — โครงสร้าง AI ซับซ้อน
+# =============================================
+
+# bt_tick ใช้กับ host syscalls — ดู docs/AI_MODULE.md สำหรับตัวอย่างเต็ม
+
+# =============================================
+# 6) FSM — Finite State Machine
+# =============================================
+
+# ai_fsm ใช้กับ host syscalls — ดู docs/AI_MODULE.md สำหรับตัวอย่างเต็ม
+
+print("done")

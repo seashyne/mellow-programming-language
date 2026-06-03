@@ -1,0 +1,8 @@
+name = "@mellow/std-ai"
+version = "0.1.0"
+description = "AI helpers"
+entry = "src/main.mellow"
+visibility = "public"
+namespace = "@mellow"
+
+[dependencies]

@@ -1,0 +1,4 @@
+[package]
+name = "core-mmg"
+version = "0.2.0"
+description = "Mellow Magic Graphics render-core starter package"

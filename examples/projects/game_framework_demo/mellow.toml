@@ -1,0 +1,7 @@
+name = "game-framework-demo"
+version = "0.1.0"
+description = "Game scripting framework demo"
+entry = "src/main.mellow"
+
+[dependencies]
+@mellow/std-game = "^0.1.0"

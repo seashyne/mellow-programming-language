@@ -1,0 +1,333 @@
+/* mellowrt_main.c — v2.3.4 standalone runner
+   Loads an MLVI binary image and executes it with mellowrt_core.
+   No Python dependency. Build: cmake -S . -B build && cmake --build build
+*/
+#include "mellowrt.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <time.h>
+#include <math.h>
+
+#define MLVI_MAGIC     "MLVI0200"
+#define MLVI_MAGIC_LEN 8
+
+/* ── image structures ────────────────────────────────────────────────────── */
+typedef struct { uint32_t slot; char *name; } MLoadedGlobal;
+typedef struct { char *name; uint32_t address; uint16_t arity; uint16_t local_count; uint16_t flags; } MLoadedFunction;
+typedef struct { char *name; uint32_t target; uint32_t flags; } MLoadedEvent;
+typedef struct { char *name; uint32_t flags; } MLoadedModule;
+
+typedef struct {
+    MValue        *consts;       size_t const_len;
+    MInstruction  *code;         size_t code_len;
+    MSourceSpan   *spans;        size_t span_len;
+    char          *source_name;
+    char          *pipeline;
+    MLoadedGlobal    *globals;   size_t globals_len;
+    MLoadedFunction  *functions; size_t functions_len;
+    MLoadedEvent     *events;    size_t events_len;
+    MLoadedModule    *modules;   size_t modules_len;
+} MLoadedProgram;
+
+/* ── binary readers ──────────────────────────────────────────────────────── */
+static uint8_t  read_u8 (FILE *f,int*ok){uint8_t  v=0;if(fread(&v,1,1,f)!=1)*ok=0;return v;}
+static uint16_t read_u16(FILE *f,int*ok){uint16_t v=0;if(fread(&v,sizeof(v),1,f)!=1)*ok=0;return v;}
+static uint32_t read_u32(FILE *f,int*ok){uint32_t v=0;if(fread(&v,sizeof(v),1,f)!=1)*ok=0;return v;}
+static int32_t  read_i32(FILE *f,int*ok){int32_t  v=0;if(fread(&v,sizeof(v),1,f)!=1)*ok=0;return v;}
+static int64_t  read_i64(FILE *f,int*ok){int64_t  v=0;if(fread(&v,sizeof(v),1,f)!=1)*ok=0;return v;}
+static double   read_f64(FILE *f,int*ok){double   v=0;if(fread(&v,sizeof(v),1,f)!=1)*ok=0;return v;}
+static char *read_string(FILE *f,int*ok){
+    uint32_t len=read_u32(f,ok); if(!*ok)return NULL;
+    char *buf=(char*)calloc((size_t)len+1,1); if(!buf){*ok=0;return NULL;}
+    if(len&&fread(buf,1,len,f)!=len){free(buf);*ok=0;return NULL;}
+    buf[len]='\0'; return buf;
+}
+
+static void free_loaded_program(MLoadedProgram *lp){
+    size_t i;
+    if(!lp)return;
+    if(lp->consts){for(i=0;i<lp->const_len;++i)mvalue_free(&lp->consts[i]);free(lp->consts);}
+    free(lp->code); free(lp->spans); free(lp->source_name); free(lp->pipeline);
+    if(lp->globals)  {for(i=0;i<lp->globals_len;++i)  free(lp->globals[i].name);   free(lp->globals);}
+    if(lp->functions){for(i=0;i<lp->functions_len;++i) free(lp->functions[i].name); free(lp->functions);}
+    if(lp->events)   {for(i=0;i<lp->events_len;++i)    free(lp->events[i].name);    free(lp->events);}
+    if(lp->modules)  {for(i=0;i<lp->modules_len;++i)   free(lp->modules[i].name);   free(lp->modules);}
+    memset(lp,0,sizeof(*lp));
+}
+
+static int parse_loaded_program(const char *path, MLoadedProgram *out){
+    FILE *f=fopen(path,"rb");
+    char magic[MLVI_MAGIC_LEN];
+    uint32_t version=0,flags_hdr=0,counts[7]={0};
+    int ok=1; size_t i;
+    if(!f)return 0;
+    memset(out,0,sizeof(*out));
+    if(fread(magic,1,MLVI_MAGIC_LEN,f)!=MLVI_MAGIC_LEN||memcmp(magic,MLVI_MAGIC,MLVI_MAGIC_LEN)){fclose(f);return 0;}
+    version   =read_u32(f,&ok);
+    flags_hdr =read_u32(f,&ok);
+    (void)version;(void)flags_hdr;
+    out->source_name=read_string(f,&ok);
+    out->pipeline   =read_string(f,&ok);
+    for(i=0;i<7;++i) counts[i]=read_u32(f,&ok);
+    if(!ok)goto fail;
+
+    /* globals */
+    out->globals_len=counts[3];
+    out->globals=(MLoadedGlobal*)calloc(out->globals_len?out->globals_len:1,sizeof(MLoadedGlobal));
+    for(i=0;i<out->globals_len;++i){
+        out->globals[i].slot=read_u32(f,&ok);
+        out->globals[i].name=read_string(f,&ok);
+    }
+    /* functions */
+    out->functions_len=counts[4];
+    out->functions=(MLoadedFunction*)calloc(out->functions_len?out->functions_len:1,sizeof(MLoadedFunction));
+    for(i=0;i<out->functions_len;++i){
+        out->functions[i].name      =read_string(f,&ok);
+        out->functions[i].address   =read_u32(f,&ok);
+        out->functions[i].arity     =read_u16(f,&ok);
+        out->functions[i].local_count=read_u16(f,&ok);
+        out->functions[i].flags     =read_u16(f,&ok);
+    }
+    /* events */
+    out->events_len=counts[5];
+    out->events=(MLoadedEvent*)calloc(out->events_len?out->events_len:1,sizeof(MLoadedEvent));
+    for(i=0;i<out->events_len;++i){
+        out->events[i].name  =read_string(f,&ok);
+        out->events[i].target=read_u32(f,&ok);
+        out->events[i].flags =read_u32(f,&ok);
+    }
+    /* modules */
+    out->modules_len=counts[6];
+    out->modules=(MLoadedModule*)calloc(out->modules_len?out->modules_len:1,sizeof(MLoadedModule));
+    for(i=0;i<out->modules_len;++i){
+        out->modules[i].name =read_string(f,&ok);
+        out->modules[i].flags=read_u32(f,&ok);
+    }
+    /* consts */
+    out->const_len=counts[0];
+    out->consts=(MValue*)calloc(out->const_len?out->const_len:1,sizeof(MValue));
+    for(i=0;i<out->const_len;++i){
+        out->consts[i]=mval_none();
+        uint8_t tag=read_u8(f,&ok);
+        switch(tag){
+        case 0: out->consts[i]=mval_none(); break;
+        case 1:{uint8_t b=read_u8(f,&ok); out->consts[i]=mval_bool((int)b); break;}
+        case 2: out->consts[i]=mval_i64(read_i64(f,&ok)); break;
+        case 3: out->consts[i]=mval_f64(read_f64(f,&ok)); break;
+        case 4:{uint32_t slen=read_u32(f,&ok); char *sbuf=(char*)calloc((size_t)slen+1,1);
+                if(!sbuf){ok=0;break;} if(slen&&fread(sbuf,1,slen,f)!=slen){free(sbuf);ok=0;break;}
+                sbuf[slen]='\0'; out->consts[i].tag=MVAL_STR; out->consts[i].flags=1u;
+                out->consts[i].as.str.ptr=sbuf; out->consts[i].as.str.len=slen; break;}
+        case 8:{uint32_t addr=read_u32(f,&ok); uint16_t arity=read_u16(f,&ok);
+                uint16_t lc=read_u16(f,&ok); uint16_t fl=read_u16(f,&ok);
+                out->consts[i]=mval_func(addr,arity,lc,fl); break;}
+        default: ok=0; break;
+        }
+    }
+    /* code */
+    out->code_len=counts[1];
+    out->code=(MInstruction*)calloc(out->code_len?out->code_len:1,sizeof(MInstruction));
+    for(i=0;i<out->code_len;++i){
+        out->code[i].opcode=(uint8_t)read_u8(f,&ok);
+        out->code[i].a=read_i32(f,&ok);
+        out->code[i].b=read_i32(f,&ok);
+        out->code[i].c=read_i32(f,&ok);
+    }
+    /* spans */
+    out->span_len=counts[2];
+    out->spans=(MSourceSpan*)calloc(out->span_len?out->span_len:1,sizeof(MSourceSpan));
+    for(i=0;i<out->span_len;++i){
+        out->spans[i].start_line=read_u32(f,&ok);
+        out->spans[i].start_col =read_u32(f,&ok);
+        out->spans[i].end_line  =read_u32(f,&ok);
+        out->spans[i].end_col   =read_u32(f,&ok);
+    }
+    if(!ok)goto fail;
+    fclose(f); return 1;
+fail:
+    fclose(f); free_loaded_program(out); return 0;
+}
+
+/* ── syscall table (v2.3.4) ─────────────────────────────────────────────── */
+static int print_value(FILE *out, const MValue *v){
+    switch(v->tag){
+    case MVAL_NONE: return fprintf(out,"none")>=0;
+    case MVAL_BOOL: return fprintf(out,"%s",v->as.boolean?"true":"false")>=0;
+    case MVAL_I64:  return fprintf(out,"%lld",(long long)v->as.i64)>=0;
+    case MVAL_F64:  return fprintf(out,"%g",v->as.f64)>=0;
+    case MVAL_STR:  return fprintf(out,"%.*s",(int)v->as.str.len,v->as.str.ptr?v->as.str.ptr:"")>=0;
+    case MVAL_FUNC: return fprintf(out,"<func@%u>",v->as.func.address)>=0;
+    case MVAL_LIST:{
+        size_t i; if(fprintf(out,"[")<0)return 0;
+        for(i=0;i<v->as.list.len;++i){if(i&&fprintf(out,", ")<0)return 0; if(!print_value(out,&v->as.list.items[i]))return 0;}
+        return fprintf(out,"]")>=0;}
+    case MVAL_MAP:{
+        size_t i; if(fprintf(out,"{")<0)return 0;
+        for(i=0;i<v->as.map.len;++i){
+            if(i&&fprintf(out,", ")<0)return 0;
+            if(!print_value(out,&v->as.map.keys[i]))return 0;
+            if(fprintf(out,": ")<0)return 0;
+            if(!print_value(out,&v->as.map.values[i]))return 0;
+        }
+        return fprintf(out,"}")>=0;}
+    default: return fprintf(out,"<%s>",mvalue_tag_name(v->tag))>=0;
+    }
+}
+
+static MValue mval_owned_copy(const char *src, size_t len){
+    char *buf=(char*)calloc(len+1,1); MValue v=mval_none();
+    if(!buf)return v;
+    if(src&&len)memcpy(buf,src,len); buf[len]='\0';
+    v.tag=MVAL_STR; v.flags=1u; v.as.str.ptr=buf; v.as.str.len=len;
+    return v;
+}
+
+static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t argc, MValue *out_result){
+    (void)user;
+    *out_result=mval_none();
+    switch(id){
+    /* 1 — print(args...) */
+    case 1:{
+        size_t i; for(i=0;i<argc;++i){if(i)fputc(' ',stdout);print_value(stdout,&args[i]);}
+        fputc('\n',stdout); return 1;
+    }
+    /* 2 — len(container) -> i64 */
+    case 2:
+        if(argc!=1)return 0;
+        if(args[0].tag==MVAL_STR)  {*out_result=mval_i64((int64_t)args[0].as.str.len);  return 1;}
+        if(args[0].tag==MVAL_LIST) {*out_result=mval_i64((int64_t)args[0].as.list.len); return 1;}
+        if(args[0].tag==MVAL_MAP)  {*out_result=mval_i64((int64_t)args[0].as.map.len);  return 1;}
+        return 0;
+    /* 3 — clock_ms() -> i64 */
+    case 3:{
+        long long ms=(long long)((double)clock()*1000.0/(double)CLOCKS_PER_SEC);
+        *out_result=mval_i64((int64_t)ms); return 1;
+    }
+    /* 4 — getenv(name) -> str | none */
+    case 4:{
+        if(argc!=1||args[0].tag!=MVAL_STR)return 0;
+        char *key=(char*)calloc(args[0].as.str.len+1,1); const char *v;
+        if(!key)return 0;
+        memcpy(key,args[0].as.str.ptr,args[0].as.str.len);
+        v=getenv(key); free(key);
+        if(!v)*out_result=mval_none();
+        else  *out_result=mval_owned_copy(v,strlen(v));
+        return 1;
+    }
+    /* 5 — str(val) -> str */
+    case 5:{
+        if(argc!=1)return 0;
+        char buf[64];
+        switch(args[0].tag){
+        case MVAL_NONE: *out_result=mval_owned_copy("none",4); break;
+        case MVAL_BOOL: *out_result=mval_owned_copy(args[0].as.boolean?"true":"false",args[0].as.boolean?4:5); break;
+        case MVAL_I64:{ int n=snprintf(buf,sizeof(buf),"%lld",(long long)args[0].as.i64); *out_result=mval_owned_copy(buf,(size_t)(n>0?n:0)); break;}
+        case MVAL_F64:{ int n=snprintf(buf,sizeof(buf),"%g",args[0].as.f64); *out_result=mval_owned_copy(buf,(size_t)(n>0?n:0)); break;}
+        case MVAL_STR: *out_result=mval_owned_copy(args[0].as.str.ptr,args[0].as.str.len); break;
+        default:{ const char *tn=mvalue_tag_name(args[0].tag); *out_result=mval_owned_copy(tn,strlen(tn)); break;}
+        }
+        return 1;
+    }
+    /* 6 — type(val) -> str */
+    case 6:
+        if(argc!=1)return 0;
+        {const char *tn=mvalue_tag_name(args[0].tag); *out_result=mval_owned_copy(tn,strlen(tn)); return 1;}
+
+    /* 7 — abs(n) -> number */
+    case 7:
+        if(argc!=1)return 0;
+        if(args[0].tag==MVAL_I64){*out_result=mval_i64(args[0].as.i64<0?-args[0].as.i64:args[0].as.i64);return 1;}
+        if(args[0].tag==MVAL_F64){*out_result=mval_f64(fabs(args[0].as.f64));return 1;}
+        return 0;
+
+    /* 8 — floor(n) -> i64 */
+    case 8:
+        if(argc!=1)return 0;
+        if(args[0].tag==MVAL_I64){*out_result=args[0];return 1;}
+        if(args[0].tag==MVAL_F64){*out_result=mval_i64((int64_t)floor(args[0].as.f64));return 1;}
+        return 0;
+
+    /* 9 — ceil(n) -> i64 */
+    case 9:
+        if(argc!=1)return 0;
+        if(args[0].tag==MVAL_I64){*out_result=args[0];return 1;}
+        if(args[0].tag==MVAL_F64){*out_result=mval_i64((int64_t)ceil(args[0].as.f64));return 1;}
+        return 0;
+
+    /* 10 — sqrt(n) -> f64 */
+    case 10:
+        if(argc!=1)return 0;
+        {double v=(args[0].tag==MVAL_F64)?args[0].as.f64:(double)args[0].as.i64;
+         *out_result=mval_f64(sqrt(v));return 1;}
+
+    /* 11 — min(a,b) */
+    case 11:
+        if(argc!=2)return 0;
+        {double a=(args[0].tag==MVAL_F64)?args[0].as.f64:(double)args[0].as.i64;
+         double b=(args[1].tag==MVAL_F64)?args[1].as.f64:(double)args[1].as.i64;
+         if(args[0].tag==MVAL_I64&&args[1].tag==MVAL_I64)
+             *out_result=mval_i64(args[0].as.i64<args[1].as.i64?args[0].as.i64:args[1].as.i64);
+         else *out_result=mval_f64(a<b?a:b);
+         return 1;}
+
+    /* 12 — max(a,b) */
+    case 12:
+        if(argc!=2)return 0;
+        {double a=(args[0].tag==MVAL_F64)?args[0].as.f64:(double)args[0].as.i64;
+         double b=(args[1].tag==MVAL_F64)?args[1].as.f64:(double)args[1].as.i64;
+         if(args[0].tag==MVAL_I64&&args[1].tag==MVAL_I64)
+             *out_result=mval_i64(args[0].as.i64>args[1].as.i64?args[0].as.i64:args[1].as.i64);
+         else *out_result=mval_f64(a>b?a:b);
+         return 1;}
+
+    /* 13 — print_n(n_args, v0, v1, ...) — PRINTN syscall (argc == actual values) */
+    case 13:{
+        size_t i; for(i=0;i<argc;++i){if(i)fputc(' ',stdout);print_value(stdout,&args[i]);}
+        fputc('\n',stdout); return 1;
+    }
+
+    /* 20 — range(start, stop) -> list of i64 */
+    case 20: {
+        if (argc != 2) return 0;
+        int64_t start = (args[0].tag == MVAL_I64) ? args[0].as.i64 : (int64_t)args[0].as.f64;
+        int64_t stop  = (args[1].tag == MVAL_I64) ? args[1].as.i64 : (int64_t)args[1].as.f64;
+        int64_t len   = stop > start ? stop - start : 0;
+        MValue v = mval_none();
+        v.tag = MVAL_LIST;
+        v.as.list.len = v.as.list.cap = (size_t)len;
+        v.as.list.items = len ? (MValue *)calloc((size_t)len, sizeof(MValue)) : NULL;
+        if (len && !v.as.list.items) return 0;
+        for (int64_t i = 0; i < len; ++i) v.as.list.items[(size_t)i] = mval_i64(start + i);
+        *out_result = v;
+        return 1;
+    }
+
+    default: return 0;
+    }
+}
+
+/* ── entry point ─────────────────────────────────────────────────────────── */
+static void usage(const char *argv0){ fprintf(stderr,"Usage: %s <program.mvi>\n",argv0); }
+
+int main(int argc, char **argv){
+    if(argc<2){usage(argv[0]);return 1;}
+    MLoadedProgram lp;
+    if(!parse_loaded_program(argv[1],&lp)){
+        fprintf(stderr,"failed to load standalone image: %s\n",argv[1]);
+        return 1;
+    }
+    MProgram prog={lp.code,lp.code_len,lp.consts,lp.const_len,lp.spans,lp.span_len,lp.source_name};
+    MVM vm; mvm_init(&vm);
+    vm.syscall.fn=runtime_syscall; vm.syscall.user=NULL;
+    MRunResult rr; memset(&rr,0,sizeof(rr));
+    int ok=mvm_run(&vm,&prog,&rr);
+    if(!ok||rr.failed){
+        fprintf(stderr,"run failed: %s\n",rr.error_message?rr.error_message:"unknown");
+        mvm_free(&vm); free_loaded_program(&lp); return 1;
+    }
+    mvm_free(&vm); free_loaded_program(&lp);
+    return 0;
+}

@@ -1,0 +1,28 @@
+# Mellow stdlib core module
+# Default helper surface for starter packages and standalone/runtime parity.
+
+let CORE_VERSION = "2.1.4"
+let CORE_STARTER_PACKAGES = [
+  "core-print",
+  "core-strings",
+  "core-json",
+  "core-time",
+  "core-math",
+  "core-collections",
+  "core-save",
+  "core-ai",
+  "core-gamekit",
+  "core-workflow"
+]
+
+fn core_identity(x) {
+  return x
+}
+
+fn core_truthy(x) {
+  return x
+}
+
+fn core_packages() {
+  return CORE_STARTER_PACKAGES
+}

@@ -1,0 +1,8 @@
+import "pkg:core-print" as out
+import "pkg:core-strings" as text
+import "pkg:core-math" as mathx
+import "pkg:core-workflow" as wf
+
+out.banner(text.upper("mellow starter packages"))
+keep task = wf.job("demo.run", {"score": mathx.clamp01(2)})
+out.kv("task", wf.to_json(task))

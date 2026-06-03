@@ -1,0 +1,58 @@
+# modules_v148.mellow — v1.4.8 get/call Module System Examples
+
+# ── Basic get/call usage ──────────────────────────────────────────────────────
+
+# Math operations
+keep root   = get math.sqrt(25)
+keep clamped = call math.clamp(15, 0, 10)
+keep lerped = get math.lerp(0, 100, 0.3)
+keep pi_val = get math.pi
+
+show f"sqrt(25) = {root}"
+show f"clamp(15,0,10) = {clamped}"
+show f"lerp(0,100,0.3) = {lerped}"
+show f"pi = {pi_val}"
+
+# String operations
+keep upper  = get string.upper("mellowlang")
+keep lower  = call string.lower("MELLOWLANG")
+keep parts  = get string.split("one,two,three", ",")
+keep joined = call string.join(parts, " | ")
+keep trimmed = get string.trim("  hello  ")
+keep replaced = call string.replace("hello world", "world", "mellow")
+
+show upper
+show lower
+show parts
+show joined
+show trimmed
+show replaced
+
+# List operations
+keep xs = [5, 3, 1, 4, 2]
+call list.sort(xs)
+keep n = get list.len(xs)
+show xs
+show f"length: {n}"
+
+# get in arithmetic expression
+keep hyp = get math.sqrt(get math.pow(3, 2) + get math.pow(4, 2))
+show f"3-4-5 triangle hypotenuse: {hyp}"
+
+# get result used in condition
+keep val = get math.abs(-42)
+check val > 40:
+    show "absolute value is large"
+
+# get in loop
+show "Squares:"
+keep results = []
+for i = 1, 6:
+    keep sq = get math.pow(i, 2)
+    call list.push(results, sq)
+show results
+
+# JSON
+keep data = {name: "MellowLang", version: "1.4.8", ai: true}
+keep json_str = call json.encode(data)
+show json_str

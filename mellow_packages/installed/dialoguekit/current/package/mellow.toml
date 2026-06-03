@@ -1,0 +1,9 @@
+name = "dialoguekit"
+version = "0.1.0"
+description = "Mellow package"
+entry = "src/main.mellow"
+license = "MIT"
+keywords = ["mellow", "package"]
+
+[dependencies]
+# add package = "^1.0.0"

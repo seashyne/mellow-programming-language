@@ -1,0 +1,19 @@
+function push(items, value) {
+    return list.push(items, value)
+}
+
+function size(items) {
+    return list.len(items)
+}
+
+function contains(items, value) {
+    return list.has(items, value)
+}
+
+function dict_get(data, key, fallback) {
+    return map.get(data, key, fallback)
+}
+
+function dict_has(data, key) {
+    return map.has(data, key)
+}

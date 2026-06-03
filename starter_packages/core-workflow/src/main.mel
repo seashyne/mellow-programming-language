@@ -1,0 +1,19 @@
+function job(name, payload) {
+    return {
+        "name": name,
+        "payload": payload,
+        "created_ms": time.ms(),
+        "attempts": 0,
+        "status": "queued"
+    }
+}
+
+function mark_retry(task, attempts) {
+    task["attempts"] = attempts
+    task["status"] = "retry"
+    return task
+}
+
+function to_json(task) {
+    return json.encode(task)
+}

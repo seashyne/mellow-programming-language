@@ -1,0 +1,17 @@
+{
+  "version": "1.0.1",
+  "entry": "scripts/main.mellow",
+  "global_seed": 12345,
+  "allow_system_modules": [
+    "math",
+    "time",
+    "list",
+    "map",
+    "string",
+    "json",
+    "rand",
+    "vec"
+  ],
+  "project_libs_dir": "libs",
+  "notes": "โครงสร้างนี้เผื่อ future: project libs allowlist + cache"
+}

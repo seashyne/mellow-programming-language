@@ -1,0 +1,3 @@
+function save_text(key, value) {
+    storage.write(key, value)
+}

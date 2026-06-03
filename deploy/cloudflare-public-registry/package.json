@@ -1,0 +1,14 @@
+{
+  "name": "mellow-public-registry-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 execute REGISTRY_DB --file=./migrations/001_init.sql"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "wrangler": "^4.11.0"
+  }
+}

@@ -1,0 +1,101 @@
+# MellowLang v1.4.7 — Integration Test
+
+print("=== String Helpers ===")
+assert(str_starts_with("hello world", "hello"), "starts_with")
+assert(str_ends_with("hello world", "world"), "ends_with")
+assert(str_contains("hello world", "lo wo"), "contains")
+assert(str_repeat("ab", 3) == "ababab", "repeat")
+assert(str_pad_left("42", 5) == "   42", "pad_left")
+assert(str_pad_left("42", 5, "0") == "00042", "pad_left char")
+assert(str_pad_right("hi", 5) == "hi   ", "pad_right")
+assert(str_format("{} + {} = {}", 1, 2, 3) == "1 + 2 = 3", "format")
+print("String helpers: OK")
+
+print("=== Math Helpers ===")
+assert(sign(-5) == -1, "sign neg")
+assert(sign(0) == 0, "sign zero")
+assert(sign(7) == 1, "sign pos")
+assert(fmod(10, 3) == 1.0, "fmod")
+let pi_val = deg_to_rad(180)
+assert(pi_val > 3.14 and pi_val < 3.15, "deg_to_rad")
+assert(rad_to_deg(0) == 0.0, "rad_to_deg")
+let d = distance([0,0], [3,4])
+assert(d == 5.0, f"distance={d}")
+let ang = angle_between([0,0], [1,0])
+assert(ang == 0.0, f"angle_between={ang}")
+print("Math helpers: OK")
+
+print("=== List Functional ===")
+let nums = [1, 2, 3, 4, 5]
+let found = list_find(nums, 3)
+assert(found == 2, f"list_find={found}")
+let not_found = list_find(nums, 99)
+assert(not_found == -1, "list_find not found")
+let sliced = list_slice(nums, 1, 3)
+assert(sliced == [2, 3], f"list_slice={sliced}")
+let rev = list_reverse(nums)
+assert(rev == [5, 4, 3, 2, 1], f"list_reverse={rev}")
+let cnt = list_count(nums, 3)
+assert(cnt == 1, f"list_count={cnt}")
+print("List functional: OK")
+
+print("=== Type Checking ===")
+assert(is_number(42), "is_number int")
+assert(is_number(3.14), "is_number float")
+assert(not is_number("hi"), "not is_number str")
+assert(not is_number(true), "not is_number bool")
+assert(is_string("hello"), "is_string")
+assert(not is_string(42), "not is_string")
+assert(is_bool(true), "is_bool true")
+assert(is_bool(false), "is_bool false")
+assert(not is_bool(1), "not is_bool int")
+assert(is_list([1,2,3]), "is_list")
+assert(not is_list({"a":1}), "not is_list map")
+assert(is_map({"a":1}), "is_map")
+assert(is_none(none), "is_none")
+assert(not is_none(0), "not is_none 0")
+assert(type_of(42) == "number", "type_of number")
+assert(type_of("hi") == "string", "type_of string")
+assert(type_of([]) == "list", "type_of list")
+assert(type_of({}) == "map", "type_of map")
+assert(type_of(true) == "bool", "type_of bool")
+let none_type = type_of(none)
+assert(is_none(none), "is_none cross-check")
+assert(none_type != "number", "type_of none is not number")
+print("Type checking: OK")
+
+print("=== Assert ===")
+assert(1 + 1 == 2, "basic math")
+assert_eq(str_upper("hi"), "HI", "str_upper")
+assert_ne(1, 2, "1 != 2")
+try:
+    assert(false, "should fail")
+catch err:
+    assert(str_contains(err, "AssertionError"), "caught assert")
+print("Assert: OK")
+
+print("=== Event System ===")
+let log = []
+
+on("player_hit", amount):
+    list_push(log, f"hit:{amount}")
+
+on("player_heal", amount):
+    list_push(log, f"heal:{amount}")
+
+emit("player_hit", [50])
+emit("player_heal", [30])
+emit("player_hit", [20])
+
+assert(len(log) == 3, f"log len={len(log)}")
+assert(log[0] == "hit:50", f"log[0]={log[0]}")
+assert(log[1] == "heal:30", f"log[1]={log[1]}")
+assert(log[2] == "hit:20", f"log[2]={log[2]}")
+print("Event system: OK")
+
+print("")
+print("=== Linter Test (run: mellow check linter_test.mellow) ===")
+print("Create linter_test.mellow with unused vars to verify linter")
+
+print("")
+print("All v1.4.7 tests passed!")

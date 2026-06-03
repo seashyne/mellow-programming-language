@@ -1,0 +1,11 @@
+function session(prompt_name) {
+    return ai.session_open(prompt_name)
+}
+
+function ask(session_id, prompt) {
+    return ai.session_message(session_id, prompt)
+}
+
+function answer(query, docs) {
+    return ai.rag_answer(query, docs, 3)
+}

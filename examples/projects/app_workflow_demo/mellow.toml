@@ -1,0 +1,8 @@
+name = "app-workflow-demo"
+version = "0.1.0"
+description = "HTTP + storage workflow demo"
+entry = "src/main.mellow"
+
+[dependencies]
+@mellow/std-http = "^0.1.0"
+@mellow/std-storage = "^0.1.0"

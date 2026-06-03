@@ -1,0 +1,13 @@
+# v1.4.0: game module demo (A* pathfinding)
+
+g = get("game")
+
+grid = [
+  [0,0,0,0,0],
+  [1,1,0,1,0],
+  [0,0,0,1,0],
+  [0,1,0,0,0]
+]
+
+path = call(g["astar"], grid, [0,0], [4,3], false)
+print("path:", path)

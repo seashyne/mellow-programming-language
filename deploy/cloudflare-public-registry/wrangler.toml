@@ -1,0 +1,18 @@
+name = "mellow-public-registry"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+workers_dev = true
+
+[[d1_databases]]
+binding = "REGISTRY_DB"
+database_name = "mellow_registry"
+database_id = "6d64e6c2-4c6a-469c-8a6f-8345678fbfda"
+
+[[r2_buckets]]
+binding = "PACKAGE_BUCKET"
+bucket_name = "mellow-registry-packages"
+preview_bucket_name = "mellow-registry-packages-preview"
+
+[vars]
+REGISTRY_BASE_URL = "https://registry.mellowlang.org"
+TOKEN_HASH_SALT = "replace-with-random-64-hex-salt"

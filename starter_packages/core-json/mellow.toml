@@ -1,0 +1,10 @@
+name = "core-json"
+version = "0.1.0"
+description = "JSON encode/decode wrappers for app and API scripts."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+keywords = ["core", "json", "data", "starter"]
+
+[dependencies]
+json = "host"

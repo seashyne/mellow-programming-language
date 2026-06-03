@@ -1,0 +1,19 @@
+function scene(name) {
+    return game.scene_create(name)
+}
+
+function spawn(name, x, y) {
+    return game.entity_create(name, x, y, 1, 1)
+}
+
+function move(entity, dx, dy) {
+    return game.entity_move(entity, dx, dy)
+}
+
+function tween(a, b, t) {
+    return game.tween(a, b, t, "out_quad")
+}
+
+function collide(a, b) {
+    return game.collide_aabb(a, b)
+}

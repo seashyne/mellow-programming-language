@@ -1,0 +1,11 @@
+keep game = get("game")
+keep scene = call game["scene_create"]("level1", 320, 180)
+keep hero = call game["entity_create"]("hero", 2, 3, 1, 1, ["player"])
+keep wall = call game["entity_create"]("wall", 3, 3, 1, 1, ["solid"])
+keep moved = call game["entity_move"](hero, 1, 0)
+keep hit = call game["collide_aabb"](moved, wall)
+keep frame = call game["anim_frame"](6, 0.5, 8, true)
+show scene
+show moved
+show hit
+show frame

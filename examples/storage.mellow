@@ -1,0 +1,14 @@
+# storage.mellow — Storage + File modes (recommended)
+
+# Storage base folder is NOT auto-created.
+# Create it explicitly (user choice):
+mkdir(".")
+
+save_data("profile", {"score": 42, "name": "mellow"})
+let data = load_data("profile")
+print(data)
+
+# File modes
+file_write("notes.txt", "Hello\n", "w")
+file_append("notes.txt", "Append line\n", "a")
+print(file_read("notes.txt", "r"))
