@@ -33,6 +33,7 @@ These features are allowed to be missing from a default install and should be re
 - `security`: signing and secure-save helpers
 - `video`: MELV video encode/decode
 - native VM: optional C extension
+- `frameworks.mellow_ui`: Python UI framework with an in-memory renderer
 
 ## Experimental Or Legacy
 
@@ -50,6 +51,7 @@ These surfaces may be present in the repository but should not block a stable re
 A release is considered stable when:
 
 - `python -m pytest -q tests/core -p no:cacheprovider` passes
+- `python -m pytest -q frameworks/mellow_ui/tests -p no:cacheprovider` passes when framework files change
 - `mellow doctor` runs without crashing
 - `mellow run examples/hello.mellow` works
 - README version matches `pyproject.toml`

@@ -32,7 +32,9 @@ mellow = "mellowlang.cli:main"
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["mellowlang*", "frameworks*"]
+exclude = ["tests*", "examples*", "docs*", "deploy*", "websites*"]
 
 [tool.setuptools.package-data]
 "mellowlang.playground" = ["assets/*.html", "assets/*.css", "assets/*.js"]

@@ -110,6 +110,16 @@ The full suite currently includes legacy and experimental coverage. Use `tests/c
 - Changelog: `CHANGELOG.md`
 - Windows native build helper: `scripts/build-native-windows.ps1`
 
+## Frameworks
+
+`frameworks.mellow_ui` is the first usable framework package. It provides a small React-like virtual UI tree and an in-memory renderer:
+
+```powershell
+python -m frameworks.mellow_ui
+```
+
+Direct Mellow-script imports such as `import("mellow.ui")` are planned, but the stable v1 framework surface is the Python package.
+
 ## Project Layout
 
 - `src/mellowlang`: compiler, VM, CLI, stdlib bridges, and runtime support

@@ -7,6 +7,8 @@
 - Limit GitHub Actions to stable core tests while legacy and experimental suites are being triaged.
 - Add stable-core documentation and a release checklist.
 - Add a Windows native build helper script for the optional C extension.
+- Make `frameworks.mellow_ui` installable and runnable as a Python framework package.
+- Add JSON rendering support for Mellow UI framework previews/tools.
 
 ### Deferred
 - Full legacy and experimental test suite cleanup.
