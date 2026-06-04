@@ -103,6 +103,13 @@ python -m pytest -q tests
 
 The full suite currently includes legacy and experimental coverage. Use `tests/core` as the release gate for the stable language core.
 
+## Release Process
+
+- Stable core definition: `docs/STABLE_CORE.md`
+- Release checklist: `docs/RELEASE_CHECKLIST.md`
+- Changelog: `CHANGELOG.md`
+- Windows native build helper: `scripts/build-native-windows.ps1`
+
 ## Project Layout
 
 - `src/mellowlang`: compiler, VM, CLI, stdlib bridges, and runtime support
