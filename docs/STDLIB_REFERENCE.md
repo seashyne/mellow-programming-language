@@ -1,4 +1,4 @@
-# MellowLang Stdlib Reference (v1.4.0)
+# MellowLang Stdlib Reference (v2.5.0)
 
 This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
 
@@ -19,6 +19,33 @@ This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
 - `vec(x, y)`
 - `vec_add(a, b)`, `vec_sub(a, b)`
 - `vec_len(v)`
+
+## Money / decimal-safe rules
+
+Money helpers use Python `Decimal` internally and return a map shaped like
+`{"type": "money", "currency": "THB", "amount": "12.34"}`.
+
+```mellow
+let a = money("0.10", "THB")
+let b = money("0.20", "THB")
+let total = money_add(a, b)
+print(money_format(total))  # THB 0.30
+```
+
+Available helpers:
+
+- `money(amount, currency="USD")`
+- `money_add(a, b)`, `money_sub(a, b)`
+- `money_mul(a, factor)`, `money_div(a, divisor)`
+- `money_quantize(a, scale="0.01")`
+- `money_format(a)`, `money_amount(a)`, `money_currency(a)`
+- `money_eq(a, b)`, `money_lt(a, b)`, `money_gt(a, b)`
+
+Module form is also available:
+
+```mellow
+let total = money.add(money.of("12.34", "THB"), money.of("0.01", "THB"))
+```
 
 ## Random (deterministic)
 
@@ -129,6 +156,7 @@ print(path)
 ## CLI tooling
 
 - `mellow run <file|projectdir>`
+- `mellow run <file> --sandbox=finance`
 - `mellow check <file|dir>`
 - `mellow fmt <file|dir> [--write|--check]`
 - `mellow test`

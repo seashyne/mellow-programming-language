@@ -6,7 +6,7 @@ from typing import Any, List, Optional
 from ..error_core import MellowLangRuntimeError
 from ..ir import IRProgram
 from ..parser import parse_program
-from ..ast import Index
+from ..ast import Call, GetModuleExpr, GetModuleStmt, Index
 from .bytecode_backend import BytecodeBackend
 from .ir_lowering import IRLowerer, UnsupportedLoweringError
 from .optimizer import ControlFlowGraph, DefUseInfo, DominatorTree, IROptimizer, OptimizationSummary, SSAProgram
@@ -81,7 +81,7 @@ class Compiler:
             # The optimizer is still experimental. Its constant propagation can
             # corrupt indexed expressions such as xs[1], so keep those on the
             # unoptimized IR path until that pass is fixed.
-            use_optimizer = bool(optimize) and not _ast_contains(ast, Index)
+            use_optimizer = bool(optimize) and not _ast_contains(ast, Index) and not _ast_contains_money_call(ast)
             if use_optimizer:
                 optimized_ir, optimization = opt.optimize(ir)
                 optimized_cfg = opt.build_cfg(optimized_ir.instructions)
@@ -168,4 +168,18 @@ def _ast_contains(node: Any, node_type: type) -> bool:
         return any(_ast_contains(item, node_type) for item in node)
     if isinstance(node, dict):
         return any(_ast_contains(item, node_type) for item in node.values())
+    return False
+
+
+def _ast_contains_money_call(node: Any) -> bool:
+    if isinstance(node, Call):
+        return str(node.name).lower().startswith("money")
+    if isinstance(node, (GetModuleExpr, GetModuleStmt)):
+        return str(node.module).lower() == "money"
+    if is_dataclass(node):
+        return any(_ast_contains_money_call(value) for value in node.__dict__.values())
+    if isinstance(node, (list, tuple)):
+        return any(_ast_contains_money_call(item) for item in node)
+    if isinstance(node, dict):
+        return any(_ast_contains_money_call(item) for item in node.values())
     return False

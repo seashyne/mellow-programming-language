@@ -13,12 +13,13 @@ This document defines the stable surface for Mellow Programming Language release
 - list literals and indexing
 - map literals and indexing
 - strings, numbers, booleans, and `none`/`null`
-- basic math/string/list/map/json host helpers
+- basic math/string/list/map/json/money host helpers
 
 ## Stable CLI
 
 - `mellow --version`
 - `mellow run <file>`
+- `mellow run <file> --sandbox=finance`
 - `mellow check <file-or-dir>`
 - `mellow fmt <files...>`
 - `mellow modules --json`
@@ -33,6 +34,7 @@ These features are allowed to be missing from a default install and should be re
 - `security`: signing and secure-save helpers
 - `video`: MELV video encode/decode
 - native VM: optional C extension with stable-core parity in v2.4.0
+- finance sandbox profile: routes through the Python VM until native sandbox parity is complete
 - `frameworks.mellow_ui`: Python UI framework with an in-memory renderer
 
 ## Experimental Or Legacy

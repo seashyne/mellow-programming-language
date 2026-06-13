@@ -474,6 +474,8 @@ Modern usage:
 
     p.add_argument("--allow-ask", action="store_true", help="Enable input()/ask() in sandbox")
     p.add_argument("--no-wait", action="store_true", help="Disable wait() in sandbox")
+    p.add_argument("--sandbox", dest="sandbox_profile", choices=["default", "finance"], default="default",
+                  help="Runtime sandbox profile")
 
     # Storage
     p.add_argument("--no-storage", action="store_true", help="Disable storage APIs")
@@ -541,6 +543,8 @@ Modern commands:
     pr.add_argument("--global-seed", type=int)
     pr.add_argument("--allow-ask", action="store_true")
     pr.add_argument("--no-wait", action="store_true")
+    pr.add_argument("--sandbox", dest="sandbox_profile", choices=["default", "finance"], default="default",
+                    help="Runtime sandbox profile")
     pr.add_argument("--no-storage", action="store_true", help="Disable storage APIs")
     pr.add_argument("--storage-dir", help="Base directory for storage (default: mellow_saves)")
     pr.add_argument("--unsafe-fs", action="store_true", help="Allow scripts to set storage_dir to absolute paths or use '..' (unsafe)")
@@ -2414,11 +2418,24 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
              profile: bool,
              trace: bool = False, step: bool = False, break_lines: str | None = None,
              watch: str | None = None, ai_timeline: str | None = None,
-             color: bool = False, no_color: bool = False, registry: str | None = None, no_resolve: bool = False) -> int:
+             color: bool = False, no_color: bool = False, registry: str | None = None, no_resolve: bool = False,
+             sandbox_profile: str = "default") -> int:
     p = Path(file)
 
     # Secure save system default (dev-friendly). In project mode this becomes deny-by-default.
     allow_save: bool = True
+    sandbox_profile = str(sandbox_profile or "default").strip().lower()
+    if sandbox_profile == "finance":
+        engine = "py"
+        allow_ask = False
+        no_wait = True
+        allow_storage = False
+        allow_save = False
+        allow_unsafe_fs = False
+        if max_steps is None:
+            max_steps = 100_000
+        if syscall_budget is None:
+            syscall_budget = 100
 
     # --- Project mode auto-detect (v1.4.5 standard) ---
     project_root: Path | None = None
@@ -2635,6 +2652,17 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             if isinstance(perms, list):
                 net_http_allow = ",".join(http_allow) if http_allow else None
                 net_ws_allow = ",".join(ws_allow) if ws_allow else None
+
+        if sandbox_profile == "finance":
+            engine = "py"
+            allow_ask = False
+            no_wait = True
+            allow_storage = False
+            allow_save = False
+            allow_net = False
+            net_http_allow = None
+            net_ws_allow = None
+            allow_unsafe_fs = False
 
         cfg = RunConfig(
             seed=seed,
@@ -3885,6 +3913,7 @@ def main(argv: List[str] | None = None) -> int:
                 no_color=False,
                 registry=getattr(ns, "registry", None),
                 no_resolve=getattr(ns, "no_resolve", False),
+                sandbox_profile=getattr(ns, "sandbox_profile", "default"),
             )
         if cmd == "test":
             return _cmd_test(
@@ -3962,6 +3991,7 @@ def main(argv: List[str] | None = None) -> int:
         max_ms=getattr(ns, "max_ms", None),
         syscall_budget=getattr(ns, "syscall_budget", None),
         profile=bool(getattr(ns, "profile", False)),
+        sandbox_profile=getattr(ns, "sandbox_profile", "default"),
     )
 
 

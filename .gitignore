@@ -6,6 +6,7 @@ __pycache__/
 .mellow/
 .pytest_cache/
 pytest-cache-files-*/
+.tmp_money_finance_test/
 tmp/
 node_modules/
 dist/

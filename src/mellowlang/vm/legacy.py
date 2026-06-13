@@ -544,6 +544,8 @@ class MellowLangVM:
 
     # ---------------- Utilities ----------------
     def format_value(self, val):
+        if isinstance(val, dict) and val.get("type") == "money":
+            return f"{val.get('currency', 'USD')} {val.get('amount', '0.00')}"
         if isinstance(val, (float, int)):
             if self.precision is not None:
                 try:

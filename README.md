@@ -1,4 +1,4 @@
-# Mellow Programming Language 2.4.0
+# Mellow Programming Language 2.5.0
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -9,10 +9,10 @@ This release treats the language core as the stable surface:
 - `if`, `while`, and `for`
 - `range(...)`
 - list and map literals
-- string/math/list/map/json helpers
+- string/math/list/map/json/money helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. The native C VM is a supported optional runtime for the stable core in v2.4.0.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. The native C VM is a supported optional runtime for the stable core in v2.4.0+; finance sandbox mode currently routes through the Python VM for stricter permission behavior.
 
 ## Quick Start
 
@@ -53,6 +53,21 @@ Run it:
 
 ```powershell
 mellow run my_script.mellow
+```
+
+Money-safe rules:
+
+```mellow
+let subtotal = money("0.10", "THB")
+let fee = money("0.20", "THB")
+let total = money_add(subtotal, fee)
+print(money_format(total))  # THB 0.30
+```
+
+Run finance-style scripts with a tighter sandbox:
+
+```powershell
+mellow run rules.mellow --sandbox=finance
 ```
 
 ## Stable CLI
@@ -109,7 +124,7 @@ Full suite:
 python -m pytest -q tests
 ```
 
-The full suite currently includes legacy and experimental coverage. Use `tests/core` plus `tests/native` as the v2.4.0 release gate for stable language core and native C parity.
+The full suite currently includes legacy and experimental coverage. Use `tests/core` plus `tests/native` as the release gate for stable language core and native C parity.
 
 ## Release Process
 

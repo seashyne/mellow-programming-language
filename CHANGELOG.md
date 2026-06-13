@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.5.0 - 2026-06-13
+
+### Production Scripting Core
+- Add Decimal-backed `std.money` helpers for exact money-style rules.
+- Add top-level money aliases such as `money(...)`, `money_add(...)`, and `money_format(...)`.
+- Add `--sandbox=finance` for stricter rule-script execution: no ask/wait/storage/save/network and Python VM routing until native sandbox parity is complete.
+- Teach the IR compiler path to lower money stdlib calls without treating them as user skills.
+- Add core tests for money precision and finance sandbox enforcement.
+
+### Deferred
+- Native C VM parity for `std.money`.
+- A full language-level `decimal` literal/type syntax.
+- Audit-log and immutable ledger primitives.
+
 ## 2.4.0 - 2026-06-13
 
 ### Native Core Parity

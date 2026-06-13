@@ -1,4 +1,4 @@
-# MellowLang Syntax Reference (v1.3.3)
+# MellowLang Syntax Reference (v2.5.0)
 
 Mellow is a **safe, deterministic scripting language** for games and AI logic.
 
@@ -51,6 +51,7 @@ hp = hp - 10
 - list: `[1, 2, 3]`
 - dict: `{ "a": 1, "b": 2 }`
 - vec: `vec(x, y)`
+- money maps from `money("12.34", "THB")` for exact decimal-style rules
 
 ---
 
@@ -205,5 +206,6 @@ Common flags:
 - `--allow-ask` (enable user input)
 - `--no-wait` (disable sleep/wait)
 - budgets: `--max-steps`, `--max-ms`, `--syscall-budget`
+- `--sandbox=finance` disables ask/wait/storage/save/network and routes through the Python VM for stricter permission enforcement
 
 See: `docs/CAPABILITIES.md` and `docs/CLI.md`.

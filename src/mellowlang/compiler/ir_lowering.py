@@ -44,10 +44,48 @@ from ..ast import (
     WaitStmt,
 )
 from ..ir import IRFunction, IRInstruction, IRProgram
+from ..host.legacy import MODULE_ALLOWLIST
+
+
+STDLIB_CALLS = {
+    "money": "std.money.of",
+    "money.of": "std.money.of",
+    "money_of": "std.money.of",
+    "money.add": "std.money.add",
+    "money_add": "std.money.add",
+    "money.sub": "std.money.sub",
+    "money_sub": "std.money.sub",
+    "money.mul": "std.money.mul",
+    "money_mul": "std.money.mul",
+    "money.div": "std.money.div",
+    "money_div": "std.money.div",
+    "money.quantize": "std.money.quantize",
+    "money_quantize": "std.money.quantize",
+    "money.format": "std.money.format",
+    "money_format": "std.money.format",
+    "money.amount": "std.money.amount",
+    "money_amount": "std.money.amount",
+    "money.currency": "std.money.currency",
+    "money_currency": "std.money.currency",
+    "money.eq": "std.money.eq",
+    "money_eq": "std.money.eq",
+    "money.lt": "std.money.lt",
+    "money_lt": "std.money.lt",
+    "money.gt": "std.money.gt",
+    "money_gt": "std.money.gt",
+}
 
 
 class UnsupportedLoweringError(RuntimeError):
     pass
+
+
+def _module_syscall(module: str, function: str) -> str:
+    mod = str(module).lower()
+    func = str(function).lower()
+    if mod in MODULE_ALLOWLIST and func in MODULE_ALLOWLIST[mod]:
+        return MODULE_ALLOWLIST[mod][func]
+    return f"std.{mod}.{func}"
 
 
 @dataclass
@@ -292,7 +330,7 @@ class IRLowerer:
             self.emit("LABEL", skip, line=line, col=col)
             self.events[stmt.event] = IRFunction(name=stmt.event, entry_label=entry, params=list(stmt.params), kind="event")
         elif isinstance(stmt, GetModuleStmt):
-            self.emit("PUSH", f"{stmt.module}.{stmt.function}", line=line, col=col)
+            self.emit("PUSH", _module_syscall(stmt.module, stmt.function), line=line, col=col)
             for arg in stmt.args:
                 self._expr(arg)
             self.emit("SYSCALL", len(stmt.args), line=line, col=col)
@@ -335,13 +373,22 @@ class IRLowerer:
             else:
                 self.emit(chosen, line=line, col=col)
         elif isinstance(expr, Call):
+            syscall_name = STDLIB_CALLS.get(str(expr.name).lower())
+            if syscall_name:
+                if expr.kwargs:
+                    raise UnsupportedLoweringError("named arguments are not yet lowered in IR pipeline")
+                self.emit("PUSH", syscall_name, line=line, col=col)
+                for arg in expr.args:
+                    self._expr(arg)
+                self.emit("SYSCALL", len(expr.args), line=line, col=col)
+                return
             for arg in expr.args:
                 self._expr(arg)
             if expr.kwargs:
                 raise UnsupportedLoweringError("named arguments are not yet lowered in IR pipeline")
             self.emit("CALL", expr.name, len(expr.args), line=line, col=col)
         elif isinstance(expr, GetModuleExpr):
-            self.emit("PUSH", f"{expr.module}.{expr.function}", line=line, col=col)
+            self.emit("PUSH", _module_syscall(expr.module, expr.function), line=line, col=col)
             for arg in expr.args:
                 self._expr(arg)
             self.emit("SYSCALL", len(expr.args), line=line, col=col)
