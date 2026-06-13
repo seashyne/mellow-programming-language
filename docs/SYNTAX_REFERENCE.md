@@ -1,4 +1,4 @@
-# MellowLang Syntax Reference (v2.6.0)
+# MellowLang Syntax Reference (v2.7.0)
 
 Mellow is a **safe, deterministic scripting language** for games and AI logic.
 
@@ -207,7 +207,7 @@ Common flags:
 - `--allow-ask` (enable user input)
 - `--no-wait` (disable sleep/wait)
 - budgets: `--max-steps`, `--max-ms`, `--syscall-budget`
-- `--sandbox=finance` disables ask/wait/storage/save/network and routes through the Python VM for stricter permission enforcement
+- `--sandbox=finance` disables ask/wait/storage/save/network on both Python and native C execution
 - `--sandbox=data` enables bounded read-oriented data processing; writes additionally require `--data-write`
 
 See: `docs/CAPABILITIES.md` and `docs/CLI.md`.

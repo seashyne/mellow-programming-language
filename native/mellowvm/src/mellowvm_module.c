@@ -120,10 +120,12 @@ typedef struct CVM {
 
     /* RNG state (Python random.Random object) */
     PyObject *rng;            /* may be NULL */
+    PyObject *host;           /* borrowed for the duration of run() */
 
     /* config */
     int allow_ask;
     int allow_wait;
+    int allow_storage;
 
     /* output capture buffer — NULL means write to real stdout */
     PyObject *capture_list;   /* list of strings, or NULL */
@@ -156,8 +158,8 @@ static int mellow_truthy(PyObject *v) {
 static PyObject *fmt_list(PyObject *lst);
 static PyObject *mellow_format(PyObject *v) {
     if (!v || v == Py_None)    return PyUnicode_FromString("none");
-    if (v == Py_True)          return PyUnicode_FromString("true");
-    if (v == Py_False)         return PyUnicode_FromString("false");
+    if (v == Py_True)          return PyUnicode_FromString("True");
+    if (v == Py_False)         return PyUnicode_FromString("False");
     if (PyLong_CheckExact(v))  return PyObject_Str(v);
     if (PyFloat_CheckExact(v)) {
         double d = PyFloat_AS_DOUBLE(v), ip;
@@ -368,8 +370,10 @@ static PyObject *cvm_call1(CVM *parent_vm, PyObject *fn_ref,
     sub.tsp          = 0;
     sub.max_try      = CVM_SUB_TRY;
     sub.rng          = parent_vm->rng;
+    sub.host         = parent_vm->host;
     sub.allow_ask    = parent_vm->allow_ask;
     sub.allow_wait   = parent_vm->allow_wait;
+    sub.allow_storage = parent_vm->allow_storage;
     sub.capture_list = parent_vm->capture_list;
 
     /* new scope for the function */
@@ -1029,6 +1033,19 @@ static PyObject *cvm_syscall_dispatch(const char *sn,
         PyObject *r=PyObject_CallMethod(json,"loads","O",s); Py_DECREF(s); Py_DECREF(json); return r;
     }
 
+    /* Stateful/optional stdlib services are delegated to the per-run host. */
+    if (parent_vm->host && parent_vm->host != Py_None) {
+        PyObject *arg_list = PyList_New(argc);
+        if (!arg_list) return NULL;
+        for (long i=0; i<argc; i++) {
+            Py_INCREF(sa[i]);
+            PyList_SET_ITEM(arg_list, i, sa[i]);
+        }
+        PyObject *result = PyObject_CallMethod(parent_vm->host, "call", "sO", sn, arg_list);
+        Py_DECREF(arg_list);
+        return result;
+    }
+
     /* Fallthrough: unknown syscall */
     PyErr_Format(PyExc_RuntimeError, "RUNTIME: unknown syscall '%s'", sn);
     return NULL;
@@ -1495,6 +1512,10 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
 
         /* ── SAVE / LOAD_F / SAVE_VAL ── */
         case OP_SAVE_VAL: {
+            if (!vm->allow_storage) {
+                PyErr_SetString(PyExc_RuntimeError, "SANDBOX: storage is disabled");
+                goto exec_err;
+            }
             PyObject *value=_POP(), *filename=_POP();
             PyObject *json=PyImport_ImportModule("json");
             if(json){
@@ -1516,6 +1537,10 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
             Py_DECREF(value); Py_DECREF(filename); break;
         }
         case OP_SAVE: {
+            if (!vm->allow_storage) {
+                PyErr_SetString(PyExc_RuntimeError, "SANDBOX: storage is disabled");
+                goto exec_err;
+            }
             PyObject *filename=_POP();
             PyObject *vname=_A1;
             PyObject *value=scope_get(vm->scopes,vm->ns,vname);
@@ -1537,6 +1562,10 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
             Py_DECREF(filename); break;
         }
         case OP_LOAD_F: {
+            if (!vm->allow_storage) {
+                PyErr_SetString(PyExc_RuntimeError, "SANDBOX: storage is disabled");
+                goto exec_err;
+            }
             PyObject *filename=_POP();
             PyObject *vname=_A1;
             PyObject *loaded=Py_None;
@@ -1703,10 +1732,10 @@ exec_err:
 static PyObject *
 mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
 {
-    static char *kwlist[]={"bytecode","func_table","config","event_table",NULL};
-    PyObject *bytecode_obj=NULL,*func_table=NULL,*config_obj=NULL,*event_table=NULL;
-    if(!PyArg_ParseTupleAndKeywords(args_in,kwargs,"O|OOO",kwlist,
-            &bytecode_obj,&func_table,&config_obj,&event_table))
+    static char *kwlist[]={"bytecode","func_table","config","event_table","host",NULL};
+    PyObject *bytecode_obj=NULL,*func_table=NULL,*config_obj=NULL,*event_table=NULL,*host_obj=Py_None;
+    if(!PyArg_ParseTupleAndKeywords(args_in,kwargs,"O|OOOO",kwlist,
+            &bytecode_obj,&func_table,&config_obj,&event_table,&host_obj))
         return NULL;
     if(!PyList_Check(bytecode_obj)){
         PyErr_SetString(PyExc_TypeError,"bytecode must be a list"); return NULL;
@@ -1719,7 +1748,7 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
 
     /* config */
     long max_steps=5000000, max_stack_c=CVM_MAX_STACK;
-    int allow_ask=0, allow_wait=1;
+    int allow_ask=0, allow_wait=1, allow_storage=1;
     if(config_obj&&PyDict_Check(config_obj)){
         PyObject *ms=PyDict_GetItemString(config_obj,"max_steps");
         if(ms&&PyLong_Check(ms)) max_steps=PyLong_AsLong(ms);
@@ -1729,6 +1758,8 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
         if(aa) allow_ask=mellow_truthy(aa);
         PyObject *aw=PyDict_GetItemString(config_obj,"allow_wait");
         if(aw) allow_wait=mellow_truthy(aw);
+        PyObject *as=PyDict_GetItemString(config_obj,"allow_storage");
+        if(as) allow_storage=mellow_truthy(as);
     }
     if(max_stack_c>CVM_MAX_STACK) max_stack_c=CVM_MAX_STACK;
 
@@ -1770,8 +1801,10 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
     vm.tsp          = 0;
     vm.max_try      = CVM_MAX_TRY;
     vm.rng          = NULL;
+    vm.host         = host_obj;
     vm.allow_ask    = allow_ask;
     vm.allow_wait   = allow_wait;
+    vm.allow_storage = allow_storage;
     vm.capture_list = NULL;
 
     PyObject *result = cvm_exec(&vm, 0);
@@ -1790,14 +1823,16 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
 static PyObject *
 mellowvm_capabilities(PyObject *self, PyObject *Py_UNUSED(args))
 {
-    return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:s}",
+    return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:s,s:s}",
         "available", Py_True,
         "native_execution", Py_True,
+        "native_stdlib_parity", Py_True,
         "conditional_breakpoints", Py_False,
         "watch_expressions", Py_False,
         "typed_frame_snapshots", Py_False,
         "source_span_parity", Py_False,
-        "notes", "Native C execution covers the v2.4.0 stable language core; debugger, event, and replay hooks still route through Python."
+        "native_parity_level", "stable-core+money+data",
+        "notes", "Native C execution covers the stable language core plus money and data stdlib services; debugger, event, and replay hooks still route through Python."
     );
 }
 
@@ -1805,7 +1840,7 @@ mellowvm_capabilities(PyObject *self, PyObject *Py_UNUSED(args))
 static PyMethodDef methods[]={
     {"run",(PyCFunction)mellowvm_run,METH_VARARGS|METH_KEYWORDS,
      "Run MellowLang bytecode in native C VM v1.5.0.\n"
-     "Args: bytecode, func_table=None, config=None, event_table=None\n"
+     "Args: bytecode, func_table=None, config=None, event_table=None, host=None\n"
      "Handles all standard opcodes and ~70 builtin syscalls natively.\n"
      "No Python fallback needed for pure Mellow programs."},
     {"capabilities",(PyCFunction)mellowvm_capabilities,METH_NOARGS,

@@ -2436,7 +2436,6 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
     allow_save: bool = True
     sandbox_profile = str(sandbox_profile or "default").strip().lower()
     if sandbox_profile == "finance":
-        engine = "py"
         allow_ask = False
         no_wait = True
         allow_storage = False
@@ -2447,7 +2446,6 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
         if syscall_budget is None:
             syscall_budget = 100
     elif sandbox_profile == "data":
-        engine = "py"
         allow_ask = False
         no_wait = True
         allow_save = False
@@ -2680,7 +2678,6 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
                 net_ws_allow = ",".join(ws_allow) if ws_allow else None
 
         if sandbox_profile == "finance":
-            engine = "py"
             allow_ask = False
             no_wait = True
             allow_storage = False
@@ -2691,7 +2688,6 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             allow_unsafe_fs = False
             allow_data_write = False
         elif sandbox_profile == "data":
-            engine = "py"
             allow_ask = False
             no_wait = True
             allow_save = False

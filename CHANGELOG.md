@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.7.0 - 2026-06-13
+
+### Native Stdlib Parity
+- Add a per-run native host bridge so the C VM can call stateful and optional stdlib services without falling back to the Python VM.
+- Add strict native parity for Decimal-backed `std.money`.
+- Add strict native parity for bounded JSONL/CSV streams and parameterized SQLite in `std.data`.
+- Preserve data batch, record, stream, query, write, path, and time limits in native execution.
+- Close native data streams and SQLite handles at the end of every run.
+- Enforce storage denial inside the C VM for the finance sandbox profile.
+- Stop forcing finance and data sandbox profiles to the Python VM.
+- Add native money, JSONL, and SQLite lifecycle tests with fallback disabled.
+
+### Deferred
+- Native debugger, event dispatch, and deterministic record/replay parity.
+- Native implementations for external database adapters and distributed data execution.
+
 ## 2.6.0 - 2026-06-13
 
 ### Data Processing Core

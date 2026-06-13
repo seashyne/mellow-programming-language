@@ -112,7 +112,7 @@ def native_vm_status() -> dict[str, Any]:
         'build_ready': bool(build_tool and header and all(p.exists() for p in source_files())),
         'build_command': f"{sys.executable} setup.py build_ext --inplace",
         'recommended_run_mode': 'engine=c,native_allow_fallback=false' if load_error is None else 'build-native-first',
-        'native_parity_level': 'stable-core' if load_error is None else 'unavailable',
+        'native_parity_level': 'stable-core+money+data' if load_error is None else 'unavailable',
         'python_vm_still_needed_for': ['record/replay', 'event handlers', 'debugger parity'] if load_error is None else ['all execution until native extension is rebuilt'],
     }
 

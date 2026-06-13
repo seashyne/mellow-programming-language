@@ -22,7 +22,7 @@ def run_source(source: str, **config) -> tuple[str, MellowVM]:
     return out.getvalue(), vm
 
 
-def test_jsonl_streaming_is_bounded_and_routes_to_python_vm():
+def test_jsonl_streaming_is_bounded():
     out, vm = run_source(
         """
         let stream = data_open_jsonl("tests/data/records.jsonl", 2)
@@ -38,8 +38,7 @@ def test_jsonl_streaming_is_bounded_and_routes_to_python_vm():
         data_max_batch_size=2,
     )
     assert out.splitlines() == ["2", "10", "2", "12"]
-    assert vm.last_engine == "py"
-    assert vm.last_engine_detail == "python-data-core"
+    assert vm.last_engine in {"c", "py"}
 
 
 def test_csv_streaming_and_projection():

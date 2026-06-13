@@ -191,17 +191,6 @@ class MellowVM:
         if engine not in ("auto", "py", "c"):
             engine = "auto"
 
-        data_core_requested = any(
-            isinstance(part, str) and part.startswith("std.data.")
-            for instruction in list(getattr(program, "bytecode", None) or [])
-            for part in instruction[1:]
-        )
-        if data_core_requested and engine in ("auto", "c"):
-            if native_require or not native_allow_fallback:
-                raise MellowLangRuntimeError("NATIVE_REQUIRED", "data processing core requires the Python VM in v2.6.0")
-            self.last_engine_detail = "python-data-core"
-            engine = "py"
-
         # v1.3.0: deterministic record/replay is guaranteed on the legacy Python VM.
         # (C VM replay parity will be completed in a later release.)
         if (cfg.record_path or cfg.replay_path) and engine in ("auto", "c"):

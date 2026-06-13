@@ -1,4 +1,4 @@
-# MellowLang Stdlib Reference (v2.6.0)
+# MellowLang Stdlib Reference (v2.7.0)
 
 This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
 

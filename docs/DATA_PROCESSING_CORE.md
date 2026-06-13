@@ -1,6 +1,6 @@
 # Data Processing Core
 
-Mellow v2.6.0 processes large files as bounded batches instead of loading an
+Mellow v2.7.0 processes large files as bounded batches instead of loading an
 entire dataset into one list.
 
 ## Runtime model
@@ -10,11 +10,13 @@ entire dataset into one list.
 - Empty batches signal end-of-stream.
 - `data_cancel` and `data_close` release resources.
 - `--max-ms` is checked while reading records and executing data operations.
+- Python and native C engines use the same bounded data manager and cleanup rules.
 
 ## Recommended command
 
 ```bash
 mellow run job.mellow --sandbox=data --data-batch-size 1000 --data-max-rows 5000
+mellow run job.mellow --sandbox=data --engine=c --data-batch-size 1000
 ```
 
 SQLite writes are disabled unless explicitly enabled:

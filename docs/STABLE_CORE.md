@@ -34,9 +34,9 @@ These features are allowed to be missing from a default install and should be re
 - `net`: websocket/network helpers
 - `security`: signing and secure-save helpers
 - `video`: MELV video encode/decode
-- native VM: optional C extension with stable-core parity in v2.4.0
-- finance sandbox profile: routes through the Python VM until native sandbox parity is complete
-- data processing core: bounded JSONL/CSV streams and parameterized SQLite, currently Python VM only
+- native VM: optional C extension with stable-core, money, and data parity in v2.7.0
+- finance sandbox profile: supports native execution with storage denial enforced in the C VM
+- data processing core: bounded JSONL/CSV streams and parameterized SQLite on both Python and C engines
 - `frameworks.mellow_ui`: Python UI framework with an in-memory renderer
 
 ## Experimental Or Legacy
@@ -48,7 +48,7 @@ These surfaces may be present in the repository but should not block a stable re
 - package registry workflows
 - MMG and video runtime
 - desktop/playground runtimes
-- standalone/native parity beyond stable core execution
+- standalone/native parity beyond the stable core, money, and data surfaces
 
 ## Release Rule
 
