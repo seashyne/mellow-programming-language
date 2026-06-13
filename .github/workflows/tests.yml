@@ -21,6 +21,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[dev]
-      - name: Run stable core tests
+      - name: Build native extension
         run: |
-          pytest -q tests/core frameworks/mellow_ui/tests -p no:cacheprovider
+          python setup.py build_ext --inplace
+      - name: Run stable core and native parity tests
+        run: |
+          pytest -q tests/core tests/native frameworks/mellow_ui/tests -p no:cacheprovider

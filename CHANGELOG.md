@@ -1,6 +1,24 @@
 # Changelog
 
-## 2.3.5 - Unreleased
+## 2.4.0 - 2026-06-13
+
+### Native Core Parity
+- Add `tests/native` as the strict Python VM vs native C VM parity gate for the stable language core.
+- Fix the Python-to-C VM bridge so current native extensions can run without accidental `host=` keyword failures.
+- Add native C support for compiled `range(...)` calls used by stable `for` loops.
+- Report native parity as `stable-core` while keeping debugger, event, and record/replay fallback status explicit.
+- Build the native extension in CI before running native parity tests.
+
+### Stable
+- Bump package and runtime version to `2.4.0`.
+- Keep `frameworks.mellow_ui` in the release verification set.
+
+### Deferred
+- Native debugger pause/inspect parity.
+- Native event handler execution parity.
+- Native record/replay parity.
+
+## 2.3.5 - 2026-06-13
 
 ### Release Polish
 - Treat `tests/core` as the stable release gate.

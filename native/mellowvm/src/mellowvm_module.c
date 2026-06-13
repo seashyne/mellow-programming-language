@@ -1153,6 +1153,52 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
         case OP_CALL: {
             PyObject *fname=_A1;
             long argc_c=ilen>2?PyLong_AsLong(_A2):0;
+            const char *fname_c=PyUnicode_Check(fname)?PyUnicode_AsUTF8(fname):"";
+            if(fname_c && strcmp(fname_c,"range")==0) {
+                PyObject **args=(PyObject**)alloca((size_t)argc_c*sizeof(PyObject*));
+                for(long i=argc_c-1;i>=0;i--) args[i]=_POP();
+                long start=0, stop=0, step=1;
+                if(argc_c==1) {
+                    stop=to_long(args[0]);
+                } else if(argc_c>=2) {
+                    start=to_long(args[0]);
+                    stop=to_long(args[1]);
+                    if(argc_c>=3) step=to_long(args[2]);
+                }
+                if(step==0) step=1;
+                PyObject *lst=PyList_New(0);
+                if(!lst) {
+                    for(long i=0;i<argc_c;i++) Py_DECREF(args[i]);
+                    goto exec_err;
+                }
+                if(step>0) {
+                    for(long v=start; v<stop; v+=step) {
+                        PyObject *item=PyLong_FromLong(v);
+                        if(!item || PyList_Append(lst,item)<0) {
+                            Py_XDECREF(item);
+                            Py_DECREF(lst);
+                            for(long i=0;i<argc_c;i++) Py_DECREF(args[i]);
+                            goto exec_err;
+                        }
+                        Py_DECREF(item);
+                    }
+                } else {
+                    for(long v=start; v>stop; v+=step) {
+                        PyObject *item=PyLong_FromLong(v);
+                        if(!item || PyList_Append(lst,item)<0) {
+                            Py_XDECREF(item);
+                            Py_DECREF(lst);
+                            for(long i=0;i<argc_c;i++) Py_DECREF(args[i]);
+                            goto exec_err;
+                        }
+                        Py_DECREF(item);
+                    }
+                }
+                for(long i=0;i<argc_c;i++) Py_DECREF(args[i]);
+                _PUSH(lst);
+                Py_DECREF(lst);
+                break;
+            }
             /* resolve variable → func ref */
             PyObject *fvar=scope_get(vm->scopes,vm->ns,fname);
             PyObject *aname=fname;
@@ -1751,7 +1797,7 @@ mellowvm_capabilities(PyObject *self, PyObject *Py_UNUSED(args))
         "watch_expressions", Py_False,
         "typed_frame_snapshots", Py_False,
         "source_span_parity", Py_False,
-        "notes", "Execution parity is native-first in v2.0.3; debugger parity still needs follow-up hooks."
+        "notes", "Native C execution covers the v2.4.0 stable language core; debugger, event, and replay hooks still route through Python."
     );
 }
 

@@ -1,4 +1,4 @@
-# Mellow Programming Language 2.3.4
+# Mellow Programming Language 2.4.0
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -12,7 +12,7 @@ This release treats the language core as the stable surface:
 - string/math/list/map/json helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, native runtimes, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. The native C VM is a supported optional runtime for the stable core in v2.4.0.
 
 ## Quick Start
 
@@ -22,6 +22,7 @@ From a source checkout:
 python -m pip install -e .[dev]
 mellow --version
 mellow run examples\hello.mellow
+mellow run examples\hello.mellow --engine=c
 mellow check examples\hello.mellow
 mellow doctor
 ```
@@ -95,13 +96,20 @@ $env:PYTHONDONTWRITEBYTECODE = "1"
 python -m pytest -q tests\core -p no:cacheprovider
 ```
 
+Native core parity gate:
+
+```powershell
+python setup.py build_ext --inplace
+python -m pytest -q tests\native -p no:cacheprovider
+```
+
 Full suite:
 
 ```powershell
 python -m pytest -q tests
 ```
 
-The full suite currently includes legacy and experimental coverage. Use `tests/core` as the release gate for the stable language core.
+The full suite currently includes legacy and experimental coverage. Use `tests/core` plus `tests/native` as the v2.4.0 release gate for stable language core and native C parity.
 
 ## Release Process
 
@@ -124,6 +132,7 @@ Direct Mellow-script imports such as `import("mellow.ui")` are planned, but the 
 
 - `src/mellowlang`: compiler, VM, CLI, stdlib bridges, and runtime support
 - `tests/core`: stable core language tests
+- `tests/native`: native C VM parity tests for the stable core
 - `tests`: legacy, extended, and experimental tests
 - `examples`: runnable Mellow scripts
 - `stdlib`, `starter_packages`, `mellow_packages`: package and stdlib content

@@ -2,7 +2,7 @@
 
 This document defines the stable surface for Mellow Programming Language releases.
 
-`tests/core` is the release gate. A release may be tagged when this suite passes, `mellow doctor` runs, and the README and `pyproject.toml` versions agree.
+`tests/core` is the language release gate. Starting in v2.4.0, `tests/native` is also required for releases that claim native C parity for the stable core.
 
 ## Stable Language Features
 
@@ -32,7 +32,7 @@ These features are allowed to be missing from a default install and should be re
 - `net`: websocket/network helpers
 - `security`: signing and secure-save helpers
 - `video`: MELV video encode/decode
-- native VM: optional C extension
+- native VM: optional C extension with stable-core parity in v2.4.0
 - `frameworks.mellow_ui`: Python UI framework with an in-memory renderer
 
 ## Experimental Or Legacy
@@ -44,13 +44,15 @@ These surfaces may be present in the repository but should not block a stable re
 - package registry workflows
 - MMG and video runtime
 - desktop/playground runtimes
-- standalone/native parity beyond core execution
+- standalone/native parity beyond stable core execution
 
 ## Release Rule
 
 A release is considered stable when:
 
 - `python -m pytest -q tests/core -p no:cacheprovider` passes
+- `python setup.py build_ext --inplace` succeeds before native parity checks
+- `python -m pytest -q tests/native -p no:cacheprovider` passes for native-core releases
 - `python -m pytest -q frameworks/mellow_ui/tests -p no:cacheprovider` passes when framework files change
 - `mellow doctor` runs without crashing
 - `mellow run examples/hello.mellow` works

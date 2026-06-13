@@ -66,7 +66,7 @@ def run_bytecode_ex(
 ) -> NativeRunResult:
     """Run bytecode through the native C VM when possible.
 
-    In v2.0.3 this helper makes fallback explicit instead of silently dropping
+    In v2.4.0 this helper makes fallback explicit instead of silently dropping
     into the Python VM. Callers can require native execution and fail fast when
     the loaded extension or runtime path cannot satisfy the request.
     """
@@ -74,13 +74,18 @@ def run_bytecode_ex(
     native_available = ext is not None
     if ext is not None:
         try:
-            result = ext.run(
-                bytecode=bytecode,
-                host=host,
-                config=config,
-                func_table=func_table,
-                event_table=event_table,
-            )
+            run_kwargs = {
+                'bytecode': bytecode,
+                'config': config,
+                'func_table': func_table,
+                'event_table': event_table,
+            }
+            try:
+                result = ext.run(host=host, **run_kwargs)
+            except TypeError as e:
+                if 'keyword' not in str(e):
+                    raise
+                result = ext.run(**run_kwargs)
             return NativeRunResult(
                 result=result,
                 engine='c',
@@ -146,9 +151,9 @@ def c_vm_capabilities() -> Dict[str, Any]:
         "watch_expressions": False,
         "typed_frame_snapshots": False,
         "source_span_parity": False,
-        "notes": "Prebuilt extension exposes native execution only until rebuilt with newer debug hooks.",
+        "notes": "Native C execution covers the v2.4.0 stable language core; debugger, event, and replay hooks still route through Python.",
         "requires_python_fallback_for_debugger": True,
-        "native_parity_level": "execution-first",
+        "native_parity_level": "stable-core",
     }
     if ext is None:
         return base

@@ -21,7 +21,7 @@ def run_source(source: str) -> str:
 
 
 def test_version_matches_core_release():
-    assert __version__ == "2.3.4"
+    assert __version__ == "2.4.0"
 
 
 def test_print_arithmetic_and_variables():

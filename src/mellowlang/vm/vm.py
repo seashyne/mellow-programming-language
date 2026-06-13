@@ -181,14 +181,14 @@ class MellowVM:
         # (C VM replay parity will be completed in a later release.)
         if (cfg.record_path or cfg.replay_path) and engine in ("auto", "c"):
             if native_require or not native_allow_fallback:
-                raise MellowLangRuntimeError("NATIVE_REQUIRED", "record/replay still routes through the Python VM in v2.0.3")
+                raise MellowLangRuntimeError("NATIVE_REQUIRED", "record/replay still routes through the Python VM in v2.4.0")
             engine = "py"
 
         # v1.4.7: force Python VM when script uses event handlers
         # (C VM does not support on()/emit() dispatch yet)
         if getattr(program, "event_table", None):
             if native_require or not native_allow_fallback:
-                raise MellowLangRuntimeError("NATIVE_REQUIRED", "event handlers still require the Python VM in v2.0.3")
+                raise MellowLangRuntimeError("NATIVE_REQUIRED", "event handlers still require the Python VM in v2.4.0")
             engine = "py"
 
         # v2.0: unified debugger hook contract.
@@ -209,7 +209,7 @@ class MellowVM:
         self.last_debug_capabilities = dict(native_caps)
         if debug_requested and engine in ('auto', 'c') and not c_vm_debug_supported():
             if native_require or not native_allow_fallback:
-                raise MellowLangRuntimeError('NATIVE_REQUIRED', 'native C debugger parity is not complete yet in v2.0.3')
+                raise MellowLangRuntimeError('NATIVE_REQUIRED', 'native C debugger parity is not complete yet in v2.4.0')
             self.last_engine_detail = 'python-debug-bridge-for-c-parity' if native_caps.get('available') else 'python-debug-path'
             engine = 'py'
 
