@@ -35,6 +35,14 @@ python -m mellowlang --version
 python -m mellowlang run examples\hello.mellow
 ```
 
+คู่มือ syntax ฉบับเต็ม: [`docs/SYNTAX_REFERENCE.md`](docs/SYNTAX_REFERENCE.md)
+
+ตัวอย่างรวมที่รันได้:
+
+```powershell
+mellow run examples\syntax_tour_v280.mellow
+```
+
 ## Example
 
 ```mellow

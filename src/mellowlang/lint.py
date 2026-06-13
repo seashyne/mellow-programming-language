@@ -21,6 +21,8 @@ from .ast import (
     LoopForRange, RepeatUntil, LoopCount, DoBlock,
     Var, Call, BinaryOp, UnaryOp, Literal,
     Index, ListLiteral, MapLiteral, FStringExpr,
+    CallValExpr, LambdaExpr, ListCompExpr, SpreadExpr, SliceExpr,
+    GetModuleExpr, GetModuleStmt, ImportStmt,
 )
 
 
@@ -53,6 +55,15 @@ _BUILTINS: Set[str] = {
     "string_len","string_lower","string_upper",
     "str_starts_with","str_ends_with","str_pad_left","str_pad_right","str_repeat","str_contains",
     "json_encode","json_decode",
+    "enumerate","zip","sorted","reversed","any","all","sum",
+    "str","int","float","bool","type",
+    "money","money_of","money_add","money_sub","money_mul","money_div",
+    "money_quantize","money_format","money_amount","money_currency",
+    "money_eq","money_lt","money_gt",
+    "data_open_jsonl","data_open_csv","data_next","data_close","data_cancel",
+    "data_info","data_project","data_where","data_sum",
+    "data_sqlite_open","data_sqlite_close","data_sqlite_query","data_sqlite_execute",
+    "ledger_create","ledger_post","ledger_verify","ledger_balance","ledger_entries",
     "save_data","load_data","mkdir",
     "file_read","file_write","file_append","file_exists","file_delete",
     "save_init","save_set","save_get","save_commit","save_load",
@@ -173,6 +184,34 @@ class _Linter:
         elif isinstance(e, FStringExpr):
             for kind, val in e.parts:
                 if kind == "expr": self._expr(val)
+        elif isinstance(e, CallValExpr):
+            self._expr(e.callee)
+            for a in e.args: self._expr(a)
+        elif isinstance(e, LambdaExpr):
+            self._push(fn_name="<lambda>")
+            for p in e.params:
+                self._scope.declare(p, param=True)
+                self._scope.mark_used(p)
+            for default in e.defaults.values(): self._expr(default)
+            self._stmts(e.body)
+            self._flush_unused(self._pop())
+        elif isinstance(e, ListCompExpr):
+            self._expr(e.iterable)
+            self._push()
+            self._scope.declare(e.var_name, loop_var=True)
+            self._scope.mark_used(e.var_name)
+            self._expr(e.expr)
+            self._expr(e.condition)
+            self._flush_unused(self._pop())
+        elif isinstance(e, SpreadExpr):
+            self._expr(e.expr)
+        elif isinstance(e, SliceExpr):
+            self._expr(e.target)
+            self._expr(e.start)
+            self._expr(e.stop)
+            self._expr(e.step)
+        elif isinstance(e, GetModuleExpr):
+            for a in e.args: self._expr(a)
 
     def _stmts(self, stmts):
         for s in stmts: self._stmt(s)
@@ -191,6 +230,11 @@ class _Linter:
                 else: self._scope.mark_used(n)
         elif isinstance(s, ExprStmt):
             self._expr(s.expr)
+        elif isinstance(s, ImportStmt):
+            self._declare(s.alias)
+            self._scope.mark_used(s.alias)
+        elif isinstance(s, GetModuleStmt):
+            for e in s.args: self._expr(e)
         elif isinstance(s, ShowStmt):
             for e in s.exprs: self._expr(e)
         elif isinstance(s, (PrecisionStmt, WaitStmt)):
@@ -237,7 +281,10 @@ class _Linter:
             self._stmts(s.body); self._flush_unused(self._pop())
         elif isinstance(s, LoopForEach):
             self._expr(s.iterable)
-            self._push(); self._scope.declare(s.var_name, loop_var=True); self._scope.mark_used(s.var_name)
+            self._push()
+            for name in s.var_names:
+                self._scope.declare(name, loop_var=True)
+                self._scope.mark_used(name)
             self._stmts(s.body); self._flush_unused(self._pop())
         elif isinstance(s, LoopForMap):
             self._expr(s.iterable)
