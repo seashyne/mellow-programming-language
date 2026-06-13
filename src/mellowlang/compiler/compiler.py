@@ -174,9 +174,9 @@ def _ast_contains(node: Any, node_type: type) -> bool:
 def _ast_contains_stateful_stdlib_call(node: Any) -> bool:
     if isinstance(node, Call):
         name = str(node.name).lower()
-        return name.startswith("money") or name.startswith("data")
+        return name.startswith("money") or name.startswith("data") or name.startswith("ledger")
     if isinstance(node, (GetModuleExpr, GetModuleStmt)):
-        return str(node.module).lower() in {"money", "data"}
+        return str(node.module).lower() in {"money", "data", "ledger"}
     if is_dataclass(node):
         return any(_ast_contains_stateful_stdlib_call(value) for value in node.__dict__.values())
     if isinstance(node, (list, tuple)):

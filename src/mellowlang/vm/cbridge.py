@@ -262,11 +262,12 @@ def c_vm_capabilities() -> Dict[str, Any]:
         "watch_expressions": False,
         "typed_frame_snapshots": False,
         "source_span_parity": False,
-        "notes": "Native C execution covers the stable language core plus money and data stdlib services; debugger, event, and replay hooks still route through Python.",
+        "notes": "Native C execution covers the stable language core plus money, data, and ledger stdlib services; debugger, event, and replay hooks still route through Python.",
         "requires_python_fallback_for_debugger": True,
         "native_stdlib_parity": bool(ext is not None),
         "native_data_transforms": False,
-        "native_parity_level": "stable-core+money+data",
+        "native_ledger_bridge": bool(ext is not None),
+        "native_parity_level": "stable-core+money+data+ledger",
     }
     if ext is None:
         return base

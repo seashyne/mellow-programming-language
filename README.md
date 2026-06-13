@@ -1,4 +1,4 @@
-# Mellow Programming Language 2.7.1
+# Mellow Programming Language 2.8.0
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -9,10 +9,10 @@ This release treats the language core as the stable surface:
 - `if`, `while`, and `for`
 - `range(...)`
 - list and map literals
-- string/math/list/map/json/money/data helpers
+- string/math/list/map/json/money/data/ledger helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. In v2.7.1 the native C VM covers the stable language core plus money and data stdlib services, including native `data.where`, `data.project`, and `data.sum` transforms. Debugger, events, and record/replay still route through the Python VM.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. In v2.8.0 the native C VM covers the stable language core plus money, data, and ledger services. Debugger, events, and record/replay still route through the Python VM.
 
 ## Quick Start
 
@@ -83,7 +83,26 @@ while len(batch) > 0:
 
 Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
 
-Both finance and data sandbox profiles can use `--engine=c` in v2.7.1. Native parity tests run with Python fallback disabled.
+Finance and data sandbox profiles, plus Ledger Core, can use `--engine=c` in v2.8.0. Native parity tests run with Python fallback disabled.
+
+Build an immutable, balanced ledger:
+
+```mellow
+let book = ledger_create("THB")
+book = ledger_post(
+    book,
+    "sale-001",
+    [
+        {"account": "cash", "amount": "100.00"},
+        {"account": "revenue", "amount": "-100.00"}
+    ],
+    "cash sale"
+)
+print(money_format(ledger_balance(book, "cash")))
+print(ledger_verify(book)["ok"])
+```
+
+Ledger Core is intended for deterministic business rules and audit-friendly prototypes. Durable storage, identity, authorization, signatures, and compliance controls belong in the host application.
 
 ## Stable CLI
 

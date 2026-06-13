@@ -1,4 +1,4 @@
-# MellowLang Stdlib Reference (v2.7.1)
+# MellowLang Stdlib Reference (v2.8.0)
 
 This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
 
@@ -46,6 +46,35 @@ Module form is also available:
 ```mellow
 let total = money.add(money.of("12.34", "THB"), money.of("0.01", "THB"))
 ```
+
+## Immutable ledger
+
+Ledger transactions use signed Decimal amounts. Every transaction must balance
+to `0.00`; posting returns a new ledger and leaves the original unchanged.
+
+```mellow
+let empty = ledger_create("THB")
+let book = ledger_post(
+    empty,
+    "sale-001",
+    [
+        {"account": "cash", "amount": "100.00"},
+        {"account": "revenue", "amount": "-100.00"}
+    ],
+    "cash sale"
+)
+print(money_format(ledger_balance(book, "cash")))
+print(ledger_verify(book)["ok"])
+```
+
+- `ledger_create(currency="USD")`
+- `ledger_post(ledger, transaction_id, postings, memo="", metadata={})`
+- `ledger_balance(ledger, account)`
+- `ledger_verify(ledger)`
+- `ledger_entries(ledger)`
+
+Each entry includes its previous hash and deterministic SHA-256 hash. See
+`docs/LEDGER_CORE.md` for the data contract and security boundaries.
 
 ## Data processing
 

@@ -912,6 +912,17 @@ class Compiler:
                 "data_sqlite_query": "std.data.sqlite_query",
                 "data.sqlite_execute": "std.data.sqlite_execute",
                 "data_sqlite_execute": "std.data.sqlite_execute",
+                # immutable double-entry ledger helpers
+                "ledger.create": "std.ledger.create",
+                "ledger_create": "std.ledger.create",
+                "ledger.post": "std.ledger.post",
+                "ledger_post": "std.ledger.post",
+                "ledger.verify": "std.ledger.verify",
+                "ledger_verify": "std.ledger.verify",
+                "ledger.balance": "std.ledger.balance",
+                "ledger_balance": "std.ledger.balance",
+                "ledger.entries": "std.ledger.entries",
+                "ledger_entries": "std.ledger.entries",
                 # range
                 "range": "std.range",
 

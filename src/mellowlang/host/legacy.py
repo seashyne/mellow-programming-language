@@ -76,6 +76,13 @@ MODULE_ALLOWLIST = {
             "sqlite_query": "std.data.sqlite_query",
             "sqlite_execute": "std.data.sqlite_execute",
         },
+        "ledger": {
+            "create": "std.ledger.create",
+            "post": "std.ledger.post",
+            "verify": "std.ledger.verify",
+            "balance": "std.ledger.balance",
+            "entries": "std.ledger.entries",
+        },
         "ai": {
             # v1.4.7 game AI
             "decide": "std.ai.decide",
@@ -1066,6 +1073,8 @@ def default_host() -> HostRegistry:
     h.register(HostFunction('std.money.eq', lambda a: (_same_currency(_as_money(a[0]), _as_money(a[1])) is None) and _money_decimal(a[0]) == _money_decimal(a[1]), cost=1, min_args=2, max_args=2))
     h.register(HostFunction('std.money.lt', lambda a: (_same_currency(_as_money(a[0]), _as_money(a[1])) is None) and _money_decimal(a[0]) < _money_decimal(a[1]), cost=1, min_args=2, max_args=2))
     h.register(HostFunction('std.money.gt', lambda a: (_same_currency(_as_money(a[0]), _as_money(a[1])) is None) and _money_decimal(a[0]) > _money_decimal(a[1]), cost=1, min_args=2, max_args=2))
+    from ..ledger_core import register_ledger_functions
+    register_ledger_functions(h)
     def _clamp(args):
         x, lo, hi = float(args[0]), float(args[1]), float(args[2])
         return max(lo, min(hi, x))

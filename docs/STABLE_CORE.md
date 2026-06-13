@@ -13,7 +13,7 @@ This document defines the stable surface for Mellow Programming Language release
 - list literals and indexing
 - map literals and indexing
 - strings, numbers, booleans, and `none`/`null`
-- basic math/string/list/map/json/money/data host helpers
+- basic math/string/list/map/json/money/data/ledger host helpers
 
 ## Stable CLI
 
@@ -34,9 +34,10 @@ These features are allowed to be missing from a default install and should be re
 - `net`: websocket/network helpers
 - `security`: signing and secure-save helpers
 - `video`: MELV video encode/decode
-- native VM: optional C extension with stable-core, money, and data parity in v2.7.1
+- native VM: optional C extension with stable-core, money, data, and ledger parity in v2.8.0
 - finance sandbox profile: supports native execution with storage denial enforced in the C VM
 - data processing core: bounded JSONL/CSV streams and parameterized SQLite on both Python and C engines
+- ledger core: immutable balanced entries with deterministic hash-chain verification
 - `frameworks.mellow_ui`: Python UI framework with an in-memory renderer
 
 ## Experimental Or Legacy
@@ -48,7 +49,7 @@ These surfaces may be present in the repository but should not block a stable re
 - package registry workflows
 - MMG and video runtime
 - desktop/playground runtimes
-- standalone/native parity beyond the stable core, money, and data surfaces
+- standalone/native parity beyond the stable core, money, data, and ledger surfaces
 
 ## Release Rule
 

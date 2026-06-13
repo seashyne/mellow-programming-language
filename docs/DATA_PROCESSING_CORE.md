@@ -1,6 +1,6 @@
 # Data Processing Core
 
-Mellow v2.7.1 processes large files as bounded batches instead of loading an
+Mellow v2.8.0 processes large files as bounded batches instead of loading an
 entire dataset into one list.
 
 ## Runtime model

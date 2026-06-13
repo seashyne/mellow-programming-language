@@ -1,4 +1,4 @@
-# MellowLang CLI (v2.7.1)
+# MellowLang CLI (v2.8.0)
 
 MellowLang v1.0.3 คืน **CLI แบบเดิม** (Frinds-style) และยังคง **CLI แบบใหม่ (subcommands)** ไว้ด้วย
 

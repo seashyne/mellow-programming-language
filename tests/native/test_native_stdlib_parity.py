@@ -30,13 +30,14 @@ def _run(source: str, *, engine: str, **config: object) -> tuple[str, MellowVM]:
 
 
 def _assert_strict_native(vm: MellowVM) -> None:
-    assert c_vm_available(), "native C extension is required for v2.7.0 stdlib parity"
+    assert c_vm_available(), "native C extension is required for v2.8.0 stdlib parity"
     assert vm.last_engine == "c"
     assert vm.last_native_result.get("used_fallback") is False
 
 
 def test_native_extension_reports_data_transform_acceleration() -> None:
     assert c_vm_capabilities().get("native_data_transforms") is True
+    assert c_vm_capabilities().get("native_ledger_bridge") is True
 
 
 def test_native_money_matches_python() -> None:
@@ -47,6 +48,29 @@ def test_native_money_matches_python() -> None:
         print(money_format(total))
         print(money_amount(total))
         print(money_gt(total, subtotal))
+    """
+    py_output, _ = _run(source, engine="py")
+    native_output, native_vm = _run(source, engine="c")
+    _assert_strict_native(native_vm)
+    assert native_output == py_output
+
+
+def test_native_ledger_matches_python() -> None:
+    source = """
+        let book = ledger_create("THB")
+        let posted = ledger_post(
+            book,
+            "sale-001",
+            [
+                {"account": "cash", "amount": "125.50"},
+                {"account": "revenue", "amount": "-125.50"}
+            ],
+            "native sale"
+        )
+        print(len(ledger_entries(book)))
+        print(money_format(ledger_balance(posted, "cash")))
+        let status = ledger_verify(posted)
+        print(status["ok"])
     """
     py_output, _ = _run(source, engine="py")
     native_output, native_vm = _run(source, engine="c")

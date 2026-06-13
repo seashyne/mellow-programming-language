@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.8.0 - 2026-06-13
+
+### Ledger Core
+- Add immutable double-entry ledger primitives through `std.ledger`.
+- Require every transaction to contain at least two postings whose Decimal amounts sum to zero.
+- Add deterministic SHA-256 hash chaining, duplicate transaction protection, balance queries, entry snapshots, and tamper verification.
+- Keep ledger creation and posting free of implicit timestamps so replayed inputs produce identical hashes.
+- Add strict Python/native parity through the per-run native host bridge.
+
+### Boundaries
+- Ledger Core is an in-memory business-rule primitive, not a bank-grade database or payment processor.
+- Persistence, authentication, authorization, signatures, external audit storage, and regulatory compliance remain host-application responsibilities.
+
 ## 2.7.1 - 2026-06-13
 
 ### Native Data Acceleration
