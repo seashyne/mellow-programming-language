@@ -1,4 +1,4 @@
-# Mellow Programming Language 2.5.0
+# Mellow Programming Language 2.6.0
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -9,7 +9,7 @@ This release treats the language core as the stable surface:
 - `if`, `while`, and `for`
 - `range(...)`
 - list and map literals
-- string/math/list/map/json/money helpers
+- string/math/list/map/json/money/data helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
 Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. The native C VM is a supported optional runtime for the stable core in v2.4.0+; finance sandbox mode currently routes through the Python VM for stricter permission behavior.
@@ -69,6 +69,19 @@ Run finance-style scripts with a tighter sandbox:
 ```powershell
 mellow run rules.mellow --sandbox=finance
 ```
+
+Process JSONL/CSV in bounded batches:
+
+```mellow
+let stream = data_open_jsonl("records.jsonl", 1000)
+let batch = data_next(stream)
+while len(batch) > 0:
+    let sales = data_where(batch, "kind", "==", "sale")
+    print(data_sum(sales, "amount"))
+    batch = data_next(stream)
+```
+
+Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
 
 ## Stable CLI
 

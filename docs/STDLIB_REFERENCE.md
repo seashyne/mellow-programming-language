@@ -1,4 +1,4 @@
-# MellowLang Stdlib Reference (v2.5.0)
+# MellowLang Stdlib Reference (v2.6.0)
 
 This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
 
@@ -46,6 +46,40 @@ Module form is also available:
 ```mellow
 let total = money.add(money.of("12.34", "THB"), money.of("0.01", "THB"))
 ```
+
+## Data processing
+
+JSONL and CSV readers return opaque stream handles. `data_next` returns at most
+the configured batch size, so large files do not need to be loaded into memory.
+
+```mellow
+let stream = data_open_jsonl("records.jsonl", 1000)
+let batch = data_next(stream)
+while len(batch) > 0:
+    let active = data_where(batch, "active", "==", true)
+    let view = data_project(active, ["id", "amount"])
+    print(data_sum(view, "amount"))
+    batch = data_next(stream)
+```
+
+Streaming helpers:
+
+- `data_open_jsonl(path, batch_size=100)`
+- `data_open_csv(path, batch_size=100)`
+- `data_next(stream)`, `data_close(stream)`, `data_cancel(stream)`
+- `data_info(stream)`
+- `data_where(rows, field, operator, expected)`
+- `data_project(rows, fields)`
+- `data_sum(rows, field)`
+
+Parameterized SQLite:
+
+- `data_sqlite_open(path=":memory:", readonly=false)`
+- `data_sqlite_query(db_or_path, sql, params=[], limit=max_rows)`
+- `data_sqlite_execute(db_or_path, sql, params=[])`
+- `data_sqlite_close(db)`
+
+Writes require `--data-write`. Query values must use `?` or named placeholders.
 
 ## Random (deterministic)
 
@@ -157,6 +191,7 @@ print(path)
 
 - `mellow run <file|projectdir>`
 - `mellow run <file> --sandbox=finance`
+- `mellow run <file> --sandbox=data`
 - `mellow check <file|dir>`
 - `mellow fmt <file|dir> [--write|--check]`
 - `mellow test`

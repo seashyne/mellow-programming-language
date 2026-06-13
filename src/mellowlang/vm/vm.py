@@ -58,6 +58,11 @@ class RunConfig:
     max_steps: Optional[int] = None
     max_ms: Optional[int] = None
     syscall_budget: Optional[int] = None
+    data_max_batch_size: Optional[int] = None
+    data_max_open_streams: Optional[int] = None
+    data_max_record_bytes: Optional[int] = None
+    data_max_query_rows: Optional[int] = None
+    allow_data_write: bool = False
 
     # Diagnostics
     profile: bool = False
@@ -138,6 +143,15 @@ class MellowVM:
             config_dict["max_ms"] = int(cfg.max_ms)
         if cfg.syscall_budget is not None:
             config_dict["syscall_budget"] = int(cfg.syscall_budget)
+        if cfg.data_max_batch_size is not None:
+            config_dict["data_max_batch_size"] = int(cfg.data_max_batch_size)
+        if cfg.data_max_open_streams is not None:
+            config_dict["data_max_open_streams"] = int(cfg.data_max_open_streams)
+        if cfg.data_max_record_bytes is not None:
+            config_dict["data_max_record_bytes"] = int(cfg.data_max_record_bytes)
+        if cfg.data_max_query_rows is not None:
+            config_dict["data_max_query_rows"] = int(cfg.data_max_query_rows)
+        config_dict["allow_data_write"] = bool(cfg.allow_data_write)
         if cfg.profile:
             config_dict["profile"] = True
 
@@ -176,6 +190,17 @@ class MellowVM:
         engine = str(engine).lower().strip()
         if engine not in ("auto", "py", "c"):
             engine = "auto"
+
+        data_core_requested = any(
+            isinstance(part, str) and part.startswith("std.data.")
+            for instruction in list(getattr(program, "bytecode", None) or [])
+            for part in instruction[1:]
+        )
+        if data_core_requested and engine in ("auto", "c"):
+            if native_require or not native_allow_fallback:
+                raise MellowLangRuntimeError("NATIVE_REQUIRED", "data processing core requires the Python VM in v2.6.0")
+            self.last_engine_detail = "python-data-core"
+            engine = "py"
 
         # v1.3.0: deterministic record/replay is guaranteed on the legacy Python VM.
         # (C VM replay parity will be completed in a later release.)

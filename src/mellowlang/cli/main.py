@@ -474,8 +474,11 @@ Modern usage:
 
     p.add_argument("--allow-ask", action="store_true", help="Enable input()/ask() in sandbox")
     p.add_argument("--no-wait", action="store_true", help="Disable wait() in sandbox")
-    p.add_argument("--sandbox", dest="sandbox_profile", choices=["default", "finance"], default="default",
+    p.add_argument("--sandbox", dest="sandbox_profile", choices=["default", "finance", "data"], default="default",
                   help="Runtime sandbox profile")
+    p.add_argument("--data-write", action="store_true", help="Allow data core writes")
+    p.add_argument("--data-batch-size", type=int, help="Maximum rows returned by data.next")
+    p.add_argument("--data-max-rows", type=int, help="Maximum SQLite query rows")
 
     # Storage
     p.add_argument("--no-storage", action="store_true", help="Disable storage APIs")
@@ -543,8 +546,13 @@ Modern commands:
     pr.add_argument("--global-seed", type=int)
     pr.add_argument("--allow-ask", action="store_true")
     pr.add_argument("--no-wait", action="store_true")
-    pr.add_argument("--sandbox", dest="sandbox_profile", choices=["default", "finance"], default="default",
+    pr.add_argument("--sandbox", dest="sandbox_profile", choices=["default", "finance", "data"], default="default",
                     help="Runtime sandbox profile")
+    pr.add_argument("--data-write", action="store_true", help="Allow data.sqlite_execute and other data writes")
+    pr.add_argument("--data-batch-size", type=int, help="Maximum rows returned by data.next")
+    pr.add_argument("--data-max-rows", type=int, help="Maximum SQLite rows returned per query")
+    pr.add_argument("--data-max-record-bytes", type=int, help="Maximum encoded size of one streamed record")
+    pr.add_argument("--data-max-streams", type=int, help="Maximum concurrently open data streams")
     pr.add_argument("--no-storage", action="store_true", help="Disable storage APIs")
     pr.add_argument("--storage-dir", help="Base directory for storage (default: mellow_saves)")
     pr.add_argument("--unsafe-fs", action="store_true", help="Allow scripts to set storage_dir to absolute paths or use '..' (unsafe)")
@@ -2419,7 +2427,9 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
              trace: bool = False, step: bool = False, break_lines: str | None = None,
              watch: str | None = None, ai_timeline: str | None = None,
              color: bool = False, no_color: bool = False, registry: str | None = None, no_resolve: bool = False,
-             sandbox_profile: str = "default") -> int:
+             sandbox_profile: str = "default", allow_data_write: bool = False,
+             data_max_batch_size: int | None = None, data_max_query_rows: int | None = None,
+             data_max_record_bytes: int | None = None, data_max_open_streams: int | None = None) -> int:
     p = Path(file)
 
     # Secure save system default (dev-friendly). In project mode this becomes deny-by-default.
@@ -2436,6 +2446,22 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             max_steps = 100_000
         if syscall_budget is None:
             syscall_budget = 100
+    elif sandbox_profile == "data":
+        engine = "py"
+        allow_ask = False
+        no_wait = True
+        allow_save = False
+        allow_unsafe_fs = False
+        if max_steps is None:
+            max_steps = 1_000_000
+        if max_ms is None:
+            max_ms = 30_000
+        if syscall_budget is None:
+            syscall_budget = 10_000
+        if data_max_batch_size is None:
+            data_max_batch_size = 1_000
+        if data_max_query_rows is None:
+            data_max_query_rows = 5_000
 
     # --- Project mode auto-detect (v1.4.5 standard) ---
     project_root: Path | None = None
@@ -2663,6 +2689,16 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             net_http_allow = None
             net_ws_allow = None
             allow_unsafe_fs = False
+            allow_data_write = False
+        elif sandbox_profile == "data":
+            engine = "py"
+            allow_ask = False
+            no_wait = True
+            allow_save = False
+            allow_net = False
+            net_http_allow = None
+            net_ws_allow = None
+            allow_unsafe_fs = False
 
         cfg = RunConfig(
             seed=seed,
@@ -2691,6 +2727,11 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             max_steps=max_steps,
             max_ms=max_ms,
             syscall_budget=syscall_budget,
+            data_max_batch_size=data_max_batch_size,
+            data_max_open_streams=data_max_open_streams,
+            data_max_record_bytes=data_max_record_bytes,
+            data_max_query_rows=data_max_query_rows,
+            allow_data_write=allow_data_write,
             profile=profile,
             trace=trace,
             step=step,
@@ -3914,6 +3955,11 @@ def main(argv: List[str] | None = None) -> int:
                 registry=getattr(ns, "registry", None),
                 no_resolve=getattr(ns, "no_resolve", False),
                 sandbox_profile=getattr(ns, "sandbox_profile", "default"),
+                allow_data_write=getattr(ns, "data_write", False),
+                data_max_batch_size=getattr(ns, "data_batch_size", None),
+                data_max_query_rows=getattr(ns, "data_max_rows", None),
+                data_max_record_bytes=getattr(ns, "data_max_record_bytes", None),
+                data_max_open_streams=getattr(ns, "data_max_streams", None),
             )
         if cmd == "test":
             return _cmd_test(
@@ -3992,6 +4038,11 @@ def main(argv: List[str] | None = None) -> int:
         syscall_budget=getattr(ns, "syscall_budget", None),
         profile=bool(getattr(ns, "profile", False)),
         sandbox_profile=getattr(ns, "sandbox_profile", "default"),
+        allow_data_write=getattr(ns, "data_write", False),
+        data_max_batch_size=getattr(ns, "data_batch_size", None),
+        data_max_query_rows=getattr(ns, "data_max_rows", None),
+        data_max_record_bytes=getattr(ns, "data_max_record_bytes", None),
+        data_max_open_streams=getattr(ns, "data_max_streams", None),
     )
 
 

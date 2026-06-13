@@ -48,6 +48,7 @@ from ..host.legacy import MODULE_ALLOWLIST
 
 
 STDLIB_CALLS = {
+    "len": "std.len",
     "money": "std.money.of",
     "money.of": "std.money.of",
     "money_of": "std.money.of",
@@ -73,6 +74,32 @@ STDLIB_CALLS = {
     "money_lt": "std.money.lt",
     "money.gt": "std.money.gt",
     "money_gt": "std.money.gt",
+    "data.open_jsonl": "std.data.open_jsonl",
+    "data_open_jsonl": "std.data.open_jsonl",
+    "data.open_csv": "std.data.open_csv",
+    "data_open_csv": "std.data.open_csv",
+    "data.next": "std.data.next",
+    "data_next": "std.data.next",
+    "data.close": "std.data.close",
+    "data_close": "std.data.close",
+    "data.cancel": "std.data.cancel",
+    "data_cancel": "std.data.cancel",
+    "data.info": "std.data.info",
+    "data_info": "std.data.info",
+    "data.project": "std.data.project",
+    "data_project": "std.data.project",
+    "data.where": "std.data.where",
+    "data_where": "std.data.where",
+    "data.sum": "std.data.sum",
+    "data_sum": "std.data.sum",
+    "data.sqlite_open": "std.data.sqlite_open",
+    "data_sqlite_open": "std.data.sqlite_open",
+    "data.sqlite_close": "std.data.sqlite_close",
+    "data_sqlite_close": "std.data.sqlite_close",
+    "data.sqlite_query": "std.data.sqlite_query",
+    "data_sqlite_query": "std.data.sqlite_query",
+    "data.sqlite_execute": "std.data.sqlite_execute",
+    "data_sqlite_execute": "std.data.sqlite_execute",
 }
 
 

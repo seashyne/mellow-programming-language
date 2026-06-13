@@ -1,12 +1,14 @@
 
 # frinds/vm.py (v2.2)
 from __future__ import annotations
+import sqlite3
 from typing import Any, List
 from ..constants import Op
 from ..host import HostRegistry, default_host
 from ..replay import ReplayConfig, ReplayLog
 from ..error_core import MellowLangRuntimeError
 from ..range_core import MellowLangRange
+from ..data_core import DataCoreError, DataStreamManager
 
 class MellowLangVM:
     def __init__(self, bytecode, func_table=None, event_table=None, *, config=None, host: HostRegistry | None = None, replay: ReplayConfig | None = None, filename: str | None = None, source_lines: list[str] | None = None, line_map: list[int] | None = None, col_map: list[int] | None = None, end_line_map: list[int] | None = None, end_col_map: list[int] | None = None, span_map: list[dict] | None = None):
@@ -44,6 +46,11 @@ class MellowLangVM:
             "max_string_len": 20_000,
             "max_list_len": 5_000,
             "max_map_keys": 2_000,
+            "data_max_batch_size": 1_000,
+            "data_max_open_streams": 8,
+            "data_max_record_bytes": 1_048_576,
+            "data_max_query_rows": 5_000,
+            "allow_data_write": False,
 
             # Budget for syscalls (anti-spam)
             "syscall_budget": 500,
@@ -115,6 +122,16 @@ class MellowLangVM:
         self._t0 = _time.monotonic()
         self._profile = bool(self.config.get('profile', False))
         self._opcounts = {}  # opcode -> count
+        self._data = DataStreamManager(
+            resolve_read=lambda path: self._fs_resolve(path, op="read"),
+            resolve_write=lambda path: self._fs_resolve(path, op="write"),
+            check_cancelled=self._check_data_cancelled,
+            max_batch_size=int(self.config.get("data_max_batch_size", 1_000)),
+            max_open_streams=int(self.config.get("data_max_open_streams", 8)),
+            max_record_bytes=int(self.config.get("data_max_record_bytes", 1_048_576)),
+            max_query_rows=int(self.config.get("data_max_query_rows", 5_000)),
+            allow_write=bool(self.config.get("allow_data_write", False)),
+        )
 
         # Global base seed (optional): used to derive per-script seeds deterministically.
         # This keeps MellowLang identity: deterministic-by-default + sandboxed (no external entropy).
@@ -531,6 +548,13 @@ class MellowLangVM:
         if len(self.stack) > int(self.config.get("max_stack", 2_000)):
             self._raise_sandbox("Stack limit exceeded")
 
+    def _check_data_cancelled(self):
+        max_ms = self.config.get("max_ms", None)
+        if max_ms is not None:
+            import time as _time
+            if (_time.monotonic() - self._t0) * 1000.0 > float(max_ms):
+                self._raise_sandbox("Time limit exceeded")
+
     def _enforce_value_limits(self, v):
         ms = int(self.config.get("max_string_len", 20_000))
         ml = int(self.config.get("max_list_len", 5_000))
@@ -572,6 +596,43 @@ class MellowLangVM:
     def _syscall(self, name: str, args: list):
         if not isinstance(name, str):
             self._raise_sandbox("syscall name must be string")
+
+        if name.startswith("std.data."):
+            try:
+                if name == "std.data.open_jsonl":
+                    return self._data.open_jsonl(args[0], args[1] if len(args) > 1 else 100)
+                if name == "std.data.open_csv":
+                    return self._data.open_csv(args[0], args[1] if len(args) > 1 else 100)
+                if name == "std.data.next":
+                    return self._data.next_batch(args[0])
+                if name == "std.data.close":
+                    return self._data.close(args[0])
+                if name == "std.data.cancel":
+                    return self._data.cancel(args[0])
+                if name == "std.data.info":
+                    return self._data.stream_info(args[0])
+                if name == "std.data.project":
+                    return self._data.project(args[0], args[1])
+                if name == "std.data.where":
+                    return self._data.where(args[0], args[1], args[2], args[3])
+                if name == "std.data.sum":
+                    return self._data.sum_field(args[0], args[1])
+                if name == "std.data.sqlite_query":
+                    return self._data.sqlite_query(
+                        args[0],
+                        args[1],
+                        args[2] if len(args) > 2 else [],
+                        args[3] if len(args) > 3 else None,
+                    )
+                if name == "std.data.sqlite_execute":
+                    return self._data.sqlite_execute(args[0], args[1], args[2] if len(args) > 2 else [])
+                if name == "std.data.sqlite_open":
+                    return self._data.sqlite_open(args[0] if args else ":memory:", args[1] if len(args) > 1 else False)
+                if name == "std.data.sqlite_close":
+                    return self._data.sqlite_close(args[0])
+                self._raise_sandbox(f"syscall not allowed: {name}")
+            except (DataCoreError, OSError, ValueError, sqlite3.Error) as exc:
+                self._raise_runtime(str(exc))
 
         # --- v1.4.7: emit() — fire event to on-handler ---
         if name == "std.event.emit":

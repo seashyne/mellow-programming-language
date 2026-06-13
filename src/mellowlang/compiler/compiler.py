@@ -81,7 +81,7 @@ class Compiler:
             # The optimizer is still experimental. Its constant propagation can
             # corrupt indexed expressions such as xs[1], so keep those on the
             # unoptimized IR path until that pass is fixed.
-            use_optimizer = bool(optimize) and not _ast_contains(ast, Index) and not _ast_contains_money_call(ast)
+            use_optimizer = bool(optimize) and not _ast_contains(ast, Index) and not _ast_contains_stateful_stdlib_call(ast)
             if use_optimizer:
                 optimized_ir, optimization = opt.optimize(ir)
                 optimized_cfg = opt.build_cfg(optimized_ir.instructions)
@@ -171,15 +171,16 @@ def _ast_contains(node: Any, node_type: type) -> bool:
     return False
 
 
-def _ast_contains_money_call(node: Any) -> bool:
+def _ast_contains_stateful_stdlib_call(node: Any) -> bool:
     if isinstance(node, Call):
-        return str(node.name).lower().startswith("money")
+        name = str(node.name).lower()
+        return name.startswith("money") or name.startswith("data")
     if isinstance(node, (GetModuleExpr, GetModuleStmt)):
-        return str(node.module).lower() == "money"
+        return str(node.module).lower() in {"money", "data"}
     if is_dataclass(node):
-        return any(_ast_contains_money_call(value) for value in node.__dict__.values())
+        return any(_ast_contains_stateful_stdlib_call(value) for value in node.__dict__.values())
     if isinstance(node, (list, tuple)):
-        return any(_ast_contains_money_call(item) for item in node)
+        return any(_ast_contains_stateful_stdlib_call(item) for item in node)
     if isinstance(node, dict):
-        return any(_ast_contains_money_call(item) for item in node.values())
+        return any(_ast_contains_stateful_stdlib_call(item) for item in node.values())
     return False

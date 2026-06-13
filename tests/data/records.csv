@@ -1,0 +1,5 @@
+id,kind,amount
+1,sale,10
+2,refund,-3
+3,sale,7
+4,sale,5

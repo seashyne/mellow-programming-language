@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.6.0 - 2026-06-13
+
+### Data Processing Core
+- Add bounded streaming readers for JSONL and CSV.
+- Add batch projection, filtering, field summation, stream inspection, cancellation, and close operations.
+- Add parameterized SQLite query/execute APIs with row limits and read-only query enforcement.
+- Add persistent SQLite handles, including in-memory databases for transactional rule workflows.
+- Add `--sandbox=data` and CLI controls for batch size, record size, open streams, query rows, and explicit data-write permission.
+- Route data-core programs through the Python VM until native data parity is implemented.
+- Add fixtures, core tests, an example program, and a 10K/100K/1M-capable benchmark.
+
+### Safety
+- Batch size and query results are bounded to provide backpressure.
+- Runtime time limits are checked during stream reads and database operations.
+- SQL values are bound through placeholders rather than string interpolation.
+
+### Deferred
+- Native C VM parity for `std.data`.
+- External PostgreSQL/ClickHouse adapters.
+- Parallel workers and distributed execution.
+
 ## 2.5.0 - 2026-06-13
 
 ### Production Scripting Core

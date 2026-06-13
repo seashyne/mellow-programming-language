@@ -61,6 +61,21 @@ MODULE_ALLOWLIST = {
             "lt": "std.money.lt",
             "gt": "std.money.gt",
         },
+        "data": {
+            "open_jsonl": "std.data.open_jsonl",
+            "open_csv": "std.data.open_csv",
+            "next": "std.data.next",
+            "close": "std.data.close",
+            "cancel": "std.data.cancel",
+            "info": "std.data.info",
+            "project": "std.data.project",
+            "where": "std.data.where",
+            "sum": "std.data.sum",
+            "sqlite_open": "std.data.sqlite_open",
+            "sqlite_close": "std.data.sqlite_close",
+            "sqlite_query": "std.data.sqlite_query",
+            "sqlite_execute": "std.data.sqlite_execute",
+        },
         "ai": {
             # v1.4.7 game AI
             "decide": "std.ai.decide",
