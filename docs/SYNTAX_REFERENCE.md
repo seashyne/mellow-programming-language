@@ -1,4 +1,4 @@
-# MellowLang Syntax Reference (v2.7.0)
+# MellowLang Syntax Reference (v2.7.1)
 
 Mellow is a **safe, deterministic scripting language** for games and AI logic.
 

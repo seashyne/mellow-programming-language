@@ -34,7 +34,7 @@ These features are allowed to be missing from a default install and should be re
 - `net`: websocket/network helpers
 - `security`: signing and secure-save helpers
 - `video`: MELV video encode/decode
-- native VM: optional C extension with stable-core, money, and data parity in v2.7.0
+- native VM: optional C extension with stable-core, money, and data parity in v2.7.1
 - finance sandbox profile: supports native execution with storage denial enforced in the C VM
 - data processing core: bounded JSONL/CSV streams and parameterized SQLite on both Python and C engines
 - `frameworks.mellow_ui`: Python UI framework with an in-memory renderer

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.7.1 - 2026-06-13
+
+### Native Data Acceleration
+- Implement `std.data.where`, `std.data.project`, and `std.data.sum` directly in the C VM.
+- Preserve Python VM behavior for comparison operators, `contains`, missing fields, mixed integer/float sums, and non-map rows.
+- Align native `None` output with the Python VM while extending strict output parity coverage.
+- Add native transform edge-case parity coverage with Python fallback disabled.
+- Add `benchmarks/native_data_transform_benchmark.py` for repeatable Python/C engine comparisons.
+- Improve the representative where+project+sum workload from about 1.33x native speedup before this patch to about 3.2-4.1x, reaching roughly 8.3-10.8 million rows/second on the development machine.
+
+### Boundaries
+- JSONL/CSV parsing, stream handles, SQLite, sandbox path checks, deadlines, and cleanup remain managed by the host bridge.
+
 ## 2.7.0 - 2026-06-13
 
 ### Native Stdlib Parity

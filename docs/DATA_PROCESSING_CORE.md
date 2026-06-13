@@ -1,6 +1,6 @@
 # Data Processing Core
 
-Mellow v2.7.0 processes large files as bounded batches instead of loading an
+Mellow v2.7.1 processes large files as bounded batches instead of loading an
 entire dataset into one list.
 
 ## Runtime model
@@ -11,6 +11,7 @@ entire dataset into one list.
 - `data_cancel` and `data_close` release resources.
 - `--max-ms` is checked while reading records and executing data operations.
 - Python and native C engines use the same bounded data manager and cleanup rules.
+- The C engine executes `data.where`, `data.project`, and `data.sum` directly without a Python host callback.
 
 ## Recommended command
 
@@ -31,10 +32,16 @@ mellow run import.mellow --sandbox=data --data-write
 python benchmarks/data_core_benchmark.py --rows 10000
 python benchmarks/data_core_benchmark.py --rows 100000
 python benchmarks/data_core_benchmark.py --rows 1000000
+python benchmarks/native_data_transform_benchmark.py --rows 1000 --rounds 250 --repeats 7
 ```
 
 The benchmark reports elapsed time and rows per second. Performance depends on
 storage, Python version, record width, and transformation complexity.
+
+On the v2.7.1 development machine, repeated native transform runs reached about
+8.3-10.8 million rows/second and were about 3.2-4.1x faster than the Python VM
+for the same where+project+sum workload. This benchmark measures in-memory
+transforms, not JSONL/CSV disk parsing.
 
 ## Boundaries
 

@@ -265,6 +265,7 @@ def c_vm_capabilities() -> Dict[str, Any]:
         "notes": "Native C execution covers the stable language core plus money and data stdlib services; debugger, event, and replay hooks still route through Python.",
         "requires_python_fallback_for_debugger": True,
         "native_stdlib_parity": bool(ext is not None),
+        "native_data_transforms": False,
         "native_parity_level": "stable-core+money+data",
     }
     if ext is None:

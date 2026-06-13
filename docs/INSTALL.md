@@ -1,11 +1,11 @@
-# Installing MellowLang v2.7.0
+# Installing MellowLang v2.7.1
 
 ## Linux
 
 ### Option A — .deb package (Ubuntu / Debian)
 ```bash
 bash packaging/linux/build_deb.sh
-sudo dpkg -i dist/mellowlang_2.7.0_amd64.deb
+sudo dpkg -i dist/mellowlang_2.7.1_amd64.deb
 mellow --version
 ```
 Installs `mellow` + `mellowrt` to `/usr/bin/`, registers `.mellow` MIME type.
@@ -26,8 +26,8 @@ chmod +x install.sh && ./install.sh
 ### Option A — .pkg installer
 ```bash
 bash packaging/macos/build_pkg.sh
-# then double-click dist/MellowLang-2.7.0.pkg
-# or: sudo installer -pkg dist/MellowLang-2.7.0.pkg -target /
+# then double-click dist/MellowLang-2.7.1.pkg
+# or: sudo installer -pkg dist/MellowLang-2.7.1.pkg -target /
 mellow --version
 ```
 
@@ -41,13 +41,13 @@ chmod +x install.sh && ./install.sh
 ## Windows
 
 ### Option A — .exe installer (recommended for end-users)
-Double-click `MellowLang_Setup_2.7.0.exe` -> Next -> Install.
+Double-click `MellowLang_Setup_2.7.1.exe` -> Next -> Install.
 
 Two installer variants:
 | File | Size | Notes |
 |---|---|---|
-| `MellowLang_Setup_2.7.0.exe` | ~25 MB | onedir - fast startup |
-| `MellowLang_Setup_2.7.0_portable.exe` | ~12 MB | onefile - single portable .exe |
+| `MellowLang_Setup_2.7.1.exe` | ~25 MB | onedir - fast startup |
+| `MellowLang_Setup_2.7.1_portable.exe` | ~12 MB | onefile - single portable .exe |
 
 Both add to PATH and associate `.mellow` files.
 
@@ -68,10 +68,10 @@ mellow.cmd run examples\hello.mellow
 
 | Platform | Command | Output |
 |---|---|---|
-| Windows onedir | `build_exe.bat` | `dist/MellowLang_Setup_2.7.0.exe` |
-| Windows onefile | `build_exe.bat` | `dist/MellowLang_Setup_2.7.0_portable.exe` |
-| macOS | `bash packaging/macos/build_pkg.sh` | `dist/MellowLang-2.7.0.pkg` |
-| Linux .deb | `bash packaging/linux/build_deb.sh` | `dist/mellowlang_2.7.0_amd64.deb` |
+| Windows onedir | `build_exe.bat` | `dist/MellowLang_Setup_2.7.1.exe` |
+| Windows onefile | `build_exe.bat` | `dist/MellowLang_Setup_2.7.1_portable.exe` |
+| macOS | `bash packaging/macos/build_pkg.sh` | `dist/MellowLang-2.7.1.pkg` |
+| Linux .deb | `bash packaging/linux/build_deb.sh` | `dist/mellowlang_2.7.1_amd64.deb` |
 | Linux generic | `bash install.sh` | installs to `~/.local/bin/` |
 
 ---

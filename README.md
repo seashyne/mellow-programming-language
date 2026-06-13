@@ -1,4 +1,4 @@
-# Mellow Programming Language 2.7.0
+# Mellow Programming Language 2.7.1
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -12,7 +12,7 @@ This release treats the language core as the stable surface:
 - string/math/list/map/json/money/data helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. In v2.7.0 the native C VM covers the stable language core plus money and data stdlib services. Debugger, events, and record/replay still route through the Python VM.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. In v2.7.1 the native C VM covers the stable language core plus money and data stdlib services, including native `data.where`, `data.project`, and `data.sum` transforms. Debugger, events, and record/replay still route through the Python VM.
 
 ## Quick Start
 
@@ -83,7 +83,7 @@ while len(batch) > 0:
 
 Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
 
-Both finance and data sandbox profiles can use `--engine=c` in v2.7.0. Native parity tests run with Python fallback disabled.
+Both finance and data sandbox profiles can use `--engine=c` in v2.7.1. Native parity tests run with Python fallback disabled.
 
 ## Stable CLI
 

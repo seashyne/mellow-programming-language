@@ -157,7 +157,7 @@ static int mellow_truthy(PyObject *v) {
 
 static PyObject *fmt_list(PyObject *lst);
 static PyObject *mellow_format(PyObject *v) {
-    if (!v || v == Py_None)    return PyUnicode_FromString("none");
+    if (!v || v == Py_None)    return PyUnicode_FromString("None");
     if (v == Py_True)          return PyUnicode_FromString("True");
     if (v == Py_False)         return PyUnicode_FromString("False");
     if (PyLong_CheckExact(v))  return PyObject_Str(v);
@@ -418,6 +418,24 @@ static PyObject *pylong(PyObject *v) {
     return PyLong_FromLong(l);
 }
 
+static int data_compare(PyObject *actual, const char *op, PyObject *expected) {
+    int cmp_op = -1;
+    if (strcmp(op, "==") == 0) cmp_op = Py_EQ;
+    else if (strcmp(op, "!=") == 0) cmp_op = Py_NE;
+    else if (strcmp(op, ">") == 0) cmp_op = Py_GT;
+    else if (strcmp(op, ">=") == 0) cmp_op = Py_GE;
+    else if (strcmp(op, "<") == 0) cmp_op = Py_LT;
+    else if (strcmp(op, "<=") == 0) cmp_op = Py_LE;
+    if (cmp_op >= 0) return PyObject_RichCompareBool(actual, expected, cmp_op);
+    if (strcmp(op, "contains") == 0) {
+        if (!PyUnicode_Check(actual) && !PyList_Check(actual) && !PyDict_Check(actual))
+            return 0;
+        return PySequence_Contains(actual, expected);
+    }
+    PyErr_Format(PyExc_RuntimeError, "RUNTIME: unsupported data.where operator: %s", op);
+    return -1;
+}
+
 static PyObject *cvm_syscall_dispatch(const char *sn,
                                       PyObject **sa, long argc,
                                       CVM *parent_vm)
@@ -425,6 +443,7 @@ static PyObject *cvm_syscall_dispatch(const char *sn,
 #define A0 (argc>0?sa[0]:Py_None)
 #define A1 (argc>1?sa[1]:Py_None)
 #define A2 (argc>2?sa[2]:Py_None)
+#define A3 (argc>3?sa[3]:Py_None)
 #define STR0 (PyUnicode_Check(A0)?PyUnicode_AsUTF8(A0):"")
 #define STR1 (PyUnicode_Check(A1)?PyUnicode_AsUTF8(A1):"")
 
@@ -1033,6 +1052,89 @@ static PyObject *cvm_syscall_dispatch(const char *sn,
         PyObject *r=PyObject_CallMethod(json,"loads","O",s); Py_DECREF(s); Py_DECREF(json); return r;
     }
 
+    /* std.data bounded in-memory transforms */
+    if (strcmp(sn,"std.data.project")==0 && argc>=2) {
+        if (!PyList_Check(A0) || !PyList_Check(A1)) {
+            PyErr_SetString(PyExc_RuntimeError, "RUNTIME: data.project expects rows and field-name list");
+            return NULL;
+        }
+        Py_ssize_t row_count=PyList_GET_SIZE(A0), field_count=PyList_GET_SIZE(A1);
+        PyObject *names=PyList_New(field_count);
+        if(!names) return NULL;
+        for(Py_ssize_t j=0;j<field_count;j++) {
+            PyObject *name=PyObject_Str(PyList_GET_ITEM(A1,j));
+            if(!name){Py_DECREF(names);return NULL;}
+            PyList_SET_ITEM(names,j,name);
+        }
+        PyObject *result=PyList_New(0);
+        if(!result){Py_DECREF(names);return NULL;}
+        for(Py_ssize_t i=0;i<row_count;i++) {
+            PyObject *row=PyList_GET_ITEM(A0,i);
+            if(!PyDict_Check(row)) continue;
+            PyObject *projected=PyDict_New();
+            if(!projected){Py_DECREF(names);Py_DECREF(result);return NULL;}
+            for(Py_ssize_t j=0;j<field_count;j++) {
+                PyObject *name=PyList_GET_ITEM(names,j);
+                PyObject *value=PyDict_GetItemWithError(row,name);
+                if(!value && PyErr_Occurred()){Py_DECREF(projected);Py_DECREF(names);Py_DECREF(result);return NULL;}
+                if(!value) value=Py_None;
+                if(PyDict_SetItem(projected,name,value)<0){Py_DECREF(projected);Py_DECREF(names);Py_DECREF(result);return NULL;}
+            }
+            if(PyList_Append(result,projected)<0){Py_DECREF(projected);Py_DECREF(names);Py_DECREF(result);return NULL;}
+            Py_DECREF(projected);
+        }
+        Py_DECREF(names);
+        return result;
+    }
+    if (strcmp(sn,"std.data.where")==0 && argc>=4) {
+        if (!PyList_Check(A0)) {
+            PyErr_SetString(PyExc_RuntimeError, "RUNTIME: data.where expects a row list");
+            return NULL;
+        }
+        PyObject *key=PyObject_Str(A1), *op_obj=PyObject_Str(A2);
+        if(!key||!op_obj){Py_XDECREF(key);Py_XDECREF(op_obj);return NULL;}
+        const char *op=PyUnicode_AsUTF8(op_obj);
+        if(!op){Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+        PyObject *result=PyList_New(0);
+        if(!result){Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+        Py_ssize_t row_count=PyList_GET_SIZE(A0);
+        for(Py_ssize_t i=0;i<row_count;i++) {
+            PyObject *row=PyList_GET_ITEM(A0,i);
+            if(!PyDict_Check(row)) continue;
+            PyObject *actual=PyDict_GetItemWithError(row,key);
+            if(!actual && PyErr_Occurred()){Py_DECREF(result);Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+            if(!actual) actual=Py_None;
+            int matched=data_compare(actual,op,A3);
+            if(matched<0){Py_DECREF(result);Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+            if(matched && PyList_Append(result,row)<0){Py_DECREF(result);Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+        }
+        Py_DECREF(key); Py_DECREF(op_obj);
+        return result;
+    }
+    if (strcmp(sn,"std.data.sum")==0 && argc>=2) {
+        if (!PyList_Check(A0)) {
+            PyErr_SetString(PyExc_RuntimeError, "RUNTIME: data.sum expects a row list");
+            return NULL;
+        }
+        PyObject *key=PyObject_Str(A1);
+        PyObject *total=PyLong_FromLong(0);
+        if(!key||!total){Py_XDECREF(key);Py_XDECREF(total);return NULL;}
+        Py_ssize_t row_count=PyList_GET_SIZE(A0);
+        for(Py_ssize_t i=0;i<row_count;i++) {
+            PyObject *row=PyList_GET_ITEM(A0,i);
+            if(!PyDict_Check(row)) continue;
+            PyObject *value=PyDict_GetItemWithError(row,key);
+            if(!value && PyErr_Occurred()){Py_DECREF(key);Py_DECREF(total);return NULL;}
+            if(!value) continue;
+            PyObject *next=PyNumber_Add(total,value);
+            if(!next){Py_DECREF(key);Py_DECREF(total);return NULL;}
+            Py_DECREF(total);
+            total=next;
+        }
+        Py_DECREF(key);
+        return total;
+    }
+
     /* Stateful/optional stdlib services are delegated to the per-run host. */
     if (parent_vm->host && parent_vm->host != Py_None) {
         PyObject *arg_list = PyList_New(argc);
@@ -1053,6 +1155,7 @@ static PyObject *cvm_syscall_dispatch(const char *sn,
 #undef A0
 #undef A1
 #undef A2
+#undef A3
 #undef STR0
 #undef STR1
 }
@@ -1823,10 +1926,11 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
 static PyObject *
 mellowvm_capabilities(PyObject *self, PyObject *Py_UNUSED(args))
 {
-    return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:s,s:s}",
+    return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:s,s:s}",
         "available", Py_True,
         "native_execution", Py_True,
         "native_stdlib_parity", Py_True,
+        "native_data_transforms", Py_True,
         "conditional_breakpoints", Py_False,
         "watch_expressions", Py_False,
         "typed_frame_snapshots", Py_False,
