@@ -61,6 +61,14 @@ def _run_source(source: str, *, engine: str) -> tuple[str, MellowVM]:
     return out.getvalue(), vm
 
 
+def test_native_c_is_the_default_engine() -> None:
+    assert RunConfig().engine == "c"
+    output, vm = _run_source(CORE_SNIPPETS["print_arithmetic_and_variables"], engine=RunConfig().engine)
+    assert output.strip() == "5"
+    assert vm.last_engine == "c"
+    assert vm.last_native_result.get("used_fallback") is False
+
+
 @pytest.mark.parametrize("name,source", CORE_SNIPPETS.items())
 def test_native_c_matches_python_vm_for_stable_core(name: str, source: str) -> None:
     assert c_vm_available(), "native C extension is required for v2.4.0 core parity"

@@ -37,17 +37,18 @@ mellow run examples/hello.mellow --engine=c
 
 Engine modes:
 
-- `--engine=auto` (default): try C if available, otherwise Python
+- `--engine=c` (default): use C first and fall back to Python for unsupported runtime features
+- `--engine=auto`: compatibility alias for native-first execution
 - `--engine=py`: force legacy Python VM
-- `--engine=c`: force C VM (errors if missing/unsupported)
 
 ## Notes / Limitations (current)
 
-The C VM supports most v1.2.x core opcodes, but parity is still growing. When an opcode is unsupported,
-`--engine=auto` will fall back to the Python VM.
+The C VM supports the stable core plus money, data, and ledger services. When an
+opcode or runtime feature is unsupported, the default C mode falls back to the
+Python VM.
 
-Scripts using **functions**, **events**, or advanced runtime features will fall back to the Python VM in `auto`
-mode, or raise in `c` mode.
+Scripts using **events**, debugger hooks, record/replay, or advanced runtime
+features without native parity fall back to the Python VM.
 
 ## Extending opcode coverage
 

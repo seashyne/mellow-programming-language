@@ -120,8 +120,7 @@ def test_native_data_transforms_match_python_edge_cases() -> None:
 
 @pytest.mark.parametrize("engine", ["py", "c"])
 def test_data_where_rejects_unknown_operator_on_both_engines(engine: str) -> None:
-    expected_error = RuntimeError if engine == "c" else MellowLangRuntimeError
-    with pytest.raises(expected_error, match="unsupported data.where operator"):
+    with pytest.raises(MellowLangRuntimeError, match="unsupported data.where operator"):
         _run(
             'let rows = [{"amount": 1}]\ndata.where(rows, "amount", "~=", 1)\n',
             engine=engine,

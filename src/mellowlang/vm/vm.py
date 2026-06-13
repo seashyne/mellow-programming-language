@@ -18,8 +18,8 @@ class RunConfig:
     record_path: Optional[str] = None
     replay_path: Optional[str] = None
 
-    # Engine selection: auto (prefer C if available), py, c
-    engine: str = "auto"
+    # Engine selection: c (native-first default with fallback), auto, py
+    engine: str = "c"
     native_allow_fallback: bool = True
     native_require: bool = False
 
@@ -88,7 +88,7 @@ class MellowVM:
     def __init__(self, *, host: HostRegistry | None = None) -> None:
         self._host = host or default_host()
         self.last_debug_stop = None
-        self.last_engine = "auto"
+        self.last_engine = "c"
         self.last_engine_detail = ""
         self.last_debug_capabilities = {}
         self.last_native_result = {}
@@ -184,12 +184,12 @@ class MellowVM:
         elif cfg.replay_path:
             replay = ReplayConfig(mode="replay", path=str(cfg.replay_path))
 
-        engine = getattr(cfg, "engine", "auto") or "auto"
+        engine = getattr(cfg, "engine", "c") or "c"
         native_allow_fallback = bool(getattr(cfg, "native_allow_fallback", True))
         native_require = bool(getattr(cfg, "native_require", False))
         engine = str(engine).lower().strip()
         if engine not in ("auto", "py", "c"):
-            engine = "auto"
+            engine = "c"
 
         # v1.3.0: deterministic record/replay is guaranteed on the legacy Python VM.
         # (C VM replay parity will be completed in a later release.)
@@ -254,7 +254,19 @@ class MellowVM:
                 raise MellowLangRuntimeError('NATIVE_REQUIRED', str(e))
             except (ImportError, CVMUnsupportedOpcode):
                 if engine == "c":
-                    raise
+                    raw = str(e)
+                    kind = "RUNTIME"
+                    message = raw
+                    if ":" in raw:
+                        prefix, remainder = raw.split(":", 1)
+                        if prefix.strip().isupper():
+                            kind = prefix.strip()
+                            message = remainder.strip()
+                    raise MellowLangRuntimeError(
+                        kind,
+                        message,
+                        filename=program.filename,
+                    ) from e
             except Exception as e:
                 pc = getattr(e, "pc", None)
                 if pc is not None and getattr(program, "line_map", None) and getattr(program, "col_map", None):
@@ -276,7 +288,19 @@ class MellowVM:
                     except Exception:
                         pass
                 if engine == "c":
-                    raise
+                    raw = str(e)
+                    kind = "RUNTIME"
+                    message = raw
+                    if ":" in raw:
+                        prefix, remainder = raw.split(":", 1)
+                        if prefix.strip().isupper():
+                            kind = prefix.strip()
+                            message = remainder.strip()
+                    raise MellowLangRuntimeError(
+                        kind,
+                        message,
+                        filename=program.filename,
+                    ) from e
 
         # ---- Legacy Python VM ----
         self.last_engine = "py"

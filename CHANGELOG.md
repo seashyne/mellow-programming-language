@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Native-First Default
+- Make the native C VM the default engine for `RunConfig()` and `mellow run`.
+- Keep Python fallback enabled for unavailable native builds and runtime features
+  without native parity, including debugger, events, and record/replay.
+- Preserve `--engine=auto` as a compatibility mode and `--engine=py` as an
+  explicit Python override.
+
 ## 2.8.0 - 2026-06-13
 
 ### Ledger Core

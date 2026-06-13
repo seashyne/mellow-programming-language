@@ -539,7 +539,12 @@ Modern commands:
     pr = sub.add_parser("run", help="Run a script")
     pr.add_argument("file")
     pr.add_argument("--json", action="store_true")
-    pr.add_argument("--engine", choices=["auto","py","c","fast"], default="auto", help="Execution engine: fast=compile-to-Python (~100-200x faster)")
+    pr.add_argument(
+        "--engine",
+        choices=["c", "auto", "py", "fast"],
+        default="c",
+        help="Execution engine (default: c; falls back to Python for unsupported runtime features)",
+    )
     pr.add_argument("--record", dest="record_path")
     pr.add_argument("--replay", dest="replay_path")
     pr.add_argument("--seed", type=int)
@@ -3938,7 +3943,7 @@ def main(argv: List[str] | None = None) -> int:
             return _cmd_run(
                 ns.file,
                 json_out=ns.json,
-                engine=getattr(ns, "engine", "auto"),
+                engine=getattr(ns, "engine", "c"),
                 record_path=getattr(ns, "record_path", None),
                 replay_path=getattr(ns, "replay_path", None),
                 seed=getattr(ns, "seed", None),
@@ -4023,7 +4028,7 @@ def main(argv: List[str] | None = None) -> int:
     return _cmd_run(
         ns.script,
         json_out=bool(ns.json),
-        engine=getattr(ns, "engine", "auto"),
+        engine=getattr(ns, "engine", "c"),
         record_path=getattr(ns, "record_path", None),
         replay_path=getattr(ns, "replay_path", None),
         seed=getattr(ns, "seed", None),

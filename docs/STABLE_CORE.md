@@ -19,6 +19,7 @@ This document defines the stable surface for Mellow Programming Language release
 
 - `mellow --version`
 - `mellow run <file>`
+- Native C is the default engine; unsupported runtime features fall back to Python
 - `mellow run <file> --sandbox=finance`
 - `mellow run <file> --sandbox=data`
 - `mellow check <file-or-dir>`
@@ -34,7 +35,7 @@ These features are allowed to be missing from a default install and should be re
 - `net`: websocket/network helpers
 - `security`: signing and secure-save helpers
 - `video`: MELV video encode/decode
-- native VM: optional C extension with stable-core, money, data, and ledger parity in v2.8.0
+- native VM: default engine with stable-core, money, data, and ledger parity in v2.8.0; installations without the extension fall back to Python
 - finance sandbox profile: supports native execution with storage denial enforced in the C VM
 - data processing core: bounded JSONL/CSV streams and parameterized SQLite on both Python and C engines
 - ledger core: immutable balanced entries with deterministic hash-chain verification

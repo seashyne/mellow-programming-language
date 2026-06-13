@@ -22,10 +22,13 @@ From a source checkout:
 python -m pip install -e .[dev]
 mellow --version
 mellow run examples\hello.mellow
-mellow run examples\hello.mellow --engine=c
 mellow check examples\hello.mellow
 mellow doctor
 ```
+
+Native C is the default execution engine. Mellow falls back to the Python VM
+when a script requests debugger, event, or record/replay features that do not
+yet have native parity. Use `--engine=py` to force Python.
 
 Without installing:
 
@@ -93,7 +96,8 @@ while len(batch) > 0:
 
 Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
 
-Finance and data sandbox profiles, plus Ledger Core, can use `--engine=c` in v2.8.0. Native parity tests run with Python fallback disabled.
+Finance and data sandbox profiles, plus Ledger Core, run on the default C engine
+in v2.8.0. Native parity tests run with Python fallback disabled.
 
 Build an immutable, balanced ledger:
 

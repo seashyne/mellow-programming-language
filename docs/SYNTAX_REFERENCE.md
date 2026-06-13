@@ -26,8 +26,9 @@ mellow run hello.mellow --engine=py
 mellow run hello.mellow --engine=c
 ```
 
-`--engine=auto` เป็นค่าเริ่มต้น หาก feature ใดยังไม่มี native parity runtime จะเลือก
-Python VM ตามความเหมาะสม
+`--engine=c` เป็นค่าเริ่มต้นและยอม fallback ไป Python หาก feature ยังไม่มี native
+parity เช่น debugger, events และ record/replay ส่วน `--engine=py` ใช้บังคับ Python
+VM และ `--engine=auto` ยังรองรับเพื่อ compatibility
 
 ## 2. รูปแบบไฟล์และ block
 
