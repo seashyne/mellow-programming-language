@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import io
 
 cli_main = importlib.import_module("mellowlang.cli.main")
 lsp_server = importlib.import_module("mellowlang.lsp_server")
@@ -56,3 +57,15 @@ def test_start_lsp_error_is_actionable(monkeypatch):
         assert 'doctor --strict' in msg
     else:  # pragma: no cover
         raise AssertionError('expected RuntimeError')
+
+
+def test_start_lsp_explains_stdio_wait_when_requested(monkeypatch):
+    monkeypatch.setattr(lsp_server, 'HAVE_PYGLS', True)
+    monkeypatch.setattr(lsp_server.server, 'start_io', lambda: None)
+    stderr = io.StringIO()
+    monkeypatch.setattr(lsp_server.sys, 'stderr', stderr)
+
+    assert lsp_server.start_lsp(show_banner=True) == 0
+    message = stderr.getvalue()
+    assert 'waiting for an editor over stdio' in message
+    assert 'docs/LSP.md' in message

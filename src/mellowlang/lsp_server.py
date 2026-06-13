@@ -1,9 +1,10 @@
 """
-MellowLang LSP Server (hotfix) - v1.6.5.1
+MellowLang LSP Server
 """
 
 from __future__ import annotations
 
+import sys
 import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -182,6 +183,7 @@ def lsp_runtime_status() -> dict[str, object]:
         "backend": PYGLS_BACKEND,
         "error": PYGLS_IMPORT_ERROR,
     }
+from mellowlang import __version__
 from mellowlang.lint import lint_source
 
 KEYWORDS: dict[str, str] = {
@@ -291,7 +293,7 @@ class MellowLangLanguageServer(LanguageServer):
     pass
 
 
-server = MellowLangLanguageServer('mellowlang-lsp', '1.6.5.1')
+server = MellowLangLanguageServer('mellowlang-lsp', __version__)
 
 
 def _publish(ls: MellowLangLanguageServer, uri: str, text: str):
@@ -370,7 +372,7 @@ def definition(ls: MellowLangLanguageServer, params: DefinitionParams):
     return defs or None
 
 
-def start_lsp() -> int:
+def start_lsp(*, show_banner: bool | None = None) -> int:
     if not HAVE_PYGLS:
         detail = PYGLS_IMPORT_ERROR or 'unknown pygls import failure'
         raise RuntimeError(
@@ -380,6 +382,18 @@ def start_lsp() -> int:
             "  1) Reinstall the project in this environment: python -m pip install -e .\n"
             "  2) Verify pygls is installed for the same Python as `mellow`\n"
             "  3) Run `mellow doctor --strict` to inspect LSP readiness\n"
+        )
+    if show_banner is None:
+        show_banner = bool(getattr(sys.stdin, "isatty", lambda: False)())
+    if show_banner:
+        print(
+            "Mellow LSP is ready and waiting for an editor over stdio.\n"
+            "This process stays open until the editor disconnects.\n"
+            "Setup guide: docs/LSP.md\n"
+            "VS Code: install the extension from vscode-extension, then open a .mellow file.\n"
+            "Press Ctrl+C to stop this standalone server.",
+            file=sys.stderr,
+            flush=True,
         )
     server.start_io()
     return 0

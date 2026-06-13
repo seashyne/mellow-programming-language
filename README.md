@@ -37,6 +37,8 @@ python -m mellowlang run examples\hello.mellow
 
 คู่มือ syntax ฉบับเต็ม: [`docs/SYNTAX_REFERENCE.md`](docs/SYNTAX_REFERENCE.md)
 
+คู่มือติดตั้ง editor และ LSP: [`docs/LSP.md`](docs/LSP.md)
+
 ตัวอย่างรวมที่รันได้:
 
 ```powershell

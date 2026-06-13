@@ -1287,7 +1287,18 @@ Modern commands:
     pa_prompt.add_argument("--task", default="demo task")
     pa_prompt.add_argument("--json", action="store_true")
 
-    sub.add_parser("lsp", help="Start language server")
+    sub.add_parser(
+        "lsp",
+        help="Start language server",
+        description=(
+            "Start the Mellow Language Server over stdio. Editors normally launch "
+            "this command automatically; running it directly waits for an LSP client."
+        ),
+        epilog=(
+            "VS Code setup: install dependencies in vscode-extension, package/install "
+            "the extension, then open a .mellow file. See docs/LSP.md."
+        ),
+    )
     sub.add_parser("help", help="Show help")
 
     return p
