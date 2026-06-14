@@ -1,4 +1,4 @@
-# Mellow Programming Language 2.3.4
+# Mellow Programming Language 2.8.0
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -9,10 +9,10 @@ This release treats the language core as the stable surface:
 - `if`, `while`, and `for`
 - `range(...)`
 - list and map literals
-- string/math/list/map/json helpers
+- string/math/list/map/json/money/data/ledger helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, native runtimes, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. In v2.8.0 the native C VM covers the stable language core plus money, data, and ledger services. Debugger, events, and record/replay still route through the Python VM.
 
 ## Quick Start
 
@@ -26,12 +26,26 @@ mellow check examples\hello.mellow
 mellow doctor
 ```
 
+Native C is the default execution engine. Mellow falls back to the Python VM
+when a script requests debugger, event, or record/replay features that do not
+yet have native parity. Use `--engine=py` to force Python.
+
 Without installing:
 
 ```powershell
 $env:PYTHONPATH = "src"
 python -m mellowlang --version
 python -m mellowlang run examples\hello.mellow
+```
+
+คู่มือ syntax ฉบับเต็ม: [`docs/SYNTAX_REFERENCE.md`](docs/SYNTAX_REFERENCE.md)
+
+คู่มือติดตั้ง editor และ LSP: [`docs/LSP.md`](docs/LSP.md)
+
+ตัวอย่างรวมที่รันได้:
+
+```powershell
+mellow run examples\syntax_tour_v280.mellow
 ```
 
 ## Example
@@ -53,6 +67,56 @@ Run it:
 ```powershell
 mellow run my_script.mellow
 ```
+
+Money-safe rules:
+
+```mellow
+let subtotal = money("0.10", "THB")
+let fee = money("0.20", "THB")
+let total = money_add(subtotal, fee)
+print(money_format(total))  # THB 0.30
+```
+
+Run finance-style scripts with a tighter sandbox:
+
+```powershell
+mellow run rules.mellow --sandbox=finance
+```
+
+Process JSONL/CSV in bounded batches:
+
+```mellow
+let stream = data_open_jsonl("records.jsonl", 1000)
+let batch = data_next(stream)
+while len(batch) > 0:
+    let sales = data_where(batch, "kind", "==", "sale")
+    print(data_sum(sales, "amount"))
+    batch = data_next(stream)
+```
+
+Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
+
+Finance and data sandbox profiles, plus Ledger Core, run on the default C engine
+in v2.8.0. Native parity tests run with Python fallback disabled.
+
+Build an immutable, balanced ledger:
+
+```mellow
+let book = ledger_create("THB")
+book = ledger_post(
+    book,
+    "sale-001",
+    [
+        {"account": "cash", "amount": "100.00"},
+        {"account": "revenue", "amount": "-100.00"}
+    ],
+    "cash sale"
+)
+print(money_format(ledger_balance(book, "cash")))
+print(ledger_verify(book)["ok"])
+```
+
+Ledger Core is intended for deterministic business rules and audit-friendly prototypes. Durable storage, identity, authorization, signatures, and compliance controls belong in the host application.
 
 ## Stable CLI
 
@@ -93,6 +157,14 @@ Core language gate:
 $env:PYTHONPATH = "src"
 $env:PYTHONDONTWRITEBYTECODE = "1"
 python -m pytest -q tests\core -p no:cacheprovider
+python -m pytest -q tests\native -p no:cacheprovider
+```
+
+Native core parity gate:
+
+```powershell
+python setup.py build_ext --inplace
+python -m pytest -q tests\native -p no:cacheprovider
 ```
 
 Full suite:
@@ -101,12 +173,30 @@ Full suite:
 python -m pytest -q tests
 ```
 
-The full suite currently includes legacy and experimental coverage. Use `tests/core` as the release gate for the stable language core.
+The full suite currently includes legacy and experimental coverage. Use `tests/core` plus `tests/native` as the release gate for stable language core and native C parity.
+
+## Release Process
+
+- Stable core definition: `docs/STABLE_CORE.md`
+- Release checklist: `docs/RELEASE_CHECKLIST.md`
+- Changelog: `CHANGELOG.md`
+- Windows native build helper: `scripts/build-native-windows.ps1`
+
+## Frameworks
+
+`frameworks.mellow_ui` is the first usable framework package. It provides a small React-like virtual UI tree and an in-memory renderer:
+
+```powershell
+python -m frameworks.mellow_ui
+```
+
+Direct Mellow-script imports such as `import("mellow.ui")` are planned, but the stable v1 framework surface is the Python package.
 
 ## Project Layout
 
 - `src/mellowlang`: compiler, VM, CLI, stdlib bridges, and runtime support
 - `tests/core`: stable core language tests
+- `tests/native`: native C VM parity tests for the stable core
 - `tests`: legacy, extended, and experimental tests
 - `examples`: runnable Mellow scripts
 - `stdlib`, `starter_packages`, `mellow_packages`: package and stdlib content

@@ -2,7 +2,7 @@
   "name": "mellowlang",
   "displayName": "MellowLang Language Support",
   "description": "Syntax highlighting + polished LSP for MellowLang (.mellow / .mel)",
-  "version": "1.6.5.1",
+  "version": "2.8.0",
   "publisher": "seashyne",
   "engines": {
     "vscode": "^1.80.0"
@@ -85,7 +85,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/seashyne/mellowlang"
+    "url": "https://github.com/seashyne/mellow-programming-language"
   },
   "license": "MIT"
 }

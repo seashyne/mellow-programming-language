@@ -1,0 +1,4 @@
+{"id": 1, "kind": "sale", "amount": 10}
+{"id": 2, "kind": "refund", "amount": -3}
+{"id": 3, "kind": "sale", "amount": 7}
+{"id": 4, "kind": "sale", "amount": 5}

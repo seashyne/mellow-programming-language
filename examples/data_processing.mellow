@@ -1,0 +1,10 @@
+let stream = data_open_jsonl("tests/data/records.jsonl", 2)
+let total = 0
+
+let batch = data_next(stream)
+while len(batch) > 0:
+    let sales = data_where(batch, "kind", "==", "sale")
+    total = total + data_sum(sales, "amount")
+    batch = data_next(stream)
+
+print(total)

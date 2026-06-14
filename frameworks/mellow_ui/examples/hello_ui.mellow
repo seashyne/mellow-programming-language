@@ -1,0 +1,16 @@
+let UI = import("mellow.ui")
+
+def App(props):
+    return UI.createElement("Screen", {
+        "Name": "HelloScreen",
+        "Children": [
+            UI.createElement("TextLabel", {
+                "Text": "Hello Mellow UI",
+                "Size": [360, 60],
+                "Position": [0.5, 0.5]
+            })
+        ]
+    })
+
+let root = UI.createRoot("App")
+root.render(UI.createElement(App, {}))

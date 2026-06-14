@@ -120,10 +120,12 @@ typedef struct CVM {
 
     /* RNG state (Python random.Random object) */
     PyObject *rng;            /* may be NULL */
+    PyObject *host;           /* borrowed for the duration of run() */
 
     /* config */
     int allow_ask;
     int allow_wait;
+    int allow_storage;
 
     /* output capture buffer — NULL means write to real stdout */
     PyObject *capture_list;   /* list of strings, or NULL */
@@ -155,9 +157,9 @@ static int mellow_truthy(PyObject *v) {
 
 static PyObject *fmt_list(PyObject *lst);
 static PyObject *mellow_format(PyObject *v) {
-    if (!v || v == Py_None)    return PyUnicode_FromString("none");
-    if (v == Py_True)          return PyUnicode_FromString("true");
-    if (v == Py_False)         return PyUnicode_FromString("false");
+    if (!v || v == Py_None)    return PyUnicode_FromString("None");
+    if (v == Py_True)          return PyUnicode_FromString("True");
+    if (v == Py_False)         return PyUnicode_FromString("False");
     if (PyLong_CheckExact(v))  return PyObject_Str(v);
     if (PyFloat_CheckExact(v)) {
         double d = PyFloat_AS_DOUBLE(v), ip;
@@ -368,8 +370,10 @@ static PyObject *cvm_call1(CVM *parent_vm, PyObject *fn_ref,
     sub.tsp          = 0;
     sub.max_try      = CVM_SUB_TRY;
     sub.rng          = parent_vm->rng;
+    sub.host         = parent_vm->host;
     sub.allow_ask    = parent_vm->allow_ask;
     sub.allow_wait   = parent_vm->allow_wait;
+    sub.allow_storage = parent_vm->allow_storage;
     sub.capture_list = parent_vm->capture_list;
 
     /* new scope for the function */
@@ -414,6 +418,24 @@ static PyObject *pylong(PyObject *v) {
     return PyLong_FromLong(l);
 }
 
+static int data_compare(PyObject *actual, const char *op, PyObject *expected) {
+    int cmp_op = -1;
+    if (strcmp(op, "==") == 0) cmp_op = Py_EQ;
+    else if (strcmp(op, "!=") == 0) cmp_op = Py_NE;
+    else if (strcmp(op, ">") == 0) cmp_op = Py_GT;
+    else if (strcmp(op, ">=") == 0) cmp_op = Py_GE;
+    else if (strcmp(op, "<") == 0) cmp_op = Py_LT;
+    else if (strcmp(op, "<=") == 0) cmp_op = Py_LE;
+    if (cmp_op >= 0) return PyObject_RichCompareBool(actual, expected, cmp_op);
+    if (strcmp(op, "contains") == 0) {
+        if (!PyUnicode_Check(actual) && !PyList_Check(actual) && !PyDict_Check(actual))
+            return 0;
+        return PySequence_Contains(actual, expected);
+    }
+    PyErr_Format(PyExc_RuntimeError, "RUNTIME: unsupported data.where operator: %s", op);
+    return -1;
+}
+
 static PyObject *cvm_syscall_dispatch(const char *sn,
                                       PyObject **sa, long argc,
                                       CVM *parent_vm)
@@ -421,6 +443,7 @@ static PyObject *cvm_syscall_dispatch(const char *sn,
 #define A0 (argc>0?sa[0]:Py_None)
 #define A1 (argc>1?sa[1]:Py_None)
 #define A2 (argc>2?sa[2]:Py_None)
+#define A3 (argc>3?sa[3]:Py_None)
 #define STR0 (PyUnicode_Check(A0)?PyUnicode_AsUTF8(A0):"")
 #define STR1 (PyUnicode_Check(A1)?PyUnicode_AsUTF8(A1):"")
 
@@ -1029,6 +1052,102 @@ static PyObject *cvm_syscall_dispatch(const char *sn,
         PyObject *r=PyObject_CallMethod(json,"loads","O",s); Py_DECREF(s); Py_DECREF(json); return r;
     }
 
+    /* std.data bounded in-memory transforms */
+    if (strcmp(sn,"std.data.project")==0 && argc>=2) {
+        if (!PyList_Check(A0) || !PyList_Check(A1)) {
+            PyErr_SetString(PyExc_RuntimeError, "RUNTIME: data.project expects rows and field-name list");
+            return NULL;
+        }
+        Py_ssize_t row_count=PyList_GET_SIZE(A0), field_count=PyList_GET_SIZE(A1);
+        PyObject *names=PyList_New(field_count);
+        if(!names) return NULL;
+        for(Py_ssize_t j=0;j<field_count;j++) {
+            PyObject *name=PyObject_Str(PyList_GET_ITEM(A1,j));
+            if(!name){Py_DECREF(names);return NULL;}
+            PyList_SET_ITEM(names,j,name);
+        }
+        PyObject *result=PyList_New(0);
+        if(!result){Py_DECREF(names);return NULL;}
+        for(Py_ssize_t i=0;i<row_count;i++) {
+            PyObject *row=PyList_GET_ITEM(A0,i);
+            if(!PyDict_Check(row)) continue;
+            PyObject *projected=PyDict_New();
+            if(!projected){Py_DECREF(names);Py_DECREF(result);return NULL;}
+            for(Py_ssize_t j=0;j<field_count;j++) {
+                PyObject *name=PyList_GET_ITEM(names,j);
+                PyObject *value=PyDict_GetItemWithError(row,name);
+                if(!value && PyErr_Occurred()){Py_DECREF(projected);Py_DECREF(names);Py_DECREF(result);return NULL;}
+                if(!value) value=Py_None;
+                if(PyDict_SetItem(projected,name,value)<0){Py_DECREF(projected);Py_DECREF(names);Py_DECREF(result);return NULL;}
+            }
+            if(PyList_Append(result,projected)<0){Py_DECREF(projected);Py_DECREF(names);Py_DECREF(result);return NULL;}
+            Py_DECREF(projected);
+        }
+        Py_DECREF(names);
+        return result;
+    }
+    if (strcmp(sn,"std.data.where")==0 && argc>=4) {
+        if (!PyList_Check(A0)) {
+            PyErr_SetString(PyExc_RuntimeError, "RUNTIME: data.where expects a row list");
+            return NULL;
+        }
+        PyObject *key=PyObject_Str(A1), *op_obj=PyObject_Str(A2);
+        if(!key||!op_obj){Py_XDECREF(key);Py_XDECREF(op_obj);return NULL;}
+        const char *op=PyUnicode_AsUTF8(op_obj);
+        if(!op){Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+        PyObject *result=PyList_New(0);
+        if(!result){Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+        Py_ssize_t row_count=PyList_GET_SIZE(A0);
+        for(Py_ssize_t i=0;i<row_count;i++) {
+            PyObject *row=PyList_GET_ITEM(A0,i);
+            if(!PyDict_Check(row)) continue;
+            PyObject *actual=PyDict_GetItemWithError(row,key);
+            if(!actual && PyErr_Occurred()){Py_DECREF(result);Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+            if(!actual) actual=Py_None;
+            int matched=data_compare(actual,op,A3);
+            if(matched<0){Py_DECREF(result);Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+            if(matched && PyList_Append(result,row)<0){Py_DECREF(result);Py_DECREF(key);Py_DECREF(op_obj);return NULL;}
+        }
+        Py_DECREF(key); Py_DECREF(op_obj);
+        return result;
+    }
+    if (strcmp(sn,"std.data.sum")==0 && argc>=2) {
+        if (!PyList_Check(A0)) {
+            PyErr_SetString(PyExc_RuntimeError, "RUNTIME: data.sum expects a row list");
+            return NULL;
+        }
+        PyObject *key=PyObject_Str(A1);
+        PyObject *total=PyLong_FromLong(0);
+        if(!key||!total){Py_XDECREF(key);Py_XDECREF(total);return NULL;}
+        Py_ssize_t row_count=PyList_GET_SIZE(A0);
+        for(Py_ssize_t i=0;i<row_count;i++) {
+            PyObject *row=PyList_GET_ITEM(A0,i);
+            if(!PyDict_Check(row)) continue;
+            PyObject *value=PyDict_GetItemWithError(row,key);
+            if(!value && PyErr_Occurred()){Py_DECREF(key);Py_DECREF(total);return NULL;}
+            if(!value) continue;
+            PyObject *next=PyNumber_Add(total,value);
+            if(!next){Py_DECREF(key);Py_DECREF(total);return NULL;}
+            Py_DECREF(total);
+            total=next;
+        }
+        Py_DECREF(key);
+        return total;
+    }
+
+    /* Stateful/optional stdlib services are delegated to the per-run host. */
+    if (parent_vm->host && parent_vm->host != Py_None) {
+        PyObject *arg_list = PyList_New(argc);
+        if (!arg_list) return NULL;
+        for (long i=0; i<argc; i++) {
+            Py_INCREF(sa[i]);
+            PyList_SET_ITEM(arg_list, i, sa[i]);
+        }
+        PyObject *result = PyObject_CallMethod(parent_vm->host, "call", "sO", sn, arg_list);
+        Py_DECREF(arg_list);
+        return result;
+    }
+
     /* Fallthrough: unknown syscall */
     PyErr_Format(PyExc_RuntimeError, "RUNTIME: unknown syscall '%s'", sn);
     return NULL;
@@ -1036,6 +1155,7 @@ static PyObject *cvm_syscall_dispatch(const char *sn,
 #undef A0
 #undef A1
 #undef A2
+#undef A3
 #undef STR0
 #undef STR1
 }
@@ -1153,6 +1273,52 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
         case OP_CALL: {
             PyObject *fname=_A1;
             long argc_c=ilen>2?PyLong_AsLong(_A2):0;
+            const char *fname_c=PyUnicode_Check(fname)?PyUnicode_AsUTF8(fname):"";
+            if(fname_c && strcmp(fname_c,"range")==0) {
+                PyObject **args=(PyObject**)alloca((size_t)argc_c*sizeof(PyObject*));
+                for(long i=argc_c-1;i>=0;i--) args[i]=_POP();
+                long start=0, stop=0, step=1;
+                if(argc_c==1) {
+                    stop=to_long(args[0]);
+                } else if(argc_c>=2) {
+                    start=to_long(args[0]);
+                    stop=to_long(args[1]);
+                    if(argc_c>=3) step=to_long(args[2]);
+                }
+                if(step==0) step=1;
+                PyObject *lst=PyList_New(0);
+                if(!lst) {
+                    for(long i=0;i<argc_c;i++) Py_DECREF(args[i]);
+                    goto exec_err;
+                }
+                if(step>0) {
+                    for(long v=start; v<stop; v+=step) {
+                        PyObject *item=PyLong_FromLong(v);
+                        if(!item || PyList_Append(lst,item)<0) {
+                            Py_XDECREF(item);
+                            Py_DECREF(lst);
+                            for(long i=0;i<argc_c;i++) Py_DECREF(args[i]);
+                            goto exec_err;
+                        }
+                        Py_DECREF(item);
+                    }
+                } else {
+                    for(long v=start; v>stop; v+=step) {
+                        PyObject *item=PyLong_FromLong(v);
+                        if(!item || PyList_Append(lst,item)<0) {
+                            Py_XDECREF(item);
+                            Py_DECREF(lst);
+                            for(long i=0;i<argc_c;i++) Py_DECREF(args[i]);
+                            goto exec_err;
+                        }
+                        Py_DECREF(item);
+                    }
+                }
+                for(long i=0;i<argc_c;i++) Py_DECREF(args[i]);
+                _PUSH(lst);
+                Py_DECREF(lst);
+                break;
+            }
             /* resolve variable → func ref */
             PyObject *fvar=scope_get(vm->scopes,vm->ns,fname);
             PyObject *aname=fname;
@@ -1449,6 +1615,10 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
 
         /* ── SAVE / LOAD_F / SAVE_VAL ── */
         case OP_SAVE_VAL: {
+            if (!vm->allow_storage) {
+                PyErr_SetString(PyExc_RuntimeError, "SANDBOX: storage is disabled");
+                goto exec_err;
+            }
             PyObject *value=_POP(), *filename=_POP();
             PyObject *json=PyImport_ImportModule("json");
             if(json){
@@ -1470,6 +1640,10 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
             Py_DECREF(value); Py_DECREF(filename); break;
         }
         case OP_SAVE: {
+            if (!vm->allow_storage) {
+                PyErr_SetString(PyExc_RuntimeError, "SANDBOX: storage is disabled");
+                goto exec_err;
+            }
             PyObject *filename=_POP();
             PyObject *vname=_A1;
             PyObject *value=scope_get(vm->scopes,vm->ns,vname);
@@ -1491,6 +1665,10 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
             Py_DECREF(filename); break;
         }
         case OP_LOAD_F: {
+            if (!vm->allow_storage) {
+                PyErr_SetString(PyExc_RuntimeError, "SANDBOX: storage is disabled");
+                goto exec_err;
+            }
             PyObject *filename=_POP();
             PyObject *vname=_A1;
             PyObject *loaded=Py_None;
@@ -1657,10 +1835,10 @@ exec_err:
 static PyObject *
 mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
 {
-    static char *kwlist[]={"bytecode","func_table","config","event_table",NULL};
-    PyObject *bytecode_obj=NULL,*func_table=NULL,*config_obj=NULL,*event_table=NULL;
-    if(!PyArg_ParseTupleAndKeywords(args_in,kwargs,"O|OOO",kwlist,
-            &bytecode_obj,&func_table,&config_obj,&event_table))
+    static char *kwlist[]={"bytecode","func_table","config","event_table","host",NULL};
+    PyObject *bytecode_obj=NULL,*func_table=NULL,*config_obj=NULL,*event_table=NULL,*host_obj=Py_None;
+    if(!PyArg_ParseTupleAndKeywords(args_in,kwargs,"O|OOOO",kwlist,
+            &bytecode_obj,&func_table,&config_obj,&event_table,&host_obj))
         return NULL;
     if(!PyList_Check(bytecode_obj)){
         PyErr_SetString(PyExc_TypeError,"bytecode must be a list"); return NULL;
@@ -1673,7 +1851,7 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
 
     /* config */
     long max_steps=5000000, max_stack_c=CVM_MAX_STACK;
-    int allow_ask=0, allow_wait=1;
+    int allow_ask=0, allow_wait=1, allow_storage=1;
     if(config_obj&&PyDict_Check(config_obj)){
         PyObject *ms=PyDict_GetItemString(config_obj,"max_steps");
         if(ms&&PyLong_Check(ms)) max_steps=PyLong_AsLong(ms);
@@ -1683,6 +1861,8 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
         if(aa) allow_ask=mellow_truthy(aa);
         PyObject *aw=PyDict_GetItemString(config_obj,"allow_wait");
         if(aw) allow_wait=mellow_truthy(aw);
+        PyObject *as=PyDict_GetItemString(config_obj,"allow_storage");
+        if(as) allow_storage=mellow_truthy(as);
     }
     if(max_stack_c>CVM_MAX_STACK) max_stack_c=CVM_MAX_STACK;
 
@@ -1724,8 +1904,10 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
     vm.tsp          = 0;
     vm.max_try      = CVM_MAX_TRY;
     vm.rng          = NULL;
+    vm.host         = host_obj;
     vm.allow_ask    = allow_ask;
     vm.allow_wait   = allow_wait;
+    vm.allow_storage = allow_storage;
     vm.capture_list = NULL;
 
     PyObject *result = cvm_exec(&vm, 0);
@@ -1744,14 +1926,17 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
 static PyObject *
 mellowvm_capabilities(PyObject *self, PyObject *Py_UNUSED(args))
 {
-    return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:s}",
+    return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:s,s:s}",
         "available", Py_True,
         "native_execution", Py_True,
+        "native_stdlib_parity", Py_True,
+        "native_data_transforms", Py_True,
         "conditional_breakpoints", Py_False,
         "watch_expressions", Py_False,
         "typed_frame_snapshots", Py_False,
         "source_span_parity", Py_False,
-        "notes", "Execution parity is native-first in v2.0.3; debugger parity still needs follow-up hooks."
+        "native_parity_level", "stable-core+money+data+ledger",
+        "notes", "Native C execution covers the stable language core plus money, data, and ledger stdlib services; debugger, event, and replay hooks still route through Python."
     );
 }
 
@@ -1759,7 +1944,7 @@ mellowvm_capabilities(PyObject *self, PyObject *Py_UNUSED(args))
 static PyMethodDef methods[]={
     {"run",(PyCFunction)mellowvm_run,METH_VARARGS|METH_KEYWORDS,
      "Run MellowLang bytecode in native C VM v1.5.0.\n"
-     "Args: bytecode, func_table=None, config=None, event_table=None\n"
+     "Args: bytecode, func_table=None, config=None, event_table=None, host=None\n"
      "Handles all standard opcodes and ~70 builtin syscalls natively.\n"
      "No Python fallback needed for pure Mellow programs."},
     {"capabilities",(PyCFunction)mellowvm_capabilities,METH_NOARGS,

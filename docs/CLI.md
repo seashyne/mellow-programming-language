@@ -1,4 +1,4 @@
-# MellowLang CLI (v1.0.3)
+# MellowLang CLI (v2.8.0)
 
 MellowLang v1.0.3 คืน **CLI แบบเดิม** (Frinds-style) และยังคง **CLI แบบใหม่ (subcommands)** ไว้ด้วย
 
@@ -22,6 +22,10 @@ Options สำคัญ:
 - `--emit/--emit-args` emit event หลังรันจบ
 - `--record/--replay` deterministic replay
 - `--seed/--global-seed` ควบคุม randomness
+- `--sandbox=finance` ปิด ask/wait/storage/save/network สำหรับ rule scripts ที่ต้องเข้มขึ้น
+- `--sandbox=data` ใช้ได้ทั้ง Python/C VM พร้อม batch/query/time limits สำหรับงานข้อมูล
+- `--data-write` เปิด SQLite writes แบบ explicit
+- `--data-batch-size`, `--data-max-rows` จำกัด memory/result size
 - `--color/--no-color` สี error
 - `--json` output แบบเครื่องอ่านได้
 - `--engine/--legacy` (compat) คงไว้เพื่อความคุ้นเคย
@@ -29,6 +33,8 @@ Options สำคัญ:
 ## 2) Modern subcommands (แนะนำสำหรับ tooling)
 ```bash
 mellow run <file>
+mellow run <file> --sandbox=finance
+mellow run <file> --sandbox=data
 mellow check <file>
 mellow fmt [-w] [--check] <files...>
 mellow init <dir> [--force]

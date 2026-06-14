@@ -1,0 +1,40 @@
+let UI = import("mellow.ui")
+
+def LoadingScreen(props):
+    let progress = UI.useState(0)
+
+    return UI.createElement("Screen", {
+        "Name": "LoadingScreen",
+        "Children": [
+            UI.createElement("Frame", {
+                "Name": "Background",
+                "Size": ["100%", "100%"],
+                "BackgroundColor": "#08080c",
+                "Children": [
+                    UI.createElement("TextLabel", {
+                        "Text": "MELLOW ZERO",
+                        "Position": ["50%", "42%"],
+                        "Size": [500, 70],
+                        "TextSize": 42,
+                        "TextColor": "#f0f0ff"
+                    }),
+                    UI.createElement("TextLabel", {
+                        "Text": "Loading... " + str(progress.value) + "%",
+                        "Position": ["50%", "52%"],
+                        "Size": [300, 40],
+                        "TextSize": 22,
+                        "TextColor": "#b8b8cc"
+                    }),
+                    UI.createElement("ProgressBar", {
+                        "Value": progress.value / 100,
+                        "Position": ["50%", "60%"],
+                        "Size": [420, 18],
+                        "Color": "#8050ff"
+                    })
+                ]
+            })
+        ]
+    })
+
+let root = UI.createRoot("PlayerGui")
+root.render(UI.createElement(LoadingScreen, {}))

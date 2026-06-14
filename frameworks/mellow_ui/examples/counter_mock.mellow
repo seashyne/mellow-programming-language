@@ -1,0 +1,24 @@
+let UI = import("mellow.ui")
+
+def Counter(props):
+    let count = UI.useState(0)
+
+    return UI.createElement("Frame", {
+        "Name": "Counter",
+        "Size": [320, 180],
+        "Children": [
+            UI.createElement("TextLabel", {
+                "Text": "Count: " + str(count.value),
+                "Size": [260, 48]
+            }),
+            UI.createElement("Button", {
+                "Text": "Add",
+                "Size": [160, 44],
+                "OnClick": def():
+                    count.set(count.value + 1)
+            })
+        ]
+    })
+
+let root = UI.createRoot("App")
+root.render(UI.createElement(Counter, {}))

@@ -1,4 +1,4 @@
-# MellowLang Stdlib Reference (v1.4.0)
+# MellowLang Stdlib Reference (v2.8.0)
 
 This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
 
@@ -19,6 +19,96 @@ This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
 - `vec(x, y)`
 - `vec_add(a, b)`, `vec_sub(a, b)`
 - `vec_len(v)`
+
+## Money / decimal-safe rules
+
+Money helpers use Python `Decimal` internally and return a map shaped like
+`{"type": "money", "currency": "THB", "amount": "12.34"}`.
+
+```mellow
+let a = money("0.10", "THB")
+let b = money("0.20", "THB")
+let total = money_add(a, b)
+print(money_format(total))  # THB 0.30
+```
+
+Available helpers:
+
+- `money(amount, currency="USD")`
+- `money_add(a, b)`, `money_sub(a, b)`
+- `money_mul(a, factor)`, `money_div(a, divisor)`
+- `money_quantize(a, scale="0.01")`
+- `money_format(a)`, `money_amount(a)`, `money_currency(a)`
+- `money_eq(a, b)`, `money_lt(a, b)`, `money_gt(a, b)`
+
+Module form is also available:
+
+```mellow
+let total = money.add(money.of("12.34", "THB"), money.of("0.01", "THB"))
+```
+
+## Immutable ledger
+
+Ledger transactions use signed Decimal amounts. Every transaction must balance
+to `0.00`; posting returns a new ledger and leaves the original unchanged.
+
+```mellow
+let empty = ledger_create("THB")
+let book = ledger_post(
+    empty,
+    "sale-001",
+    [
+        {"account": "cash", "amount": "100.00"},
+        {"account": "revenue", "amount": "-100.00"}
+    ],
+    "cash sale"
+)
+print(money_format(ledger_balance(book, "cash")))
+print(ledger_verify(book)["ok"])
+```
+
+- `ledger_create(currency="USD")`
+- `ledger_post(ledger, transaction_id, postings, memo="", metadata={})`
+- `ledger_balance(ledger, account)`
+- `ledger_verify(ledger)`
+- `ledger_entries(ledger)`
+
+Each entry includes its previous hash and deterministic SHA-256 hash. See
+`docs/LEDGER_CORE.md` for the data contract and security boundaries.
+
+## Data processing
+
+JSONL and CSV readers return opaque stream handles. `data_next` returns at most
+the configured batch size, so large files do not need to be loaded into memory.
+
+```mellow
+let stream = data_open_jsonl("records.jsonl", 1000)
+let batch = data_next(stream)
+while len(batch) > 0:
+    let active = data_where(batch, "active", "==", true)
+    let view = data_project(active, ["id", "amount"])
+    print(data_sum(view, "amount"))
+    batch = data_next(stream)
+```
+
+Streaming helpers:
+
+- `data_open_jsonl(path, batch_size=100)`
+- `data_open_csv(path, batch_size=100)`
+- `data_next(stream)`, `data_close(stream)`, `data_cancel(stream)`
+- `data_info(stream)`
+- `data_where(rows, field, operator, expected)`
+- `data_project(rows, fields)`
+- `data_sum(rows, field)`
+
+Parameterized SQLite:
+
+- `data_sqlite_open(path=":memory:", readonly=false)`
+- `data_sqlite_query(db_or_path, sql, params=[], limit=max_rows)`
+- `data_sqlite_execute(db_or_path, sql, params=[])`
+- `data_sqlite_close(db)`
+
+Writes require `--data-write`. Query values must use `?` or named placeholders.
 
 ## Random (deterministic)
 
@@ -129,6 +219,8 @@ print(path)
 ## CLI tooling
 
 - `mellow run <file|projectdir>`
+- `mellow run <file> --sandbox=finance`
+- `mellow run <file> --sandbox=data`
 - `mellow check <file|dir>`
 - `mellow fmt <file|dir> [--write|--check]`
 - `mellow test`

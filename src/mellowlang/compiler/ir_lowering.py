@@ -44,10 +44,85 @@ from ..ast import (
     WaitStmt,
 )
 from ..ir import IRFunction, IRInstruction, IRProgram
+from ..host.legacy import MODULE_ALLOWLIST
+
+
+STDLIB_CALLS = {
+    "len": "std.len",
+    "money": "std.money.of",
+    "money.of": "std.money.of",
+    "money_of": "std.money.of",
+    "money.add": "std.money.add",
+    "money_add": "std.money.add",
+    "money.sub": "std.money.sub",
+    "money_sub": "std.money.sub",
+    "money.mul": "std.money.mul",
+    "money_mul": "std.money.mul",
+    "money.div": "std.money.div",
+    "money_div": "std.money.div",
+    "money.quantize": "std.money.quantize",
+    "money_quantize": "std.money.quantize",
+    "money.format": "std.money.format",
+    "money_format": "std.money.format",
+    "money.amount": "std.money.amount",
+    "money_amount": "std.money.amount",
+    "money.currency": "std.money.currency",
+    "money_currency": "std.money.currency",
+    "money.eq": "std.money.eq",
+    "money_eq": "std.money.eq",
+    "money.lt": "std.money.lt",
+    "money_lt": "std.money.lt",
+    "money.gt": "std.money.gt",
+    "money_gt": "std.money.gt",
+    "data.open_jsonl": "std.data.open_jsonl",
+    "data_open_jsonl": "std.data.open_jsonl",
+    "data.open_csv": "std.data.open_csv",
+    "data_open_csv": "std.data.open_csv",
+    "data.next": "std.data.next",
+    "data_next": "std.data.next",
+    "data.close": "std.data.close",
+    "data_close": "std.data.close",
+    "data.cancel": "std.data.cancel",
+    "data_cancel": "std.data.cancel",
+    "data.info": "std.data.info",
+    "data_info": "std.data.info",
+    "data.project": "std.data.project",
+    "data_project": "std.data.project",
+    "data.where": "std.data.where",
+    "data_where": "std.data.where",
+    "data.sum": "std.data.sum",
+    "data_sum": "std.data.sum",
+    "data.sqlite_open": "std.data.sqlite_open",
+    "data_sqlite_open": "std.data.sqlite_open",
+    "data.sqlite_close": "std.data.sqlite_close",
+    "data_sqlite_close": "std.data.sqlite_close",
+    "data.sqlite_query": "std.data.sqlite_query",
+    "data_sqlite_query": "std.data.sqlite_query",
+    "data.sqlite_execute": "std.data.sqlite_execute",
+    "data_sqlite_execute": "std.data.sqlite_execute",
+    "ledger.create": "std.ledger.create",
+    "ledger_create": "std.ledger.create",
+    "ledger.post": "std.ledger.post",
+    "ledger_post": "std.ledger.post",
+    "ledger.verify": "std.ledger.verify",
+    "ledger_verify": "std.ledger.verify",
+    "ledger.balance": "std.ledger.balance",
+    "ledger_balance": "std.ledger.balance",
+    "ledger.entries": "std.ledger.entries",
+    "ledger_entries": "std.ledger.entries",
+}
 
 
 class UnsupportedLoweringError(RuntimeError):
     pass
+
+
+def _module_syscall(module: str, function: str) -> str:
+    mod = str(module).lower()
+    func = str(function).lower()
+    if mod in MODULE_ALLOWLIST and func in MODULE_ALLOWLIST[mod]:
+        return MODULE_ALLOWLIST[mod][func]
+    return f"std.{mod}.{func}"
 
 
 @dataclass
@@ -292,7 +367,7 @@ class IRLowerer:
             self.emit("LABEL", skip, line=line, col=col)
             self.events[stmt.event] = IRFunction(name=stmt.event, entry_label=entry, params=list(stmt.params), kind="event")
         elif isinstance(stmt, GetModuleStmt):
-            self.emit("PUSH", f"{stmt.module}.{stmt.function}", line=line, col=col)
+            self.emit("PUSH", _module_syscall(stmt.module, stmt.function), line=line, col=col)
             for arg in stmt.args:
                 self._expr(arg)
             self.emit("SYSCALL", len(stmt.args), line=line, col=col)
@@ -335,13 +410,22 @@ class IRLowerer:
             else:
                 self.emit(chosen, line=line, col=col)
         elif isinstance(expr, Call):
+            syscall_name = STDLIB_CALLS.get(str(expr.name).lower())
+            if syscall_name:
+                if expr.kwargs:
+                    raise UnsupportedLoweringError("named arguments are not yet lowered in IR pipeline")
+                self.emit("PUSH", syscall_name, line=line, col=col)
+                for arg in expr.args:
+                    self._expr(arg)
+                self.emit("SYSCALL", len(expr.args), line=line, col=col)
+                return
             for arg in expr.args:
                 self._expr(arg)
             if expr.kwargs:
                 raise UnsupportedLoweringError("named arguments are not yet lowered in IR pipeline")
             self.emit("CALL", expr.name, len(expr.args), line=line, col=col)
         elif isinstance(expr, GetModuleExpr):
-            self.emit("PUSH", f"{expr.module}.{expr.function}", line=line, col=col)
+            self.emit("PUSH", _module_syscall(expr.module, expr.function), line=line, col=col)
             for arg in expr.args:
                 self._expr(arg)
             self.emit("SYSCALL", len(expr.args), line=line, col=col)
