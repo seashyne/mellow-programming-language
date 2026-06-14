@@ -191,6 +191,16 @@ typedef struct {
     MSyscallBridge syscall;
 } MVM;
 
+typedef struct {
+    MInstruction *code;
+    size_t code_len;
+    MValue *consts;
+    size_t const_len;
+    MSourceSpan *spans;
+    size_t span_len;
+    char *source_name;
+} MNativeProgram;
+
 void mvm_init(MVM *vm);
 void mvm_free(MVM *vm);
 int mvm_reserve_stack(MVM *vm, size_t cap);
@@ -206,6 +216,10 @@ MValue mval_str(const char *ptr, size_t len);
 MValue mval_func(uint32_t address, uint16_t arity, uint16_t local_count, uint16_t flags);
 const char *mvalue_tag_name(MValueTag tag);
 void mvalue_free(MValue *v);
+
+int mellow_compile_source(const char *source, const char *source_name, MNativeProgram *out, char *error, size_t error_cap);
+int mellow_compile_file(const char *path, MNativeProgram *out, char *error, size_t error_cap);
+void mellow_native_program_free(MNativeProgram *program);
 
 #ifdef __cplusplus
 }

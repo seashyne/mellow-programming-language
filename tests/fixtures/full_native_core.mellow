@@ -1,0 +1,16 @@
+def add(a, b):
+    return a + b
+
+let total = 0
+for i in range(0, 5):
+    total = total + i
+
+let values = [10, 20, 30]
+let record = {"name": "mellow", "version": 29}
+print(add(total, values[1]))
+print(record["name"])
+
+let count = 0
+while count < 3:
+    count = count + 1
+print(count)

@@ -1,8 +1,13 @@
-# Standalone Mellow Runtime Opcode Migration Pack
+# Mellow 2.9.0 Full Native C
 
-This pack extends the standalone runtime from a scaffold into a more realistic execution core.
+The native package now contains the source frontend and execution runtime in C.
+The `mellow` executable reads, compiles, and runs `.mellow` source without
+loading Python or CPython.
 
 What moved into native standalone now:
+- lexer and expression parser
+- source-to-bytecode compiler
+- native `mellow` CLI with `run`, `check`, and `--version`
 - arithmetic: add/sub/mul/div
 - locals: load/store with per-frame local windows
 - call/return: simple function refs and stack frames
@@ -12,13 +17,20 @@ What moved into native standalone now:
 - syscall bridge: host callback contract in pure C
 - debugger snapshots now include stack, frames, and locals
 
-What still is not complete yet:
-- heap-managed strings/bytes ownership
+Native source syntax in v2.9.0:
+- `let` / `keep` declarations and assignment
+- numbers, strings, booleans, `none`
+- arithmetic, comparisons, `and` / `or` / `not`
+- `if` / `else`, `while`, and `for ... in range(...)`
+- functions and return values
+- lists, maps, and indexing
+- `print`, `len`, `str`, `type`, `abs`, `floor`, `ceil`, `sqrt`, `min`, `max`
+
+Extended systems that remain outside the native runtime:
 - import/module loader parity
 - closures/upvalues
-- GC / arena / refcount policy
 - native workflow/event runtime parity
-- bytecode serializer from the Python compiler pipeline
+- package manager, registry, LSP, playground, and deployment tooling
 
 Build:
 
@@ -26,4 +38,11 @@ Build:
 cmake -S native/standalone -B native/standalone/build
 cmake --build native/standalone/build
 ./native/standalone/build/mellowrt
+```
+
+Run source directly:
+
+```bash
+./native/standalone/build/mellow examples/hello.mellow
+./native/standalone/build/mellow check examples/hello.mellow
 ```
