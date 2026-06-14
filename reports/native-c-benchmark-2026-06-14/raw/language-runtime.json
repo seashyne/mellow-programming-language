@@ -1,0 +1,302 @@
+{
+  "metadata": {
+    "mellow_version": "2.8.0",
+    "python_version": "3.14.3",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python_executable": "C:\\Program Files\\Python314\\python.exe",
+    "repeats": 9,
+    "native_capabilities": {
+      "available": true,
+      "native_vm": {
+        "available": true,
+        "load_error": null,
+        "extension_path": "E:\\software\\MellowLang\\src\\mellowlang\\_mellowvm.cp314-win_amd64.pyd",
+        "extension_exists": true,
+        "extension_abi_tag": null,
+        "current_python_abi": "314",
+        "abi_matches": null,
+        "extension_suffixes": [
+          ".cp314-win_amd64.pyd",
+          ".pyd"
+        ],
+        "python": "3.14.3",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "python_include": "C:\\Program Files\\Python314\\Include\\Python.h",
+        "python_header_candidates": [
+          "C:\\Program Files\\Python314\\Include\\Python.h",
+          "C:\\Program Files\\Python314\\Include\\Python.h",
+          "C:\\Program Files\\Python314\\include\\python3.14\\Python.h",
+          "\\usr\\include\\python3.14\\Python.h"
+        ],
+        "python_headers_found": true,
+        "compiler": "C:\\Strawberry\\c\\bin\\gcc.EXE",
+        "compiler_found": true,
+        "source_files": [
+          "E:\\software\\MellowLang\\native\\mellowvm\\include\\mellowvm.h",
+          "E:\\software\\MellowLang\\native\\mellowvm\\src\\mellowvm_module.c"
+        ],
+        "source_files_present": true,
+        "build_ready": true,
+        "build_command": "C:\\Program Files\\Python314\\python.exe setup.py build_ext --inplace",
+        "recommended_run_mode": "engine=c,native_allow_fallback=false",
+        "native_parity_level": "stable-core+money+data+ledger",
+        "python_vm_still_needed_for": [
+          "record/replay",
+          "event handlers",
+          "debugger parity"
+        ]
+      },
+      "native_execution": true,
+      "conditional_breakpoints": false,
+      "watch_expressions": false,
+      "typed_frame_snapshots": false,
+      "source_span_parity": false,
+      "notes": "Native C execution covers the stable language core plus money, data, and ledger stdlib services; debugger, event, and replay hooks still route through Python.",
+      "requires_python_fallback_for_debugger": true,
+      "native_stdlib_parity": true,
+      "native_data_transforms": true,
+      "native_ledger_bridge": true,
+      "native_parity_level": "stable-core+money+data+ledger"
+    }
+  },
+  "compile": {
+    "median_seconds": 0.04064809999545105,
+    "p95_seconds": 0.044729700006428175,
+    "min_seconds": 0.039059499991708435,
+    "max_seconds": 0.044729700006428175,
+    "samples_seconds": [
+      0.044570500002009794,
+      0.044729700006428175,
+      0.04029669999727048,
+      0.04346219998842571,
+      0.04015639999124687,
+      0.04139299999224022,
+      0.039059499991708435,
+      0.040380499995080754,
+      0.04064809999545105
+    ],
+    "source_lines": 250,
+    "lines_per_second": 6150.348971488892
+  },
+  "cli_startup": {
+    "median_seconds": 0.32986019999952987,
+    "p95_seconds": 0.37803330000315327,
+    "min_seconds": 0.3188815000030445,
+    "max_seconds": 0.37803330000315327,
+    "samples_seconds": [
+      0.37803330000315327,
+      0.35571340000024065,
+      0.32846520000020973,
+      0.3391873999935342,
+      0.321646199998213,
+      0.3188815000030445,
+      0.32986019999952987,
+      0.3362959999940358,
+      0.3201499999995576
+    ],
+    "command": [
+      "C:\\Program Files\\Python314\\python.exe",
+      "-m",
+      "mellowlang",
+      "--version"
+    ]
+  },
+  "runtime": {
+    "arithmetic_loop": {
+      "py": {
+        "median_seconds": 0.33562179999717046,
+        "p95_seconds": 0.46686420000332873,
+        "min_seconds": 0.31813230000261683,
+        "max_seconds": 0.46686420000332873,
+        "samples_seconds": [
+          0.33562179999717046,
+          0.3410888999933377,
+          0.3346211000025505,
+          0.3222016999934567,
+          0.33602459999383427,
+          0.31813230000261683,
+          0.33095469999534544,
+          0.4156045000127051,
+          0.46686420000332873
+        ],
+        "engine_requested": "py",
+        "engine_used": "py",
+        "engine_detail": "python-legacy-vm",
+        "units": 20000,
+        "unit_name": "iterations",
+        "units_per_second": 59590.88474040904
+      },
+      "c": {
+        "median_seconds": 0.019560200002160855,
+        "p95_seconds": 0.019906300003640354,
+        "min_seconds": 0.012173399998573586,
+        "max_seconds": 0.019906300003640354,
+        "samples_seconds": [
+          0.013769600001978688,
+          0.012173399998573586,
+          0.019560200002160855,
+          0.01331749999371823,
+          0.018577700000605546,
+          0.019768999991356395,
+          0.019906300003640354,
+          0.019831600002362393,
+          0.01982560000033118
+        ],
+        "engine_requested": "c",
+        "engine_used": "c",
+        "engine_detail": "native-c",
+        "units": 20000,
+        "unit_name": "iterations",
+        "units_per_second": 1022484.4325615566
+      },
+      "native_speedup": 17.158403286269753
+    },
+    "function_calls": {
+      "py": {
+        "median_seconds": 0.2759208000061335,
+        "p95_seconds": 0.30184999998891726,
+        "min_seconds": 0.25135050000972115,
+        "max_seconds": 0.30184999998891726,
+        "samples_seconds": [
+          0.2825460999883944,
+          0.2999108999938471,
+          0.26045059999160003,
+          0.29024570000183303,
+          0.2693400999996811,
+          0.2759208000061335,
+          0.30184999998891726,
+          0.2661143000004813,
+          0.25135050000972115
+        ],
+        "engine_requested": "py",
+        "engine_used": "py",
+        "engine_detail": "python-legacy-vm",
+        "units": 8000,
+        "unit_name": "calls",
+        "units_per_second": 28993.82721354159
+      },
+      "c": {
+        "median_seconds": 0.017624600004637614,
+        "p95_seconds": 0.02140240000153426,
+        "min_seconds": 0.01170480001019314,
+        "max_seconds": 0.02140240000153426,
+        "samples_seconds": [
+          0.01782019999518525,
+          0.02140240000153426,
+          0.01696520000405144,
+          0.017624600004637614,
+          0.016578000009758398,
+          0.01672830000461545,
+          0.01821619999827817,
+          0.01170480001019314,
+          0.019927700006519444
+        ],
+        "engine_requested": "c",
+        "engine_used": "c",
+        "engine_detail": "native-c",
+        "units": 8000,
+        "unit_name": "calls",
+        "units_per_second": 453911.0106269042
+      },
+      "native_speedup": 15.655436147970997
+    },
+    "money_add": {
+      "py": {
+        "median_seconds": 0.12304130000120495,
+        "p95_seconds": 0.13719839999976102,
+        "min_seconds": 0.10361540000303648,
+        "max_seconds": 0.13719839999976102,
+        "samples_seconds": [
+          0.12883570000121836,
+          0.11936109999078326,
+          0.12893439999606926,
+          0.13719839999976102,
+          0.12351130000024568,
+          0.11723730000085197,
+          0.12304130000120495,
+          0.10361540000303648,
+          0.10815490000823047
+        ],
+        "engine_requested": "py",
+        "engine_used": "py",
+        "engine_detail": "python-legacy-vm",
+        "units": 3000,
+        "unit_name": "operations",
+        "units_per_second": 24382.057081407795
+      },
+      "c": {
+        "median_seconds": 0.036781600007088855,
+        "p95_seconds": 0.042777000009664334,
+        "min_seconds": 0.028920800003106706,
+        "max_seconds": 0.042777000009664334,
+        "samples_seconds": [
+          0.03655109999817796,
+          0.036781600007088855,
+          0.03733020000800025,
+          0.031381699998746626,
+          0.028920800003106706,
+          0.03548920000321232,
+          0.042281300004106015,
+          0.042777000009664334,
+          0.03829389999737032
+        ],
+        "engine_requested": "c",
+        "engine_used": "c",
+        "engine_detail": "native-c",
+        "units": 3000,
+        "unit_name": "operations",
+        "units_per_second": 81562.52037491069
+      },
+      "native_speedup": 3.3451861794345925
+    },
+    "ledger_post": {
+      "py": {
+        "median_seconds": 0.030807800008915365,
+        "p95_seconds": 0.034686400002101436,
+        "min_seconds": 0.022870200002216734,
+        "max_seconds": 0.034686400002101436,
+        "samples_seconds": [
+          0.03211349999764934,
+          0.034686400002101436,
+          0.029195199997047894,
+          0.025622500004828908,
+          0.027446300009614788,
+          0.022870200002216734,
+          0.03334049999830313,
+          0.030807800008915365,
+          0.03416690000449307
+        ],
+        "engine_requested": "py",
+        "engine_used": "py",
+        "engine_detail": "python-legacy-vm",
+        "units": 60,
+        "unit_name": "transactions",
+        "units_per_second": 1947.5587345619228
+      },
+      "c": {
+        "median_seconds": 0.027179400000022724,
+        "p95_seconds": 0.03108470000734087,
+        "min_seconds": 0.015742300005513243,
+        "max_seconds": 0.03108470000734087,
+        "samples_seconds": [
+          0.03108470000734087,
+          0.030363600002601743,
+          0.027179400000022724,
+          0.030068000007304363,
+          0.029613799997605383,
+          0.02690319999237545,
+          0.02542590000666678,
+          0.026942500000586733,
+          0.015742300005513243
+        ],
+        "engine_requested": "c",
+        "engine_used": "c",
+        "engine_detail": "native-c",
+        "units": 60,
+        "unit_name": "transactions",
+        "units_per_second": 2207.5542506438637
+      },
+      "native_speedup": 1.1334981643777864
+    }
+  }
+}

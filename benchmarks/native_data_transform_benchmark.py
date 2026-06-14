@@ -4,6 +4,7 @@ import argparse
 import json
 import statistics
 import time
+from pathlib import Path
 
 from mellowlang.compiler import Compiler
 from mellowlang.vm import MellowVM, RunConfig
@@ -68,10 +69,17 @@ def main() -> int:
     parser.add_argument("--rows", type=int, default=1_000)
     parser.add_argument("--rounds", type=int, default=250)
     parser.add_argument("--repeats", type=int, default=5)
+    parser.add_argument("--output")
     args = parser.parse_args()
     if args.rows > 1_500:
         parser.error("--rows must be <= 1500 to stay within the VM stack limit")
-    print(json.dumps(run_benchmark(args.rows, args.rounds, args.repeats), indent=2))
+    payload = json.dumps(
+        run_benchmark(args.rows, args.rounds, args.repeats),
+        indent=2,
+    )
+    if args.output:
+        Path(args.output).write_text(payload + "\n", encoding="utf-8")
+    print(payload)
     return 0
 
 

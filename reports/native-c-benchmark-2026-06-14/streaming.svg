@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+  <rect width="1200" height="650" fill="#F6F3EC"/>
+  <text x="60" y="65" font-family="Aptos,Arial" font-size="34" font-weight="700" fill="#172126">Streaming throughput stays stable as data scales</text>
+  <text x="60" y="98" font-family="Aptos,Arial" font-size="16" fill="#748087">1,000-row batches; median of 9 runs</text>
+  <line x1="120" y1="520" x2="1110" y2="520" stroke="#CFC9BE" stroke-width="2"/>
+  <line x1="120" y1="150" x2="120" y2="520" stroke="#CFC9BE" stroke-width="2"/>
+  <line x1="120" y1="242" x2="1110" y2="242" stroke="#E7E3DA"/>
+  <line x1="120" y1="335" x2="1110" y2="335" stroke="#E7E3DA"/>
+  <line x1="120" y1="427" x2="1110" y2="427" stroke="#E7E3DA"/>
+  <polyline points="230,175 590,219 950,174" fill="none" stroke="#178A63" stroke-width="8"/>
+  <g fill="#178A63">
+    <circle cx="230" cy="175" r="13"/>
+    <circle cx="590" cy="219" r="13"/>
+    <circle cx="950" cy="174" r="13"/>
+  </g>
+  <g font-family="Aptos,Arial" font-size="18" font-weight="700" fill="#178A63">
+    <text x="190" y="148">466K rows/s</text>
+    <text x="550" y="192">407K rows/s</text>
+    <text x="910" y="147">466K rows/s</text>
+  </g>
+  <g font-family="Aptos,Arial" font-size="17" fill="#172126">
+    <text x="190" y="558">10K rows</text>
+    <text x="540" y="558">100K rows</text>
+    <text x="915" y="558">1M rows</text>
+  </g>
+</svg>
