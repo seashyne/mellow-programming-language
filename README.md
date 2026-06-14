@@ -40,6 +40,8 @@ python -m mellowlang run examples\hello.mellow
 
 คู่มือ syntax ฉบับเต็ม: [`docs/SYNTAX_REFERENCE.md`](docs/SYNTAX_REFERENCE.md)
 
+ข้อกำหนดภาษา 2.9 ที่ล็อกแล้ว: [`docs/LANGUAGE_SPEC_2_9.md`](docs/LANGUAGE_SPEC_2_9.md)
+
 คู่มือติดตั้ง editor และ LSP: [`docs/LSP.md`](docs/LSP.md)
 
 ตัวอย่างรวมที่รันได้:

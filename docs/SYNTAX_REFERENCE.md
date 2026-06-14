@@ -1,7 +1,9 @@
-# คู่มือ Syntax Mellow Programming Language v2.8.0
+# คู่มือ Syntax Mellow Programming Language v2.9.0
 
-เอกสารนี้เป็นแหล่งอ้างอิงหลักของ syntax ที่ compiler ใน Mellow v2.8.0 รองรับจริง
-ตัวอย่างใช้รูปแบบ modern syntax เป็นหลัก และระบุ compatibility syntax แยกไว้ชัดเจน
+เอกสารนี้เป็นคู่มือรวม syntax ทั้ง Core, Extended และ Compatibility ที่ compiler
+รองรับ สำหรับข้อกำหนดแบบบังคับและ syntax ที่ล็อกแล้วของ v2.9 ให้ยึด
+[`LANGUAGE_SPEC_2_9.md`](LANGUAGE_SPEC_2_9.md) เป็นหลัก หากเอกสารสองฉบับขัดกัน
+language specification มีลำดับสูงกว่า
 
 ## 1. เริ่มต้น
 
@@ -70,7 +72,7 @@ let hp = 100  # inline comment
 print("https://example.com")  // comment ไม่ตัด // ใน string
 ```
 
-Mellow v2.8.0 ยังไม่มี block comment
+Mellow v2.9.0 ยังไม่มี block comment
 
 ## 4. ชื่อและ keyword
 
@@ -242,7 +244,7 @@ let blocked = not allowed
 let result = (2 + 3) * 4
 ```
 
-Mellow v2.8.0 ยังไม่มี `+=`, `-=`, `++`, ternary operator หรือ chained
+Mellow v2.9.0 ยังไม่มี `+=`, `-=`, `++`, ternary operator หรือ chained
 comparison เช่น `0 < x < 10`
 
 ## 9. Output, precision, input, wait และ stop
@@ -491,7 +493,7 @@ print(values[2:])
 print("mellow"[0:3])
 ```
 
-หมายเหตุ: parser รับรูปแบบ `[start:stop:step]` แต่ compiler v2.8.0 ยังไม่ใช้ค่า
+หมายเหตุ: parser รับรูปแบบ `[start:stop:step]` แต่ compiler v2.9.0 ยังไม่ใช้ค่า
 `step` จึงยังไม่ควรพึ่งพารูปแบบนี้
 
 ### Spread
@@ -542,7 +544,7 @@ catch:
 ```
 
 รองรับ `try + catch`, `try + finally` หรือทั้งสามส่วน ไม่มี syntax `raise` ใน
-stable core v2.8.0 ข้อผิดพลาดมาจาก runtime หรือ built-in
+stable core v2.9.0 ข้อผิดพลาดมาจาก runtime หรือ built-in
 
 ## 15. Module และ import
 
@@ -803,7 +805,7 @@ event ถูกส่งจาก host/CLI เช่น:
 mellow game.mellow --emit spawn --emit-args '["p1", 100]'
 ```
 
-events ยัง route ผ่าน Python VM ใน v2.8.0 จึงไม่ควรบังคับ `--engine=c`
+events ยัง route ผ่าน Python VM ใน v2.9.0 จึงไม่อยู่ใน Full Native C Core Profile
 
 ## 22. Determinism และ sandbox
 
@@ -841,7 +843,7 @@ mellow doctor
 
 เลือก style เดียวต่อ project และใช้ modern syntax ใน tutorial/library ใหม่
 
-## 24. ขอบเขตของ v2.8.0
+## 24. ขอบเขตของ v2.9.0
 
 - ไม่มี class, object declaration, decorator หรือ static type annotation
 - ไม่มี `raise`, `yield`, `async/await`, generator และ match expression
