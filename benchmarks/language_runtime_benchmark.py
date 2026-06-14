@@ -148,13 +148,34 @@ def _compile_result(repeats: int) -> dict[str, object]:
         f"let value_{index} = ({index} + 3) * 2"
         for index in range(250)
     )
-    result = _measure(
+    compiler = Compiler()
+
+    def cold_compile() -> None:
+        Compiler.clear_cache()
+        compiler.compile(source, filename="<benchmark:compile>")
+
+    cold = _measure(
         repeats,
-        lambda: Compiler().compile(source, filename="<benchmark:compile>"),
+        cold_compile,
     )
-    result["source_lines"] = 250
-    result["lines_per_second"] = 250 / float(result["median_seconds"])
-    return result
+    Compiler.clear_cache()
+    compiler.compile(source, filename="<benchmark:compile>")
+    warm = _measure(
+        repeats,
+        lambda: compiler.compile(source, filename="<benchmark:compile>"),
+    )
+    return {
+        "source_lines": 250,
+        "cold": {
+            **cold,
+            "lines_per_second": 250 / float(cold["median_seconds"]),
+        },
+        "warm_cache": {
+            **warm,
+            "lines_per_second": 250 / float(warm["median_seconds"]),
+        },
+        "cache": Compiler.cache_info(),
+    }
 
 
 def _cli_startup_result(repeats: int, root: Path) -> dict[str, object]:

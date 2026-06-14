@@ -1,0 +1,51 @@
+def create(name, config):
+    return ai.llm_create(name, config)
+
+def train(name, texts, options):
+    return ai.llm_train(name, texts, options)
+
+def generate(name, prompt, options):
+    return ai.llm_generate(name, prompt, options)
+
+def complete(name, prompt, options):
+    return ai.llm_complete(name, prompt, options)
+
+def chat(name, messages, options):
+    return ai.llm_chat(name, messages, options)
+
+def dataset(texts, options):
+    return ai.llm_dataset(texts, options)
+
+def eval(name, texts):
+    return ai.llm_eval(name, texts)
+
+def tokenize(text):
+    return ai.llm_tokenize(text)
+
+def info(name):
+    return ai.llm_info(name)
+
+def models():
+    return ai.llm_models()
+
+def backends():
+    return ai.llm_backends()
+
+def device_plan(config):
+    return ai.llm_device_plan(config)
+
+def tensor(op, args):
+    if op == "matmul":
+        return ai.llm_tensor(op, args["a"], args["b"], args["m"], args["n"], args["k"])
+    if op == "layer_norm":
+        return ai.llm_tensor(op, args["values"], args["gamma"], args["beta"], args["eps"])
+    return ai.llm_tensor(op, args)
+
+def tensor_batch(operations):
+    return ai.llm_tensor_batch(operations)
+
+def save(name, path):
+    return ai.llm_save(name, path)
+
+def load(path):
+    return ai.llm_load(path)

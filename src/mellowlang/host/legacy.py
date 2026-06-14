@@ -83,6 +83,11 @@ MODULE_ALLOWLIST = {
             "balance": "std.ledger.balance",
             "entries": "std.ledger.entries",
         },
+        "interop": {
+            "available": "std.interop.available",
+            "run": "std.interop.run",
+            "describe": "std.interop.describe",
+        },
         "ai": {
             # v1.4.7 game AI
             "decide": "std.ai.decide",
@@ -122,6 +127,22 @@ MODULE_ALLOWLIST = {
             "api_configure": "std.ai.api_configure",
             "api_complete": "std.ai.api_complete",
             "api_embed": "std.ai.api_embed",
+            "llm_create": "std.ai.llm_create",
+            "llm_train": "std.ai.llm_train",
+            "llm_generate": "std.ai.llm_generate",
+            "llm_tokenize": "std.ai.llm_tokenize",
+            "llm_info": "std.ai.llm_info",
+            "llm_dataset": "std.ai.llm_dataset",
+            "llm_eval": "std.ai.llm_eval",
+            "llm_complete": "std.ai.llm_complete",
+            "llm_chat": "std.ai.llm_chat",
+            "llm_models": "std.ai.llm_models",
+            "llm_backends": "std.ai.llm_backends",
+            "llm_device_plan": "std.ai.llm_device_plan",
+            "llm_tensor": "std.ai.llm_tensor",
+            "llm_tensor_batch": "std.ai.llm_tensor_batch",
+            "llm_save": "std.ai.llm_save",
+            "llm_load": "std.ai.llm_load",
         },
         # v1.4.2: game-oriented stdlib expansion (pure deterministic helpers)
         "game": {
@@ -168,9 +189,13 @@ class HostRegistry:
     """Capability bridge registry (เหมือน Lua host functions แต่มี cost/budget)"""
     def __init__(self):
         self._funcs: Dict[str, HostFunction] = {}
+        self.runtime_config: Dict[str, Any] = {}
 
     def register(self, func: HostFunction):
         self._funcs[func.name] = func
+
+    def set_runtime_config(self, config: Dict[str, Any] | None) -> None:
+        self.runtime_config = dict(config or {})
 
     def has(self, name: str) -> bool:
         return name in self._funcs
@@ -1075,6 +1100,8 @@ def default_host() -> HostRegistry:
     h.register(HostFunction('std.money.gt', lambda a: (_same_currency(_as_money(a[0]), _as_money(a[1])) is None) and _money_decimal(a[0]) > _money_decimal(a[1]), cost=1, min_args=2, max_args=2))
     from ..ledger_core import register_ledger_functions
     register_ledger_functions(h)
+    from ..interop_core import register_interop_functions
+    register_interop_functions(h)
     def _clamp(args):
         x, lo, hi = float(args[0]), float(args[1]), float(args[2])
         return max(lo, min(hi, x))
