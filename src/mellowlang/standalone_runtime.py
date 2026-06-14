@@ -68,7 +68,7 @@ def standalone_runtime_status() -> dict[str, Any]:
         'core_module_existing': existing_core,
         'notes': [
             'Standalone runtime core no longer needs Python.h.',
-            'Mellow 2.9.0 includes a C lexer/compiler frontend that runs .mellow source directly without CPython.',
+            'Mellow 2.9.1 includes a C lexer/compiler frontend that runs .mellow source directly without CPython.',
             'The mellow executable accepts source files and MLVI binary images; mellowrt remains as a compatibility executable.',
             'Runtime metadata now includes function/event/module tables and optional core-module loading hints.',
             'The native syscall surface now includes print/len/type/str/clock_ms/getenv builtins.',

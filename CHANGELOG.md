@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 2.9.1 - 2026-06-14
+
+### Core LLM
+- Add the official `core-llm` package with dataset, training, evaluation,
+  generation, completion, chat, checkpoint, backend, and device-planning APIs.
+- Add the Mellow-owned native tensor backend foundation with matmul, softmax,
+  GELU, and layer-normalization kernels plus a Python reference fallback.
+- Add x64 and ARM64 selection to the Windows native build helper.
+
+### Performance
+- Add a bounded in-process compiler cache for repeated source compilation.
+- Add a fast CLI version path, reducing measured cold version startup from
+  roughly 216 ms to roughly 64 ms on the development machine.
+- Add batched tensor host calls and separate cold/warm compile benchmarks.
+
 ### Native-First Default
 - Make the native C VM the default engine for `RunConfig()` and `mellow run`.
 - Keep Python fallback enabled for unavailable native builds and runtime features
