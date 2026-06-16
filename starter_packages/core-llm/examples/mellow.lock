@@ -1,9 +1,0 @@
-{
-  "lockfile_version": 1,
-  "registry": "https://mellow-public-registry.jirayut-wh.workers.dev",
-  "packages": {},
-  "root": {
-    "dependencies": {},
-    "imports": []
-  }
-}
