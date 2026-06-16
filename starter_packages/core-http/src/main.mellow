@@ -1,7 +1,11 @@
-function get(url) {
-    return http.get(url)
-}
+def request(method, url, body):
+    return {"method": method, "url": url, "body": body}
 
-function post(url, body) {
-    return http.post(url, body)
-}
+def get(url):
+    return request("GET", url, none)
+
+def post(url, body):
+    return request("POST", url, body)
+
+def route(method, path):
+    return {"method": method, "path": path}

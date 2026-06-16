@@ -111,7 +111,10 @@ def run_operation(item: dict) -> dict:
 
 def run_batch(operations: list) -> list:
     if _native is not None and hasattr(_native, "batch"):
-        return list(_native.batch(operations))
+        try:
+            return list(_native.batch(operations))
+        except Exception:
+            pass
     results = []
     for index, item in enumerate(operations):
         if not isinstance(item, dict):

@@ -1,19 +1,14 @@
-function job(name, payload) {
-    return {
-        "name": name,
-        "payload": payload,
-        "created_ms": time.ms(),
-        "attempts": 0,
-        "status": "queued"
-    }
-}
+def job(name, payload):
+    return {"name": name, "payload": payload, "created_ms": time.ms(), "attempts": 0, "status": "queued"}
 
-function mark_retry(task, attempts) {
-    task["attempts"] = attempts
-    task["status"] = "retry"
-    return task
-}
+def mark_retry(task, attempts):
+    return {"name": task["name"], "payload": task["payload"], "created_ms": task["created_ms"], "attempts": attempts, "status": "retry"}
 
-function to_json(task) {
+def mark_done(task):
+    return {"name": task["name"], "payload": task["payload"], "created_ms": task["created_ms"], "attempts": task["attempts"], "status": "done"}
+
+def mark_failed(task, reason):
+    return {"name": task["name"], "payload": task["payload"], "created_ms": task["created_ms"], "attempts": task["attempts"], "status": "failed", "error": reason}
+
+def to_json(task):
     return json.encode(task)
-}

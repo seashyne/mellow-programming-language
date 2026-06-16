@@ -1,6 +1,23 @@
 {
   "name": "core-mmg",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "entry": "src/main.mel",
-  "kind": "starter-package"
+  "description": "Mellow Magic Graphics declarative render package.",
+  "visibility": "public",
+  "dependencies": {},
+  "authors": [
+    "Mellow Core Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "graphics",
+    "mmg",
+    "render",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

@@ -1,19 +1,26 @@
-function push(items, value) {
+def push(items, value):
     return list.push(items, value)
-}
 
-function size(items) {
+def pop(items):
+    return list.pop(items)
+
+def size(items):
     return list.len(items)
-}
 
-function contains(items, value) {
+def contains(items, value):
     return list.has(items, value)
-}
 
-function dict_get(data, key, fallback) {
+def dict_get(data, key, fallback):
     return map.get(data, key, fallback)
-}
 
-function dict_has(data, key) {
+def dict_has(data, key):
     return map.has(data, key)
-}
+
+def dict_set(data, key, value):
+    return map.set(data, key, value)
+
+def keys(data):
+    return map.keys(data)
+
+def values(data):
+    return map.values(data)

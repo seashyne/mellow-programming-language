@@ -47,6 +47,33 @@ KEYS_DIR = CONFIG_HOME / "keys"
 HOST_DEP_SENTINELS = {"host", "builtin", "built-in", "internal"}
 
 
+def _normalize_authors(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [part.strip() for part in re.split(r"[,;]", value) if part.strip()]
+    elif isinstance(value, (list, tuple, set)):
+        items = [str(part).strip() for part in value if str(part).strip()]
+    else:
+        items = [str(value).strip()] if str(value).strip() else []
+    return list(dict.fromkeys(items))
+
+
+def package_authors(manifest_or_item: Dict[str, Any] | None) -> List[str]:
+    data = manifest_or_item or {}
+    authors = _normalize_authors(data.get("authors"))
+    for key in ("author", "creator", "publisher", "maintainer", "owner"):
+        if not authors:
+            authors = _normalize_authors(data.get(key))
+    metadata = data.get("metadata")
+    if not authors and isinstance(metadata, dict):
+        authors = package_authors(metadata)
+    manifest = data.get("manifest")
+    if not authors and isinstance(manifest, dict):
+        authors = package_authors(manifest)
+    return authors
+
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -626,6 +653,9 @@ def _parse_toml(path: Path) -> Dict[str, Any]:
         "authors": data.get("authors", []),
         "license": data.get("license", "MIT"),
         "keywords": data.get("keywords", ["mellow"]),
+        "badges": data.get("badges", []),
+        "official": bool(data.get("official", False)),
+        "deprecated": bool(data.get("deprecated", False)),
         "dependencies": data.get("dependencies", {}) or {},
         "visibility": data.get("visibility", "public"),
         "namespace": data.get("namespace", ""),
@@ -651,6 +681,13 @@ def _write_toml(path: Path, manifest: Dict[str, Any]) -> None:
     keywords = manifest.get("keywords", []) or []
     if keywords:
         lines.append("keywords = [" + ", ".join(json.dumps(k, ensure_ascii=False) for k in keywords) + "]")
+    badges = manifest.get("badges", []) or []
+    if badges:
+        lines.append("badges = [" + ", ".join(json.dumps(b, ensure_ascii=False) for b in badges) + "]")
+    if manifest.get("official"):
+        lines.append("official = true")
+    if manifest.get("deprecated"):
+        lines.append("deprecated = true")
     lines.append("")
     lines.append("[dependencies]")
     if deps:
@@ -682,6 +719,11 @@ def read_manifest(path: str | Path) -> Dict[str, Any]:
     data.setdefault("dependencies", {})
     data.setdefault("visibility", "public")
     data.setdefault("namespace", "")
+    data.setdefault("authors", [])
+    data.setdefault("keywords", [])
+    data.setdefault("badges", [])
+    data.setdefault("official", False)
+    data.setdefault("deprecated", False)
     return data
 
 

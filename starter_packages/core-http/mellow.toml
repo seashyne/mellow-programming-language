@@ -1,7 +1,12 @@
 name = "core-http"
-version = "0.1.0"
-description = "HTTP request wrappers for web/API integration."
+version = "0.2.1"
+description = "HTTP request and route descriptors for host integrations."
 entry = "src/main.mellow"
 license = "MIT"
+visibility = "public"
 
+authors = ["Mellow Core Team"]
+keywords = ["core", "http", "api", "route", "starter"]
+badges = ["official"]
+official = true
 [dependencies]

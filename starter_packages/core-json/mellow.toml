@@ -1,10 +1,13 @@
 name = "core-json"
-version = "0.1.0"
+version = "0.2.1"
 description = "JSON encode/decode wrappers for app and API scripts."
 entry = "src/main.mel"
 license = "MIT"
 visibility = "public"
-keywords = ["core", "json", "data", "starter"]
 
+authors = ["Mellow Core Team"]
+keywords = ["core", "json", "data", "decode", "starter"]
+badges = ["official"]
+official = true
 [dependencies]
 json = "host"

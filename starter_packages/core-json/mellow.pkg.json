@@ -1,19 +1,26 @@
 {
   "name": "core-json",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "entry": "src/main.mel",
   "description": "JSON encode/decode wrappers for app and API scripts.",
-  "authors": [],
-  "license": "MIT",
   "dependencies": {
     "json": "host"
   },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Core Team"
+  ],
+  "license": "MIT",
   "keywords": [
     "core",
     "json",
     "data",
+    "decode",
     "starter"
   ],
-  "visibility": "public",
-  "namespace": ""
+  "badges": [
+    "official"
+  ],
+  "official": true
 }
