@@ -1,23 +1,17 @@
-function println(text) {
+def println(text):
     print(text)
-}
 
-function spacer() {
+def spacer():
     print("")
-}
 
-function banner(text) {
+def banner(text):
     print("=== " + text + " ===")
-}
 
-function kv(key, value) {
+def kv(key, value):
     print(key + ": " + value)
-}
 
-function success(text) {
+def success(text):
     print("[ok] " + text)
-}
 
-function warn(text) {
+def warn(text):
     print("[warn] " + text)
-}

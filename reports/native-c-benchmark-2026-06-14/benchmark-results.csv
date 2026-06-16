@@ -1,0 +1,16 @@
+category,workload,engine,median_seconds,throughput,throughput_unit,speedup,repeats
+runtime,arithmetic_loop,python,0.3356218,59590.9,iterations_per_second,1.0,9
+runtime,arithmetic_loop,c,0.0195602,1022484.4,iterations_per_second,17.1584,9
+runtime,function_calls,python,0.2759208,28993.8,calls_per_second,1.0,9
+runtime,function_calls,c,0.0176246,453911.0,calls_per_second,15.6554,9
+runtime,money_add,python,0.1230413,24382.1,operations_per_second,1.0,9
+runtime,money_add,c,0.0367816,81562.5,operations_per_second,3.3452,9
+runtime,ledger_post,python,0.0308078,1947.56,transactions_per_second,1.0,9
+runtime,ledger_post,c,0.0271794,2207.55,transactions_per_second,1.1335,9
+data_transform,where_project_sum,python,0.1021844,2446557,rows_per_second,1.0,9
+data_transform,where_project_sum,c,0.0246859,10127239,rows_per_second,4.1394,9
+streaming,10000_rows,python,0.0214615,465951,rows_per_second,1.0,9
+streaming,100000_rows,python,0.2455583,407235,rows_per_second,1.0,9
+streaming,1000000_rows,python,2.1453444,466126,rows_per_second,1.0,9
+frontend,compile_250_lines,python,0.0406481,6150.35,lines_per_second,1.0,9
+frontend,cli_startup,python,0.3298602,3.0316,starts_per_second,1.0,9

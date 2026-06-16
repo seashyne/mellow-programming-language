@@ -29,8 +29,10 @@ def _core_module_paths() -> list[Path]:
 def standalone_runtime_status() -> dict[str, Any]:
     root = _standalone_root()
     build_dir = root / 'build'
-    binary = build_dir / ('mellowrt.exe' if os.name == 'nt' else 'mellowrt')
-    source_files = sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file()) if root.exists() else []
+    native_cli = build_dir / ('mellow.exe' if os.name == 'nt' else 'mellow')
+    compatibility_cli = build_dir / ('mellowrt.exe' if os.name == 'nt' else 'mellowrt')
+    binary = native_cli if native_cli.exists() else compatibility_cli
+    source_files = sorted(p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()) if root.exists() else []
     cc = shutil.which('cc') or shutil.which('clang') or shutil.which('gcc')
     cmake = shutil.which('cmake')
     core_paths = _core_module_paths()
@@ -48,6 +50,8 @@ def standalone_runtime_status() -> dict[str, Any]:
         'compiler_path': cc,
         'platform': platform.platform(),
         'python_dependency_free_goal': True,
+        'full_native_source_frontend': True,
+        'native_cli_name': native_cli.name,
         'standalone_image_support': True,
         'image_format': 'mlvi-binary-v2',
         'opcode_migration': {
@@ -64,7 +68,8 @@ def standalone_runtime_status() -> dict[str, Any]:
         'core_module_existing': existing_core,
         'notes': [
             'Standalone runtime core no longer needs Python.h.',
-            'The standalone VM now compiles .mellow files into MLVI binary images and executes them with the native runtime binary.',
+            'Mellow 2.9.2 includes a C lexer/compiler frontend that runs .mellow source directly without CPython.',
+            'The mellow executable accepts source files and MLVI binary images; mellowrt remains as a compatibility executable.',
             'Runtime metadata now includes function/event/module tables and optional core-module loading hints.',
             'The native syscall surface now includes print/len/type/str/clock_ms/getenv builtins.',
             'A stdlib core.mellow/core.mel file is recommended for language-level helpers, but it is not required for the C VM itself.',
@@ -108,21 +113,31 @@ def build_standalone_runtime(*, build_dir: str | None = None) -> dict[str, Any]:
                 result['ok'] = c2.returncode == 0
             else:
                 result['ok'] = False
-            return result
+            if result['ok']:
+                return result
+            result['cmake_error'] = 'cmake_build_failed'
         except Exception as exc:
-            result['error'] = str(exc)
-            return result
+            result['cmake_error'] = str(exc)
     if not cc:
         result['error'] = 'compiler_not_found'
         result['hint'] = 'Install CMake or a C compiler, then run `mellow standalone build` again.'
         return result
     out_bin = build_path / ('mellowrt.exe' if os.name == 'nt' else 'mellowrt')
-    srcs = [root / 'src' / 'mellowrt_core.c', root / 'src' / 'mellowrt_debug.c', root / 'src' / 'mellowrt_main.c']
-    cmd = [cc, '-std=c99', '-I', str(root / 'include'), *map(str, srcs), '-o', str(out_bin)]
-    result['commands'] = [' '.join(cmd)]
+    srcs = [
+        root / 'src' / 'mellowrt_core.c',
+        root / 'src' / 'mellowrt_debug.c',
+        root / 'src' / 'mellowc.c',
+        root / 'src' / 'mellowrt_main.c',
+    ]
+    cmd = [cc, '-std=c99', '-I', str(root / 'include'), *map(str, srcs), '-o', str(out_bin), '-lm']
+    result['commands'].append(' '.join(cmd))
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     result['build'] = {'returncode': proc.returncode, 'stdout': proc.stdout, 'stderr': proc.stderr}
     result['ok'] = proc.returncode == 0
+    if result['ok']:
+        native_cli = build_path / ('mellow.exe' if os.name == 'nt' else 'mellow')
+        shutil.copy2(out_bin, native_cli)
+        result['binary_path'] = str(native_cli)
     if not result['ok']:
         result['error'] = 'compiler_build_failed'
     return result

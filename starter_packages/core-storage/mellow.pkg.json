@@ -1,13 +1,23 @@
 {
   "name": "core-storage",
-  "version": "0.1.0",
-  "description": "Save/load helpers for local app and game data.",
+  "version": "0.2.1",
+  "description": "Persistence helpers using Mellow save/load statements.",
   "entry": "src/main.mellow",
+  "visibility": "public",
+  "dependencies": {},
+  "authors": [
+    "Mellow Core Team"
+  ],
   "license": "MIT",
-  "authors": [],
   "keywords": [
-    "mellow",
+    "core",
+    "storage",
+    "persistence",
+    "save",
     "starter"
   ],
-  "dependencies": {}
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

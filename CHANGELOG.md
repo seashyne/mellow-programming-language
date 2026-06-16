@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+## 2.9.2 - 2026-06-16
+
+### Security and Performance Gates
+- Add `mellow bench`, `mellow security audit`, and `mellow release-gate`.
+- Add release-gate checks for benchmark smoke tests, sandbox enforcement, and official package integrity.
+- Make AI agent tool policy default-deny while preserving explicit `--tool` allow behavior.
+- Add the Mellow AI security and performance policy document.
+
+### Native Runtime
+- Add native LLM tensor batch dispatch plumbing and Python fallback batching.
+- Block native storage path traversal before entering the C VM and align native storage source with sandboxed storage paths.
+
+## 2.9.1 - 2026-06-14
+
+### Core LLM
+- Add the official `core-llm` package with dataset, training, evaluation,
+  generation, completion, chat, checkpoint, backend, and device-planning APIs.
+- Add the Mellow-owned native tensor backend foundation with matmul, softmax,
+  GELU, and layer-normalization kernels plus a Python reference fallback.
+- Add x64 and ARM64 selection to the Windows native build helper.
+
+### Performance
+- Add a bounded in-process compiler cache for repeated source compilation.
+- Add a fast CLI version path, reducing measured cold version startup from
+  roughly 216 ms to roughly 64 ms on the development machine.
+- Add batched tensor host calls and separate cold/warm compile benchmarks.
+
 ### Native-First Default
 - Make the native C VM the default engine for `RunConfig()` and `mellow run`.
 - Keep Python fallback enabled for unavailable native builds and runtime features

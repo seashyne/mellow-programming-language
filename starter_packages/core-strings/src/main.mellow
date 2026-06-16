@@ -1,27 +1,32 @@
-function lower(text) {
+def lower(text):
     return string.lower(text)
-}
 
-function upper(text) {
+def upper(text):
     return string.upper(text)
-}
 
-function trim(text) {
+def trim(text):
     return string.trim(text)
-}
 
-function contains(text, needle) {
+def size(text):
+    return string.len(text)
+
+def contains(text, needle):
     return string.contains(text, needle)
-}
 
-function starts_with(text, prefix) {
+def starts_with(text, prefix):
     return string.starts_with(text, prefix)
-}
 
-function ends_with(text, suffix) {
+def ends_with(text, suffix):
     return string.ends_with(text, suffix)
-}
 
-function surround(text, left, right) {
+def surround(text, left, right):
     return left + text + right
-}
+
+def replace(text, needle, value):
+    return string.replace(text, needle, value)
+
+def split(text, separator):
+    return string.split(text, separator)
+
+def join(items, separator):
+    return string.join(items, separator)

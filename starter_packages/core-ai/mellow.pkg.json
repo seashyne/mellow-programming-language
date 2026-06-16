@@ -1,19 +1,26 @@
 {
   "name": "core-ai",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "entry": "src/main.mel",
   "description": "Prompt and retrieval helpers on top of the built-in AI runtime.",
-  "authors": [],
-  "license": "MIT",
   "dependencies": {
     "ai": "host"
   },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Core Team"
+  ],
+  "license": "MIT",
   "keywords": [
+    "core",
     "ai",
-    "runtime",
     "rag",
+    "prompt",
     "starter"
   ],
-  "visibility": "public",
-  "namespace": ""
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

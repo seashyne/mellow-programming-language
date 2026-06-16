@@ -1,6 +1,10 @@
 param(
     [string]$VsDevCmd = "",
-    [string]$WindowsSdkVersion = "10.0.26100.0"
+    [string]$WindowsSdkVersion = "10.0.26100.0",
+    [ValidateSet("x64", "arm64")]
+    [string]$Arch = "x64",
+    [ValidateSet("x64", "arm64")]
+    [string]$HostArch = "x64"
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,13 +30,13 @@ if (-not $VsDevCmd -or -not (Test-Path -LiteralPath $VsDevCmd)) {
     throw "Could not find VsDevCmd.bat. Install Visual Studio Build Tools or pass -VsDevCmd."
 }
 
-$sdkBin = "C:\Program Files (x86)\Windows Kits\10\bin\$WindowsSdkVersion\x64"
+$sdkBin = "C:\Program Files (x86)\Windows Kits\10\bin\$WindowsSdkVersion\$HostArch"
 $pathPrefix = ""
 if (Test-Path -LiteralPath $sdkBin) {
     $pathPrefix = "set `"PATH=$sdkBin;%PATH%`" && "
 }
 
-$command = "call `"$VsDevCmd`" -arch=x64 -host_arch=x64 && $pathPrefix python setup.py build_ext --inplace --force"
+$command = "call `"$VsDevCmd`" -arch=$Arch -host_arch=$HostArch && $pathPrefix python setup.py build_ext --inplace --force"
 cmd.exe /d /c $command
 
 if ($LASTEXITCODE -ne 0) {

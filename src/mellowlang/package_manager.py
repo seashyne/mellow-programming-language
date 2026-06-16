@@ -47,6 +47,33 @@ KEYS_DIR = CONFIG_HOME / "keys"
 HOST_DEP_SENTINELS = {"host", "builtin", "built-in", "internal"}
 
 
+def _normalize_authors(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [part.strip() for part in re.split(r"[,;]", value) if part.strip()]
+    elif isinstance(value, (list, tuple, set)):
+        items = [str(part).strip() for part in value if str(part).strip()]
+    else:
+        items = [str(value).strip()] if str(value).strip() else []
+    return list(dict.fromkeys(items))
+
+
+def package_authors(manifest_or_item: Dict[str, Any] | None) -> List[str]:
+    data = manifest_or_item or {}
+    authors = _normalize_authors(data.get("authors"))
+    for key in ("author", "creator", "publisher", "maintainer", "owner"):
+        if not authors:
+            authors = _normalize_authors(data.get(key))
+    metadata = data.get("metadata")
+    if not authors and isinstance(metadata, dict):
+        authors = package_authors(metadata)
+    manifest = data.get("manifest")
+    if not authors and isinstance(manifest, dict):
+        authors = package_authors(manifest)
+    return authors
+
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -626,6 +653,9 @@ def _parse_toml(path: Path) -> Dict[str, Any]:
         "authors": data.get("authors", []),
         "license": data.get("license", "MIT"),
         "keywords": data.get("keywords", ["mellow"]),
+        "badges": data.get("badges", []),
+        "official": bool(data.get("official", False)),
+        "deprecated": bool(data.get("deprecated", False)),
         "dependencies": data.get("dependencies", {}) or {},
         "visibility": data.get("visibility", "public"),
         "namespace": data.get("namespace", ""),
@@ -651,6 +681,13 @@ def _write_toml(path: Path, manifest: Dict[str, Any]) -> None:
     keywords = manifest.get("keywords", []) or []
     if keywords:
         lines.append("keywords = [" + ", ".join(json.dumps(k, ensure_ascii=False) for k in keywords) + "]")
+    badges = manifest.get("badges", []) or []
+    if badges:
+        lines.append("badges = [" + ", ".join(json.dumps(b, ensure_ascii=False) for b in badges) + "]")
+    if manifest.get("official"):
+        lines.append("official = true")
+    if manifest.get("deprecated"):
+        lines.append("deprecated = true")
     lines.append("")
     lines.append("[dependencies]")
     if deps:
@@ -682,6 +719,11 @@ def read_manifest(path: str | Path) -> Dict[str, Any]:
     data.setdefault("dependencies", {})
     data.setdefault("visibility", "public")
     data.setdefault("namespace", "")
+    data.setdefault("authors", [])
+    data.setdefault("keywords", [])
+    data.setdefault("badges", [])
+    data.setdefault("official", False)
+    data.setdefault("deprecated", False)
     return data
 
 
@@ -1160,26 +1202,35 @@ def seed_core_packages(target_dir: str | Path, publish_local: bool = False) -> D
     td = Path(target_dir)
     td.mkdir(parents=True, exist_ok=True)
     created: List[Dict[str, Any]] = []
-    for pkg_name, spec in CORE_PACKAGE_TEMPLATES.items():
+    source_root = _repo_starter_packages_root()
+    if not source_root.exists():
+        return {"ok": False, "error": f"starter package source not found: {source_root}"}
+    for source_dir in sorted(path for path in source_root.iterdir() if path.is_dir()):
+        if not any(path.exists() for path in _manifest_paths(source_dir)):
+            continue
+        manifest = read_manifest(source_dir)
+        pkg_name = normalize_name(str(manifest.get("name") or source_dir.name))
         pkg_dir = td / pkg_name
-        entry_name = Path(str(spec.get('entry', 'src/main.mellow'))).name
-        manifest = init_package(pkg_dir, name=pkg_name, entry=entry_name)
-        manifest['description'] = spec.get('description', manifest['description'])
-        manifest['keywords'] = spec.get('keywords', manifest.get('keywords', []))
-        manifest['dependencies'] = spec.get('dependencies', {})
-        manifest['entry'] = spec.get('entry', manifest['entry'])
-        _write_toml(pkg_dir / 'mellow.toml', manifest)
-        (pkg_dir / 'mellow.pkg.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-        for rel, content in (spec.get('files') or {}).items():
-            dst = pkg_dir / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(content, encoding='utf-8')
-        row = {'name': pkg_name, 'dir': str(pkg_dir), 'description': manifest['description']}
+        if source_dir.resolve() != pkg_dir.resolve():
+            shutil.copytree(
+                source_dir,
+                pkg_dir,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(".git", ".pytest_cache", "__pycache__", "*.mpkg"),
+            )
+        row = {
+            "name": pkg_name,
+            "version": str(manifest.get("version", "0.1.0")),
+            "dir": str(pkg_dir),
+            "description": str(manifest.get("description", "")),
+        }
         if publish_local:
             pub = publish_from_dir(pkg_dir)
-            row['published_to'] = pub.get('published_to')
+            if not pub.get("ok", True):
+                return pub
+            row["published_to"] = pub.get("published_to")
         created.append(row)
-    return {'ok': True, 'root': str(td), 'items': created, 'published_local': publish_local}
+    return {"ok": True, "root": str(td), "items": created, "published_local": publish_local}
 
 
 def list_installed() -> List[Dict[str, Any]]:

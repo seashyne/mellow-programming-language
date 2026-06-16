@@ -1,0 +1,26 @@
+{
+  "name": "core-llm",
+  "version": "0.1.0",
+  "entry": "src/main.mel",
+  "description": "Tiny local LLM training and generation helpers for Mellow AI scripts.",
+  "dependencies": {
+    "ai": "host"
+  },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Core Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "ai",
+    "llm",
+    "generation",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
+}

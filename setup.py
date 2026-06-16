@@ -55,7 +55,18 @@ ext_modules = [
         define_macros=[('PY_SSIZE_T_CLEAN', None)],
         extra_compile_args=[],
         extra_link_args=["/MANIFEST:NO"] if os.name == "nt" else [],
-    )
+    ),
+    Extension(
+        "mellowlang._mellowllm",
+        sources=[
+            "native/mellowllm/src/mellowllm_core.c",
+            "native/mellowllm/src/mellowllm_module.c",
+        ],
+        include_dirs=["native/mellowllm/include", *_python_include_dirs()],
+        define_macros=[('PY_SSIZE_T_CLEAN', None)],
+        extra_compile_args=[],
+        extra_link_args=["/MANIFEST:NO"] if os.name == "nt" else [],
+    ),
 ]
 
 setup(

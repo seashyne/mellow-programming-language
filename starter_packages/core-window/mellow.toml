@@ -1,5 +1,12 @@
 name = "core-window"
-version = "0.1.0"
-description = "Desktop window helpers for Mellow app preset"
+version = "0.2.1"
+description = "Declarative desktop window package for Mellow app projects."
 entry = "src/main.mel"
 license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Core Team"]
+keywords = ["core", "desktop", "window", "ui", "starter"]
+badges = ["official"]
+official = true
+[dependencies]

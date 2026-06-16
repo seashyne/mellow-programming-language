@@ -1,16 +1,25 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass, is_dataclass
+from threading import RLock
 from typing import Any, List, Optional
 
 from ..error_core import MellowLangRuntimeError
 from ..ir import IRProgram
 from ..parser import parse_program
-from ..ast import Call, GetModuleExpr, GetModuleStmt, Index
+from ..ast import Call, GetModuleExpr, GetModuleStmt, IfGroup, Index, LoopCount, LoopForEach, LoopForMap, LoopForRange, LoopWhile, RepeatUntil, TryStmt
 from .bytecode_backend import BytecodeBackend
 from .ir_lowering import IRLowerer, UnsupportedLoweringError
 from .optimizer import ControlFlowGraph, DefUseInfo, DominatorTree, IROptimizer, OptimizationSummary, SSAProgram
 from .legacy import Compiler as _LegacyCompiler
+
+
+_COMPILE_CACHE_MAX = 128
+_COMPILE_CACHE: "OrderedDict[tuple[str, str | None, bool], CompiledProgram]" = OrderedDict()
+_COMPILE_CACHE_LOCK = RLock()
+_COMPILE_CACHE_HITS = 0
+_COMPILE_CACHE_MISSES = 0
 
 
 @dataclass(frozen=True)
@@ -52,6 +61,43 @@ class Compiler:
         self._legacy = _LegacyCompiler()
 
     def compile(self, source: str, *, filename: str | None = None, optimize: bool = True) -> CompiledProgram:
+        global _COMPILE_CACHE_HITS, _COMPILE_CACHE_MISSES
+        cache_key = (source, filename, bool(optimize))
+        with _COMPILE_CACHE_LOCK:
+            cached = _COMPILE_CACHE.get(cache_key)
+            if cached is not None:
+                _COMPILE_CACHE.move_to_end(cache_key)
+                _COMPILE_CACHE_HITS += 1
+                return cached
+            _COMPILE_CACHE_MISSES += 1
+
+        program = self._compile_uncached(source, filename=filename, optimize=optimize)
+        with _COMPILE_CACHE_LOCK:
+            _COMPILE_CACHE[cache_key] = program
+            _COMPILE_CACHE.move_to_end(cache_key)
+            while len(_COMPILE_CACHE) > _COMPILE_CACHE_MAX:
+                _COMPILE_CACHE.popitem(last=False)
+        return program
+
+    @staticmethod
+    def clear_cache() -> None:
+        global _COMPILE_CACHE_HITS, _COMPILE_CACHE_MISSES
+        with _COMPILE_CACHE_LOCK:
+            _COMPILE_CACHE.clear()
+            _COMPILE_CACHE_HITS = 0
+            _COMPILE_CACHE_MISSES = 0
+
+    @staticmethod
+    def cache_info() -> dict[str, int]:
+        with _COMPILE_CACHE_LOCK:
+            return {
+                "size": len(_COMPILE_CACHE),
+                "max_size": _COMPILE_CACHE_MAX,
+                "hits": _COMPILE_CACHE_HITS,
+                "misses": _COMPILE_CACHE_MISSES,
+            }
+
+    def _compile_uncached(self, source: str, *, filename: str | None = None, optimize: bool = True) -> CompiledProgram:
         lines = source.splitlines()
         ast = None
         ir = None
@@ -81,7 +127,12 @@ class Compiler:
             # The optimizer is still experimental. Its constant propagation can
             # corrupt indexed expressions such as xs[1], so keep those on the
             # unoptimized IR path until that pass is fixed.
-            use_optimizer = bool(optimize) and not _ast_contains(ast, Index) and not _ast_contains_stateful_stdlib_call(ast)
+            use_optimizer = (
+                bool(optimize)
+                and not _ast_contains(ast, Index)
+                and not _ast_contains_control_flow(ast)
+                and not _ast_contains_stateful_stdlib_call(ast)
+            )
             if use_optimizer:
                 optimized_ir, optimization = opt.optimize(ir)
                 optimized_cfg = opt.build_cfg(optimized_ir.instructions)
@@ -183,4 +234,17 @@ def _ast_contains_stateful_stdlib_call(node: Any) -> bool:
         return any(_ast_contains_stateful_stdlib_call(item) for item in node)
     if isinstance(node, dict):
         return any(_ast_contains_stateful_stdlib_call(item) for item in node.values())
+    return False
+
+
+def _ast_contains_control_flow(node: Any) -> bool:
+    control_nodes = (IfGroup, LoopWhile, LoopForEach, LoopForMap, LoopForRange, LoopCount, RepeatUntil, TryStmt)
+    if isinstance(node, control_nodes):
+        return True
+    if is_dataclass(node):
+        return any(_ast_contains_control_flow(value) for value in node.__dict__.values())
+    if isinstance(node, (list, tuple)):
+        return any(_ast_contains_control_flow(item) for item in node)
+    if isinstance(node, dict):
+        return any(_ast_contains_control_flow(item) for item in node.values())
     return False

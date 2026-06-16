@@ -1,0 +1,7 @@
+call ai.llm_create("demo", {"order": 3, "seed": 7})
+let data = call ai.llm_dataset(["hello mellow", "mellow learns"], {"chunk_chars": 64})
+call ai.llm_train("demo", data, {"epochs": 2})
+let score = call ai.llm_eval("demo", data)
+let out = call ai.llm_complete("demo", "mel", {"max_tokens": 24, "seed": 7})
+print(score["perplexity"])
+print(out["text"])

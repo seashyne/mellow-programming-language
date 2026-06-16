@@ -1,5 +1,12 @@
 # Release Checklist
 
+For Mellow 2.9 and later, grammar or semantic changes must also:
+
+- update the normative language specification
+- update `spec/mellow-<version>-core.json`
+- add Python and Full Native C conformance coverage
+- bump the language minor version unless the change is a semantics-preserving bug fix
+
 Use this checklist before tagging a stable Mellow Programming Language release.
 
 ## Version

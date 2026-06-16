@@ -1,7 +1,6 @@
-function save_text(key, value) {
-    storage.write(key, value)
-}
+def save_text(key, value):
+    save value into key
 
-function load_text(key) {
-    return storage.read(key)
-}
+def load_text(key):
+    load key into value
+    return value

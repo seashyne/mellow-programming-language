@@ -1,11 +1,11 @@
-function encode(value) {
+def encode(value):
     return json.encode(value)
-}
 
-function decode(text) {
+def decode(text):
     return json.decode(text)
-}
 
-function clone(value) {
+def clone(value):
     return json.decode(json.encode(value))
-}
+
+def pretty(value):
+    return json.encode(value)

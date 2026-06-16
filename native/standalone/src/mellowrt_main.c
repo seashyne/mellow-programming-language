@@ -310,10 +310,53 @@ static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t ar
 }
 
 /* ── entry point ─────────────────────────────────────────────────────────── */
-static void usage(const char *argv0){ fprintf(stderr,"Usage: %s <program.mvi>\n",argv0); }
+static void usage(const char *argv0){
+    fprintf(stderr,
+        "Mellow Programming Language 2.9.2 (Full Native C)\n"
+        "Usage: %s <program.mellow|program.mvi>\n"
+        "       %s check <program.mellow>\n"
+        "       %s --version\n",argv0,argv0,argv0);
+}
 
 int main(int argc, char **argv){
+    int check_only=0;
     if(argc<2){usage(argv[0]);return 1;}
+    if(!strcmp(argv[1],"--version")||!strcmp(argv[1],"-V")){
+        puts("Mellow Programming Language 2.9.2 (Full Native C)");
+        return 0;
+    }
+    if(!strcmp(argv[1],"check")){
+        if(argc<3){usage(argv[0]);return 1;}
+        check_only=1;
+    }
+    {
+        const char *path=argv[check_only?2:1];
+        size_t path_len=strlen(path);
+        int is_image=path_len>=4&&!strcmp(path+path_len-4,".mvi");
+        if(!is_image){
+            MNativeProgram native;
+            MProgram prog;
+            MVM vm;
+            MRunResult rr;
+            char error[512]={0};
+            if(!mellow_compile_file(path,&native,error,sizeof(error))){
+                fprintf(stderr,"compile failed: %s\n",error[0]?error:"unknown error");
+                return 1;
+            }
+            if(check_only){
+                printf("OK %s (native-c, %lu instructions)\n",path,(unsigned long)native.code_len);
+                mellow_native_program_free(&native);
+                return 0;
+            }
+            prog=(MProgram){native.code,native.code_len,native.consts,native.const_len,native.spans,native.span_len,native.source_name};
+            mvm_init(&vm);vm.syscall.fn=runtime_syscall;vm.syscall.user=NULL;memset(&rr,0,sizeof(rr));
+            if(!mvm_run(&vm,&prog,&rr)||rr.failed){
+                fprintf(stderr,"run failed: %s\n",rr.error_message?rr.error_message:"unknown");
+                mvm_free(&vm);mellow_native_program_free(&native);return 1;
+            }
+            mvm_free(&vm);mellow_native_program_free(&native);return 0;
+        }
+    }
     MLoadedProgram lp;
     if(!parse_loaded_program(argv[1],&lp)){
         fprintf(stderr,"failed to load standalone image: %s\n",argv[1]);

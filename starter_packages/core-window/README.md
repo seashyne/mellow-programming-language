@@ -22,3 +22,12 @@ Supported calls in the `.mel` source:
 - `win.menu(...)`
 - `win.menu_item(...)`
 - `win.run(...)`
+
+Use positional arguments in compiled Mellow source:
+
+```mel
+keep app = win.window("Demo", 800, 520)
+win.label(app, "Hello")
+win.button(app, "Close", "close")
+win.run(app)
+```

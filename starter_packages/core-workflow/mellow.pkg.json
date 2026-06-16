@@ -1,20 +1,27 @@
 {
   "name": "core-workflow",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "entry": "src/main.mel",
   "description": "Starter helpers for event payloads, retries, and simple jobs.",
-  "authors": [],
-  "license": "MIT",
   "dependencies": {
     "time": "host",
     "json": "host"
   },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Core Team"
+  ],
+  "license": "MIT",
   "keywords": [
+    "core",
     "workflow",
     "jobs",
-    "starter",
-    "automation"
+    "automation",
+    "starter"
   ],
-  "visibility": "public",
-  "namespace": ""
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

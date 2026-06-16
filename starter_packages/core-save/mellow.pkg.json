@@ -1,17 +1,26 @@
 {
   "name": "core-save",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "entry": "src/main.mel",
-  "description": "Small persistence helpers using built-in save/load APIs.",
-  "authors": [],
-  "license": "MIT",
+  "description": "Compatibility persistence helpers; prefer core-storage for new projects.",
   "dependencies": {},
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Core Team"
+  ],
+  "license": "MIT",
   "keywords": [
     "core",
     "save",
     "storage",
-    "starter"
+    "compatibility",
+    "deprecated"
   ],
-  "visibility": "public",
-  "namespace": ""
+  "badges": [
+    "official",
+    "deprecated"
+  ],
+  "official": true,
+  "deprecated": true
 }

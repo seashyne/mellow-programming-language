@@ -1,10 +1,13 @@
 name = "core-math"
-version = "0.1.0"
+version = "0.2.1"
 description = "Friendly math helpers and interpolation wrappers."
 entry = "src/main.mel"
 license = "MIT"
 visibility = "public"
-keywords = ["core", "math", "numbers", "starter"]
 
+authors = ["Mellow Core Team"]
+keywords = ["core", "math", "numbers", "interpolation", "starter"]
+badges = ["official"]
+official = true
 [dependencies]
 math = "host"

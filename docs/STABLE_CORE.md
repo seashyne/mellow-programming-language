@@ -1,6 +1,8 @@
 # Stable Core
 
-This document defines the stable surface for Mellow Programming Language releases.
+This document defines the stable implementation surface for Mellow Programming Language releases.
+The normative grammar and semantics for the 2.9 release line are frozen in
+[`LANGUAGE_SPEC_2_9.md`](LANGUAGE_SPEC_2_9.md).
 
 `tests/core` is the language release gate. Starting in v2.4.0, `tests/native` is also required for releases that claim native C parity for the stable core.
 
@@ -35,7 +37,8 @@ These features are allowed to be missing from a default install and should be re
 - `net`: websocket/network helpers
 - `security`: signing and secure-save helpers
 - `video`: MELV video encode/decode
-- native VM: default engine with stable-core, money, data, and ledger parity in v2.8.0; installations without the extension fall back to Python
+- native VM: default engine with stable-core, money, data, and ledger parity
+- Full Native C CLI: lexer, compiler, bytecode VM, and Core built-ins run `.mellow` source without CPython in v2.9.0
 - finance sandbox profile: supports native execution with storage denial enforced in the C VM
 - data processing core: bounded JSONL/CSV streams and parameterized SQLite on both Python and C engines
 - ledger core: immutable balanced entries with deterministic hash-chain verification
@@ -50,15 +53,16 @@ These surfaces may be present in the repository but should not block a stable re
 - package registry workflows
 - MMG and video runtime
 - desktop/playground runtimes
-- standalone/native parity beyond the stable core, money, data, and ledger surfaces
+- standalone/native parity beyond the frozen Mellow 2.9 Core Profile
 
 ## Release Rule
 
 A release is considered stable when:
 
 - `python -m pytest -q tests/core -p no:cacheprovider` passes
-- `python setup.py build_ext --inplace` succeeds before native parity checks
+- the native extension builds through the `pyproject.toml` build backend
 - `python -m pytest -q tests/native -p no:cacheprovider` passes for native-core releases
+- `tests/fixtures/full_native_core.mellow` produces the frozen conformance output in both runtimes
 - `python -m pytest -q frameworks/mellow_ui/tests -p no:cacheprovider` passes when framework files change
 - `mellow doctor` runs without crashing
 - `mellow run examples/hello.mellow` works

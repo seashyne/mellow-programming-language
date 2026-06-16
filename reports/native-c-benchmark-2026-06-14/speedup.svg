@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+  <rect width="1200" height="650" fill="#F6F3EC"/>
+  <text x="60" y="65" font-family="Aptos,Arial" font-size="34" font-weight="700" fill="#172126">Native C speedup by workload</text>
+  <text x="60" y="98" font-family="Aptos,Arial" font-size="16" fill="#748087">Median of 9 runs; Python engine = 1x baseline</text>
+  <g font-family="Aptos,Arial" font-size="18" fill="#172126">
+    <text x="60" y="170">Arithmetic loop</text>
+    <text x="60" y="255">Function calls</text>
+    <text x="60" y="340">Data transform</text>
+    <text x="60" y="425">Money addition</text>
+    <text x="60" y="510">Ledger posting</text>
+  </g>
+  <g fill="#E7E3DA">
+    <rect x="280" y="145" width="760" height="26"/>
+    <rect x="280" y="230" width="760" height="26"/>
+    <rect x="280" y="315" width="760" height="26"/>
+    <rect x="280" y="400" width="760" height="26"/>
+    <rect x="280" y="485" width="760" height="26"/>
+  </g>
+  <g fill="#178A63">
+    <rect x="280" y="145" width="724" height="26"/>
+    <rect x="280" y="230" width="661" height="26"/>
+    <rect x="280" y="315" width="175" height="26"/>
+    <rect x="280" y="400" width="141" height="26"/>
+    <rect x="280" y="485" width="48" height="26"/>
+  </g>
+  <g font-family="Aptos,Arial" font-size="18" font-weight="700" fill="#178A63">
+    <text x="1020" y="167">17.2x</text>
+    <text x="957" y="252">15.7x</text>
+    <text x="471" y="337">4.14x</text>
+    <text x="437" y="422">3.35x</text>
+    <text x="344" y="507">1.13x</text>
+  </g>
+  <line x1="322" y1="130" x2="322" y2="540" stroke="#D85C41" stroke-width="2"/>
+  <text x="302" y="575" font-family="Aptos,Arial" font-size="14" fill="#748087">1x</text>
+</svg>

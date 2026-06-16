@@ -126,6 +126,7 @@ typedef struct CVM {
     int allow_ask;
     int allow_wait;
     int allow_storage;
+    PyObject *storage_dir;    /* owned by top-level VM, borrowed by sub-VMs */
 
     /* output capture buffer — NULL means write to real stdout */
     PyObject *capture_list;   /* list of strings, or NULL */
@@ -174,6 +175,58 @@ static PyObject *mellow_format(PyObject *v) {
     if (PyList_Check(v))    return fmt_list(v);
     if (PyDict_Check(v))    return PyObject_Repr(v);
     return PyObject_Str(v);
+}
+
+static int storage_name_unsafe(const char *raw) {
+    if (!raw) return 0;
+    if (raw[0] == '/' || raw[0] == '\\') return 1;
+    if (((raw[0] >= 'A' && raw[0] <= 'Z') || (raw[0] >= 'a' && raw[0] <= 'z')) && raw[1] == ':') return 1;
+    if (strcmp(raw, "..") == 0) return 1;
+    if (strncmp(raw, "../", 3) == 0 || strncmp(raw, "..\\", 3) == 0) return 1;
+    if (strstr(raw, "/../") || strstr(raw, "\\..\\") || strstr(raw, "/..\\") || strstr(raw, "\\../")) return 1;
+    size_t n = strlen(raw);
+    if (n >= 3 && (strcmp(raw + n - 3, "/..") == 0 || strcmp(raw + n - 3, "\\..") == 0)) return 1;
+    return 0;
+}
+
+static int storage_ensure_base(CVM *vm) {
+    PyObject *os_mod = PyImport_ImportModule("os");
+    if (!os_mod) return 0;
+    PyObject *makedirs = PyObject_GetAttrString(os_mod, "makedirs");
+    Py_DECREF(os_mod);
+    if (!makedirs) return 0;
+    PyObject *args = PyTuple_Pack(1, vm->storage_dir);
+    PyObject *kwargs = Py_BuildValue("{s:O}", "exist_ok", Py_True);
+    PyObject *res = (args && kwargs) ? PyObject_Call(makedirs, args, kwargs) : NULL;
+    Py_XDECREF(args);
+    Py_XDECREF(kwargs);
+    Py_DECREF(makedirs);
+    if (!res) return 0;
+    Py_DECREF(res);
+    return 1;
+}
+
+static PyObject *cvm_storage_path(CVM *vm, PyObject *filename) {
+    PyObject *fs = mellow_format(filename);
+    if (!fs) return NULL;
+    const char *raw = PyUnicode_AsUTF8(fs);
+    if (!raw) {
+        Py_DECREF(fs);
+        return NULL;
+    }
+    while (*raw == ' ' || *raw == '\t' || *raw == '"' || *raw == '\'') raw++;
+    if (storage_name_unsafe(raw)) {
+        Py_DECREF(fs);
+        PyErr_SetString(PyExc_RuntimeError, "SANDBOX: invalid storage path (path traversal blocked)");
+        return NULL;
+    }
+    const char *name = (*raw == '\0' || strcmp(raw, ".") == 0) ? "save" : raw;
+    int has_json = 0;
+    size_t n = strlen(name);
+    if (n >= 5 && strcmp(name + n - 5, ".json") == 0) has_json = 1;
+    PyObject *path = PyUnicode_FromFormat(has_json ? "%U/%s" : "%U/%s.json", vm->storage_dir, name);
+    Py_DECREF(fs);
+    return path;
 }
 static PyObject *fmt_list(PyObject *lst) {
     Py_ssize_t n = PyList_GET_SIZE(lst);
@@ -374,6 +427,7 @@ static PyObject *cvm_call1(CVM *parent_vm, PyObject *fn_ref,
     sub.allow_ask    = parent_vm->allow_ask;
     sub.allow_wait   = parent_vm->allow_wait;
     sub.allow_storage = parent_vm->allow_storage;
+    sub.storage_dir = parent_vm->storage_dir;
     sub.capture_list = parent_vm->capture_list;
 
     /* new scope for the function */
@@ -1622,8 +1676,11 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
             PyObject *value=_POP(), *filename=_POP();
             PyObject *json=PyImport_ImportModule("json");
             if(json){
-                PyObject *fs=mellow_format(filename);
-                if(fs){
+                PyObject *fs=cvm_storage_path(vm, filename);
+                if(!fs || !storage_ensure_base(vm)){
+                    Py_XDECREF(fs); Py_DECREF(json); Py_DECREF(value); Py_DECREF(filename); goto exec_err;
+                }
+                {
                     PyObject *encoded=PyObject_CallMethod(json,"dumps","O",value);
                     if(encoded){
                         const char *fn_s=PyUnicode_AsUTF8(fs);
@@ -1633,8 +1690,9 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
                         }
                         Py_DECREF(encoded);
                     }
-                    Py_DECREF(fs);
                 }
+                Py_DECREF(fs);
+                if (PyErr_Occurred()) { Py_DECREF(json); Py_DECREF(value); Py_DECREF(filename); goto exec_err; }
                 Py_DECREF(json);
             }
             Py_DECREF(value); Py_DECREF(filename); break;
@@ -1650,16 +1708,20 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
             if(!value) value=Py_None;
             PyObject *json=PyImport_ImportModule("json");
             if(json){
-                PyObject *fs=mellow_format(filename);
-                if(fs){
+                PyObject *fs=cvm_storage_path(vm, filename);
+                if(!fs || !storage_ensure_base(vm)){
+                    Py_XDECREF(fs); Py_DECREF(json); Py_DECREF(filename); goto exec_err;
+                }
+                {
                     PyObject *encoded=PyObject_CallMethod(json,"dumps","O",value);
                     if(encoded){
                         const char *fn_s=PyUnicode_AsUTF8(fs);
                         if(fn_s){FILE *f=fopen(fn_s,"w");if(f){fputs(PyUnicode_AsUTF8(encoded),f);fclose(f);}}
                         Py_DECREF(encoded);
                     }
-                    Py_DECREF(fs);
                 }
+                Py_DECREF(fs);
+                if (PyErr_Occurred()) { Py_DECREF(json); Py_DECREF(filename); goto exec_err; }
                 Py_DECREF(json);
             }
             Py_DECREF(filename); break;
@@ -1672,7 +1734,7 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
             PyObject *filename=_POP();
             PyObject *vname=_A1;
             PyObject *loaded=Py_None;
-            PyObject *fs=mellow_format(filename); Py_DECREF(filename);
+            PyObject *fs=cvm_storage_path(vm, filename); Py_DECREF(filename);
             if(fs){
                 const char *fn_s=PyUnicode_AsUTF8(fs);
                 if(fn_s){
@@ -1695,6 +1757,8 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
                     }
                 }
                 Py_DECREF(fs);
+            } else {
+                goto exec_err;
             }
             if(!loaded){loaded=Py_None;Py_INCREF(loaded);}
             PyDict_SetItem(vm->scopes[vm->ns-1],vname,loaded);
@@ -1852,6 +1916,8 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
     /* config */
     long max_steps=5000000, max_stack_c=CVM_MAX_STACK;
     int allow_ask=0, allow_wait=1, allow_storage=1;
+    PyObject *storage_dir = PyUnicode_FromString("mellow_saves");
+    if (!storage_dir) return NULL;
     if(config_obj&&PyDict_Check(config_obj)){
         PyObject *ms=PyDict_GetItemString(config_obj,"max_steps");
         if(ms&&PyLong_Check(ms)) max_steps=PyLong_AsLong(ms);
@@ -1863,6 +1929,11 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
         if(aw) allow_wait=mellow_truthy(aw);
         PyObject *as=PyDict_GetItemString(config_obj,"allow_storage");
         if(as) allow_storage=mellow_truthy(as);
+        PyObject *sd=PyDict_GetItemString(config_obj,"storage_dir");
+        if(sd){
+            PyObject *sd_str=PyObject_Str(sd);
+            if(sd_str){ Py_DECREF(storage_dir); storage_dir=sd_str; }
+        }
     }
     if(max_stack_c>CVM_MAX_STACK) max_stack_c=CVM_MAX_STACK;
 
@@ -1874,11 +1945,12 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
     if(!stack||!scopes||!cs||!try_stk){
         free(stack);free(scopes);free(cs);free(try_stk);
         Py_DECREF(func_table);
+        Py_DECREF(storage_dir);
         return PyErr_NoMemory();
     }
 
     scopes[0]=PyDict_New();
-    if(!scopes[0]){free(stack);free(scopes);free(cs);free(try_stk);Py_DECREF(func_table);return NULL;}
+    if(!scopes[0]){free(stack);free(scopes);free(cs);free(try_stk);Py_DECREF(func_table);Py_DECREF(storage_dir);return NULL;}
 
     /* seed C rng */
     srand((unsigned)time(NULL));
@@ -1908,6 +1980,7 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
     vm.allow_ask    = allow_ask;
     vm.allow_wait   = allow_wait;
     vm.allow_storage = allow_storage;
+    vm.storage_dir = storage_dir;
     vm.capture_list = NULL;
 
     PyObject *result = cvm_exec(&vm, 0);
@@ -1916,6 +1989,7 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
     for(int i=0;i<vm.sp;i++) Py_XDECREF(vm.stack[i]);
     for(int i=0;i<vm.ns;i++) Py_XDECREF(vm.scopes[i]);
     Py_XDECREF(vm.rng);
+    Py_DECREF(storage_dir);
     free(stack); free(scopes); free(cs); free(try_stk);
     Py_DECREF(func_table);
 

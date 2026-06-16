@@ -30,7 +30,7 @@ def _run(source: str, *, engine: str, **config: object) -> tuple[str, MellowVM]:
 
 
 def _assert_strict_native(vm: MellowVM) -> None:
-    assert c_vm_available(), "native C extension is required for v2.8.0 stdlib parity"
+    assert c_vm_available(), "native C extension is required for v2.9.0 stdlib parity"
     assert vm.last_engine == "c"
     assert vm.last_native_result.get("used_fallback") is False
 

@@ -1,4 +1,12 @@
-[package]
 name = "core-mmg"
-version = "0.2.0"
-description = "Mellow Magic Graphics render-core starter package"
+version = "0.2.1"
+description = "Mellow Magic Graphics declarative render package."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Core Team"]
+keywords = ["core", "graphics", "mmg", "render", "starter"]
+badges = ["official"]
+official = true
+[dependencies]

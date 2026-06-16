@@ -1,10 +1,14 @@
 name = "core-save"
-version = "0.1.0"
-description = "Small persistence helpers using built-in save/load APIs."
+version = "0.2.1"
+description = "Compatibility persistence helpers; prefer core-storage for new projects."
 entry = "src/main.mel"
 license = "MIT"
 visibility = "public"
-keywords = ["core", "save", "storage", "starter"]
 
+authors = ["Mellow Core Team"]
+keywords = ["core", "save", "storage", "compatibility", "deprecated"]
+badges = ["official", "deprecated"]
+official = true
+deprecated = true
 [dependencies]
 # no external dependencies

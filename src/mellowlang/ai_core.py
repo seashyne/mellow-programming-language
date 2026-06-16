@@ -181,6 +181,264 @@ class MellowModel:
 
 _MODELS: Dict[str, MellowModel] = {}
 
+
+class TinyCausalLM:
+    """Dependency-free character n-gram language model for local LLM experiments."""
+
+    def __init__(self, name: str, order: int = 3, seed: int = 42):
+        self.name = name
+        self.order = max(1, min(int(order), 8))
+        self.seed = int(seed)
+        self.vocab: List[str] = []
+        self.transitions: Dict[str, Dict[str, int]] = {}
+        self.trained_tokens = 0
+        self.loss_history: List[float] = []
+        self.created_at = int(time.time())
+
+    def _context(self, prefix: str) -> str:
+        return prefix[-self.order:]
+
+    def _add_vocab(self, text: str) -> None:
+        seen = set(self.vocab)
+        for ch in text:
+            if ch not in seen:
+                self.vocab.append(ch)
+                seen.add(ch)
+        self.vocab.sort()
+
+    def train(self, texts: List[str], epochs: int = 1) -> float:
+        clean = [str(t) for t in texts if str(t)]
+        if not clean:
+            return 0.0
+        joined = "\n".join(clean)
+        self._add_vocab(joined)
+        total_loss = 0.0
+        for _ in range(max(1, int(epochs))):
+            for text in clean:
+                history = ""
+                for ch in text:
+                    ctx = self._context(history)
+                    bucket = self.transitions.setdefault(ctx, {})
+                    bucket[ch] = bucket.get(ch, 0) + 1
+                    history += ch
+                    self.trained_tokens += 1
+            total_loss = self.loss(clean)
+            self.loss_history.append(round(total_loss, 6))
+        return total_loss
+
+    def loss(self, texts: List[str]) -> float:
+        vocab_size = max(len(self.vocab), 1)
+        nll = 0.0
+        count = 0
+        for text in texts:
+            history = ""
+            for ch in text:
+                bucket = self.transitions.get(self._context(history), {})
+                total = sum(bucket.values())
+                prob = (bucket.get(ch, 0) + 1.0) / (total + vocab_size)
+                nll -= math.log(prob)
+                count += 1
+                history += ch
+        return nll / max(count, 1)
+
+    def evaluate(self, texts: List[str]) -> dict:
+        clean = [str(t) for t in texts if str(t)]
+        loss = self.loss(clean) if clean else 0.0
+        return {
+            "loss": round(loss, 6),
+            "perplexity": round(math.exp(min(loss, 20.0)), 6),
+            "samples": len(clean),
+            "tokens": sum(len(t) for t in clean),
+        }
+
+    def generate(
+        self,
+        prompt: str = "",
+        max_tokens: int = 64,
+        temperature: float = 1.0,
+        seed: Optional[int] = None,
+        top_k: int = 0,
+        stop: Optional[List[str]] = None,
+    ) -> str:
+        if not self.vocab:
+            return prompt
+        rng = random.Random(self.seed if seed is None else int(seed))
+        out = str(prompt)
+        temp = max(float(temperature), 0.001)
+        stop_tokens = [str(s) for s in (stop or []) if str(s)]
+        for _ in range(max(0, int(max_tokens))):
+            bucket = self.transitions.get(self._context(out))
+            choices = bucket or {ch: 1 for ch in self.vocab}
+            if top_k and top_k > 0:
+                choices = dict(sorted(choices.items(), key=lambda item: item[1], reverse=True)[: int(top_k)])
+            weighted = []
+            total = 0.0
+            for ch, count in sorted(choices.items()):
+                weight = max(float(count), 0.001) ** (1.0 / temp)
+                weighted.append((ch, weight))
+                total += weight
+            pick = rng.random() * total
+            upto = 0.0
+            next_ch = weighted[-1][0]
+            for ch, weight in weighted:
+                upto += weight
+                if upto >= pick:
+                    next_ch = ch
+                    break
+            out += next_ch
+            if stop_tokens and any(out.endswith(token) for token in stop_tokens):
+                break
+        return out
+
+    def to_dict(self) -> dict:
+        return {
+            "kind": "tiny-causal-char-lm",
+            "name": self.name,
+            "order": self.order,
+            "seed": self.seed,
+            "vocab": self.vocab,
+            "transitions": self.transitions,
+            "trained_tokens": self.trained_tokens,
+            "loss_history": self.loss_history[-50:],
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TinyCausalLM":
+        model = cls(str(data.get("name", "llm")), int(data.get("order", 3)), int(data.get("seed", 42)))
+        model.vocab = [str(ch) for ch in data.get("vocab", [])]
+        model.transitions = {
+            str(ctx): {str(ch): int(count) for ch, count in dict(bucket).items()}
+            for ctx, bucket in dict(data.get("transitions", {})).items()
+        }
+        model.trained_tokens = int(data.get("trained_tokens", 0))
+        model.loss_history = [float(v) for v in data.get("loss_history", [])]
+        model.created_at = int(data.get("created_at", int(time.time())))
+        return model
+
+
+_LLM_MODELS: Dict[str, TinyCausalLM] = {}
+
+
+def _torch_status() -> Dict[str, Any]:
+    try:
+        import torch  # type: ignore
+    except Exception as exc:
+        return {
+            "available": False,
+            "backend": "transformer-torch",
+            "reason": f"torch unavailable: {exc.__class__.__name__}",
+            "devices": [{"id": "cpu", "type": "cpu", "available": True, "workers": os.cpu_count() or 1}],
+        }
+
+    devices = [{"id": "cpu", "type": "cpu", "available": True, "workers": os.cpu_count() or 1}]
+    cuda_available = bool(getattr(torch.cuda, "is_available", lambda: False)())
+    cuda_count = int(getattr(torch.cuda, "device_count", lambda: 0)()) if cuda_available else 0
+    for idx in range(cuda_count):
+        props = torch.cuda.get_device_properties(idx)
+        devices.append({
+            "id": f"cuda:{idx}",
+            "type": "cuda",
+            "available": True,
+            "name": getattr(props, "name", f"CUDA {idx}"),
+            "memory_gb": round(float(getattr(props, "total_memory", 0)) / (1024 ** 3), 3),
+        })
+    return {
+        "available": True,
+        "backend": "transformer-torch",
+        "version": getattr(torch, "__version__", "unknown"),
+        "cuda": cuda_available,
+        "cuda_count": cuda_count,
+        "devices": devices,
+    }
+
+
+def _device_plan(config: Dict[str, Any]) -> Dict[str, Any]:
+    requested = config.get("devices", "auto")
+    workers = max(1, int(config.get("cpu_workers", os.cpu_count() or 1)))
+    torch_info = _torch_status()
+    devices = torch_info["devices"]
+
+    if requested == "auto":
+        selected = [d for d in devices if d["type"] == "cuda"] or [{"id": "cpu", "type": "cpu", "workers": workers}]
+    elif requested == "cpu":
+        selected = [{"id": "cpu", "type": "cpu", "workers": workers}]
+    elif requested == "cuda:all":
+        selected = [d for d in devices if d["type"] == "cuda"]
+    elif isinstance(requested, list):
+        allowed = {str(item) for item in requested}
+        selected = [d for d in devices if d["id"] in allowed]
+    else:
+        selected = [d for d in devices if d["id"] == str(requested)]
+
+    if not selected:
+        selected = [{"id": "cpu", "type": "cpu", "workers": workers, "fallback": True}]
+
+    strategy = "single"
+    if len(selected) > 1 and any(d.get("type") == "cuda" for d in selected):
+        strategy = "data-parallel"
+    elif selected[0].get("type") == "cpu" and workers > 1:
+        strategy = "cpu-threaded"
+
+    return {
+        "requested": requested,
+        "selected": selected,
+        "strategy": strategy,
+        "torch": torch_info,
+    }
+
+
+def _llm_texts(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    if value is None:
+        return []
+    return [str(value)] if str(value) else []
+
+
+def _llm_dataset_from_texts(texts: List[str], options: Dict[str, Any]) -> dict:
+    chunk_chars = max(1, int(options.get("chunk_chars", options.get("max_chars", 512))))
+    stride = int(options.get("stride", chunk_chars))
+    stride = max(1, min(stride, chunk_chars))
+    min_chars = max(1, int(options.get("min_chars", 1)))
+    samples: List[str] = []
+    total_chars = 0
+    for text in texts:
+        total_chars += len(text)
+        if len(text) <= chunk_chars:
+            if len(text) >= min_chars:
+                samples.append(text)
+            continue
+        start = 0
+        while start < len(text):
+            chunk = text[start:start + chunk_chars]
+            if len(chunk) >= min_chars:
+                samples.append(chunk)
+            start += stride
+    return {
+        "samples": samples,
+        "count": len(samples),
+        "chars": total_chars,
+        "chunk_chars": chunk_chars,
+        "stride": stride,
+    }
+
+
+def _llm_prompt_from_messages(messages: Any) -> str:
+    if isinstance(messages, list):
+        parts = []
+        for item in messages:
+            if isinstance(item, dict):
+                role = str(item.get("role", "user"))
+                content = str(item.get("content", ""))
+                if content:
+                    parts.append(f"{role}: {content}")
+            else:
+                parts.append(f"user: {item}")
+        parts.append("assistant:")
+        return "\n".join(parts)
+    return str(messages)
+
 def _parse_layer_spec(spec: Any) -> _Layer:
     """Parse a layer spec dict or tuple [in, out, activation]."""
     if isinstance(spec, dict):
@@ -623,6 +881,343 @@ def ai_models_list(args: List[Any]) -> Any:
     return list(_MODELS.keys())
 
 
+def ai_llm_create(args: List[Any]) -> Any:
+    """ai.llm_create(name, config?) -> create a tiny local causal LM."""
+    name = str(args[0]) if args else "llm"
+    config = dict(args[1]) if len(args) > 1 and isinstance(args[1], dict) else {}
+    order = int(config.get("order", config.get("context", 3)))
+    seed = int(config.get("seed", 42))
+    model = TinyCausalLM(name, order=order, seed=seed)
+    _LLM_MODELS[name] = model
+    return {
+        "model": name,
+        "kind": "tiny-causal-char-lm",
+        "order": model.order,
+        "status": "created",
+    }
+
+
+def ai_llm_train(args: List[Any]) -> Any:
+    """ai.llm_train(name, texts, options?) -> train from local text."""
+    if len(args) < 2:
+        return {"error": "ai.llm_train requires model name and text corpus"}
+    name = str(args[0])
+    if name not in _LLM_MODELS:
+        _LLM_MODELS[name] = TinyCausalLM(name)
+    raw_texts = args[1]
+    if isinstance(raw_texts, dict) and isinstance(raw_texts.get("samples"), list):
+        texts = _llm_texts(raw_texts.get("samples"))
+    else:
+        texts = _llm_texts(raw_texts)
+    options = dict(args[2]) if len(args) > 2 and isinstance(args[2], dict) else {}
+    epochs = int(options.get("epochs", 1))
+    loss = _LLM_MODELS[name].train(texts, epochs=epochs)
+    model = _LLM_MODELS[name]
+    eval_result = model.evaluate(texts)
+    return {
+        "model": name,
+        "epochs": max(1, epochs),
+        "samples": len(texts),
+        "tokens": model.trained_tokens,
+        "vocab": len(model.vocab),
+        "loss": round(loss, 6),
+        "perplexity": eval_result["perplexity"],
+        "status": "trained",
+    }
+
+
+def ai_llm_generate(args: List[Any]) -> Any:
+    """ai.llm_generate(name, prompt?, options?) -> generate text."""
+    if not args:
+        return {"error": "ai.llm_generate requires model name"}
+    name = str(args[0])
+    if name not in _LLM_MODELS:
+        return {"error": f"LLM model '{name}' not found"}
+    prompt = str(args[1]) if len(args) > 1 else ""
+    options = dict(args[2]) if len(args) > 2 and isinstance(args[2], dict) else {}
+    max_tokens = int(options.get("max_tokens", options.get("tokens", 64)))
+    temperature = float(options.get("temperature", 1.0))
+    seed = options.get("seed")
+    top_k = int(options.get("top_k", 0))
+    stop = options.get("stop") if isinstance(options.get("stop"), list) else []
+    include_prompt = bool(options.get("include_prompt", True))
+    text = _LLM_MODELS[name].generate(
+        prompt,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        seed=seed,
+        top_k=top_k,
+        stop=stop,
+    )
+    completion = text[len(prompt):] if text.startswith(prompt) else text
+    return {
+        "model": name,
+        "prompt": prompt,
+        "text": text if include_prompt else completion,
+        "completion": completion,
+        "generated_tokens": max(0, len(text) - len(prompt)),
+        "options": {
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "top_k": top_k,
+            "include_prompt": include_prompt,
+        },
+    }
+
+
+def ai_llm_tokenize(args: List[Any]) -> Any:
+    """ai.llm_tokenize(text) -> character token ids for the tiny LM package."""
+    text = str(args[0]) if args else ""
+    tokens = [ord(ch) for ch in text]
+    return {"tokens": tokens, "count": len(tokens), "tokenizer": "unicode-char"}
+
+
+def ai_llm_info(args: List[Any]) -> Any:
+    """ai.llm_info(name?) -> model metadata or all local LLM names."""
+    if not args:
+        return {"models": list(_LLM_MODELS.keys()), "count": len(_LLM_MODELS)}
+    name = str(args[0])
+    if name not in _LLM_MODELS:
+        return {"error": f"LLM model '{name}' not found"}
+    model = _LLM_MODELS[name]
+    return {
+        "name": model.name,
+        "kind": "tiny-causal-char-lm",
+        "order": model.order,
+        "vocab": len(model.vocab),
+        "tokens": model.trained_tokens,
+        "loss_points": len(model.loss_history),
+        "loss": model.loss_history[-1] if model.loss_history else None,
+        "created_at": model.created_at,
+        "trained": model.trained_tokens > 0,
+        "capabilities": ["train", "generate", "evaluate", "checkpoint", "chat-format"],
+    }
+
+
+def ai_llm_dataset(args: List[Any]) -> Any:
+    """ai.llm_dataset(texts, options?) -> normalize text into training chunks."""
+    if not args:
+        return {"samples": [], "count": 0, "chars": 0}
+    options = dict(args[1]) if len(args) > 1 and isinstance(args[1], dict) else {}
+    return _llm_dataset_from_texts(_llm_texts(args[0]), options)
+
+
+def ai_llm_eval(args: List[Any]) -> Any:
+    """ai.llm_eval(name, texts) -> loss/perplexity metrics."""
+    if len(args) < 2:
+        return {"error": "ai.llm_eval requires model name and eval texts"}
+    name = str(args[0])
+    if name not in _LLM_MODELS:
+        return {"error": f"LLM model '{name}' not found"}
+    raw_texts = args[1]
+    texts = _llm_texts(raw_texts.get("samples")) if isinstance(raw_texts, dict) else _llm_texts(raw_texts)
+    result = _LLM_MODELS[name].evaluate(texts)
+    result["model"] = name
+    return result
+
+
+def ai_llm_complete(args: List[Any]) -> Any:
+    """ai.llm_complete(name, prompt, options?) -> OpenAI-like completion result."""
+    result = ai_llm_generate(args)
+    if "error" in result:
+        return result
+    return {
+        "model": result["model"],
+        "choices": [{"text": result["completion"], "finish_reason": "length"}],
+        "usage": {
+            "prompt_tokens": len(result["prompt"]),
+            "completion_tokens": result["generated_tokens"],
+            "total_tokens": len(result["prompt"]) + result["generated_tokens"],
+        },
+        "text": result["text"],
+    }
+
+
+def ai_llm_chat(args: List[Any]) -> Any:
+    """ai.llm_chat(name, messages, options?) -> chat-shaped local generation."""
+    if len(args) < 2:
+        return {"error": "ai.llm_chat requires model name and messages"}
+    name = str(args[0])
+    prompt = _llm_prompt_from_messages(args[1])
+    options = dict(args[2]) if len(args) > 2 and isinstance(args[2], dict) else {}
+    options.setdefault("include_prompt", False)
+    generated = ai_llm_generate([name, prompt, options])
+    if "error" in generated:
+        return generated
+    return {
+        "model": name,
+        "message": {"role": "assistant", "content": generated["completion"]},
+        "usage": {
+            "prompt_tokens": len(prompt),
+            "completion_tokens": generated["generated_tokens"],
+            "total_tokens": len(prompt) + generated["generated_tokens"],
+        },
+    }
+
+
+def ai_llm_models(args: List[Any]) -> Any:
+    """ai.llm_models() -> list registered local LLMs."""
+    return [ai_llm_info([name]) for name in sorted(_LLM_MODELS.keys())]
+
+
+def ai_llm_backends(args: List[Any]) -> Any:
+    """ai.llm_backends() -> available local LLM backend capabilities."""
+    torch_info = _torch_status()
+    cpu_workers = os.cpu_count() or 1
+    from . import llm_native
+    native_caps = llm_native.capabilities()
+    return [
+        {
+            "name": "tiny-causal-char-lm",
+            "available": True,
+            "kind": "statistical-char-lm",
+            "devices": ["cpu"],
+            "training": True,
+            "production": False,
+        },
+        {
+            "name": "mellow-native",
+            "available": True,
+            "kind": "mellow-owned-transformer-runtime",
+            "devices": native_caps.get("devices", ["cpu"]),
+            "training": False,
+            "inference": bool(native_caps.get("kernels")),
+            "production": False,
+            "status": "kernels-ready" if native_caps.get("kernels") else "contract-ready",
+            "detail": {
+                "runtime": "mellow",
+                "native_extension": bool(native_caps.get("available")),
+                "cpu_workers": cpu_workers,
+                "kernels": native_caps.get("kernels", []),
+                "planned_kernels": ["matmul", "softmax", "layer_norm", "gelu", "attention", "adamw"],
+                "planned_devices": ["cpu", "cuda", "vulkan", "metal"],
+                "capabilities": native_caps,
+            },
+        },
+        {
+            "name": "transformer-torch",
+            "available": bool(torch_info.get("available")),
+            "kind": "gpt-transformer",
+            "devices": [d["id"] for d in torch_info.get("devices", [])],
+            "training": bool(torch_info.get("available")),
+            "production": True,
+            "detail": torch_info,
+        },
+    ]
+
+
+def ai_llm_device_plan(args: List[Any]) -> Any:
+    """ai.llm_device_plan(config?) -> CPU/GPU placement plan for transformer backends."""
+    config = dict(args[0]) if args and isinstance(args[0], dict) else {}
+    backend = str(config.get("backend", "transformer-torch"))
+    if backend == "mellow-native":
+        from . import llm_native
+        native_caps = llm_native.capabilities()
+        workers = max(1, int(config.get("cpu_workers", os.cpu_count() or 1)))
+        plan = {
+            "requested": config.get("devices", "cpu"),
+            "selected": [{"id": "cpu", "type": "cpu", "workers": workers}],
+            "strategy": "cpu-threaded" if workers > 1 else "single",
+            "torch": _torch_status(),
+            "native": native_caps,
+        }
+    else:
+        plan = _device_plan(config)
+    plan["backend"] = backend
+    plan["multi_device"] = len(plan["selected"]) > 1
+    if backend == "mellow-native":
+        kernels = set(plan["native"].get("kernels", []))
+        required = {"matmul", "softmax", "layer_norm", "gelu"}
+        plan["status"] = "kernels-ready" if required <= kernels else "contract-ready"
+        plan["next"] = "add attention and optimizer kernels before enabling transformer training"
+    else:
+        plan["status"] = "ready" if backend != "transformer-torch" or plan["torch"].get("available") else "requires-llm-extra"
+    if plan["status"] == "requires-llm-extra":
+        plan["install"] = "python -m pip install -e .[llm]"
+    return plan
+
+
+def ai_llm_tensor(args: List[Any]) -> Any:
+    """ai.llm_tensor(op, args...) -> run Mellow-native tensor kernels."""
+    if not args:
+        return {"error": "ai.llm_tensor requires an operation"}
+    from . import llm_native
+    op = str(args[0])
+    try:
+        if op == "matmul":
+            if len(args) < 6:
+                return {"error": "matmul requires a, b, m, n, k"}
+            return {
+                "op": op,
+                "backend": llm_native.capabilities().get("backend"),
+                "values": llm_native.matmul(args[1], args[2], int(args[3]), int(args[4]), int(args[5])),
+            }
+        if op == "softmax":
+            return {"op": op, "backend": llm_native.capabilities().get("backend"), "values": llm_native.softmax(args[1])}
+        if op == "gelu":
+            return {"op": op, "backend": llm_native.capabilities().get("backend"), "values": llm_native.gelu(args[1])}
+        if op == "layer_norm":
+            gamma = args[2] if len(args) > 2 else None
+            beta = args[3] if len(args) > 3 else None
+            eps = float(args[4]) if len(args) > 4 else 1e-5
+            return {
+                "op": op,
+                "backend": llm_native.capabilities().get("backend"),
+                "values": llm_native.layer_norm(args[1], gamma, beta, eps),
+            }
+    except Exception as exc:
+        return {"error": f"{op} failed: {exc}"}
+    return {"error": f"unknown tensor op: {op}"}
+
+
+def ai_llm_tensor_batch(args: List[Any]) -> Any:
+    """ai.llm_tensor_batch(operations) -> execute multiple kernels in one host call."""
+    operations = args[0] if args and isinstance(args[0], list) else []
+    from . import llm_native
+    results = llm_native.run_batch(operations)
+    return {
+        "operations": len(operations),
+        "backend": llm_native.capabilities().get("backend"),
+        "results": results,
+        "errors": sum(1 for result in results if "error" in result),
+    }
+
+
+def ai_llm_save(args: List[Any]) -> Any:
+    """ai.llm_save(name, path) -> save a tiny LM checkpoint under mellow_models."""
+    if len(args) < 2:
+        return {"error": "ai.llm_save requires model name and path"}
+    name = str(args[0])
+    if name not in _LLM_MODELS:
+        return {"error": f"LLM model '{name}' not found"}
+    path = str(args[1])
+    safe_dir = "mellow_models"
+    os.makedirs(safe_dir, exist_ok=True)
+    filename = os.path.join(safe_dir, os.path.basename(path.rstrip("/\\")))
+    if not filename.endswith(".mllm"):
+        filename += ".mllm"
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(_LLM_MODELS[name].to_dict(), f, indent=2, ensure_ascii=False)
+    return {"saved": filename, "model": name}
+
+
+def ai_llm_load(args: List[Any]) -> Any:
+    """ai.llm_load(path) -> load a tiny LM checkpoint from mellow_models."""
+    if not args:
+        return {"error": "ai.llm_load requires path"}
+    path = str(args[0])
+    safe_dir = "mellow_models"
+    filename = os.path.join(safe_dir, os.path.basename(path.rstrip("/\\")))
+    if not filename.endswith(".mllm"):
+        filename += ".mllm"
+    if not os.path.isfile(filename):
+        return {"error": f"LLM file not found: {filename}"}
+    with open(filename, "r", encoding="utf-8") as f:
+        model = TinyCausalLM.from_dict(json.load(f))
+    _LLM_MODELS[model.name] = model
+    return {"loaded": model.name, "kind": "tiny-causal-char-lm", "tokens": model.trained_tokens}
+
+
 # ── register into host registry ─────────────────────────────────────────────
 
 def register_ai_functions(registry: Any) -> None:
@@ -652,6 +1247,22 @@ def register_ai_functions(registry: Any) -> None:
         HostFunction("std.ai.api_configure", ai_api_configure,  cost=1,  min_args=1, max_args=2),
         HostFunction("std.ai.api_complete",  ai_api_complete,   cost=2,  min_args=1, max_args=3),
         HostFunction("std.ai.api_embed",     ai_api_embed,      cost=1,  min_args=1, max_args=2),
+        HostFunction("std.ai.llm_create",    ai_llm_create,     cost=5,  min_args=1, max_args=2),
+        HostFunction("std.ai.llm_train",     ai_llm_train,      cost=80, min_args=2, max_args=3),
+        HostFunction("std.ai.llm_generate",  ai_llm_generate,   cost=20, min_args=1, max_args=3),
+        HostFunction("std.ai.llm_tokenize",  ai_llm_tokenize,   cost=2,  min_args=1, max_args=1),
+        HostFunction("std.ai.llm_info",      ai_llm_info,       cost=1,  min_args=0, max_args=1),
+        HostFunction("std.ai.llm_dataset",   ai_llm_dataset,    cost=5,  min_args=1, max_args=2),
+        HostFunction("std.ai.llm_eval",      ai_llm_eval,       cost=10, min_args=2, max_args=2),
+        HostFunction("std.ai.llm_complete",  ai_llm_complete,   cost=20, min_args=2, max_args=3),
+        HostFunction("std.ai.llm_chat",      ai_llm_chat,       cost=20, min_args=2, max_args=3),
+        HostFunction("std.ai.llm_models",    ai_llm_models,     cost=1,  min_args=0, max_args=0),
+        HostFunction("std.ai.llm_backends",  ai_llm_backends,   cost=1,  min_args=0, max_args=0),
+        HostFunction("std.ai.llm_device_plan", ai_llm_device_plan, cost=1, min_args=0, max_args=1),
+        HostFunction("std.ai.llm_tensor",    ai_llm_tensor,     cost=10, min_args=1, max_args=6),
+        HostFunction("std.ai.llm_tensor_batch", ai_llm_tensor_batch, cost=20, min_args=1, max_args=1),
+        HostFunction("std.ai.llm_save",      ai_llm_save,       cost=10, min_args=2, max_args=2),
+        HostFunction("std.ai.llm_load",      ai_llm_load,       cost=10, min_args=1, max_args=1),
     ]
     for fn in funcs:
         registry.register(fn)

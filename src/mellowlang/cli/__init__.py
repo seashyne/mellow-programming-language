@@ -1,6 +1,7 @@
 """CLI package."""
 
 import shutil
+import sys
 from importlib import import_module
 
 __all__ = ["main", "_cmd_check", "_print_pretty_error", "_doctor_report"]
@@ -13,6 +14,11 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 def main(argv=None):
+    args = list(sys.argv[1:] if argv is None else argv)
+    if len(args) == 1 and args[0] in {"--version", "-V", "version"}:
+        from mellowlang import __version__
+        print(f"mellow {__version__}")
+        return 0
     from .main import main as _main
     return _main(argv)
 
