@@ -1160,26 +1160,35 @@ def seed_core_packages(target_dir: str | Path, publish_local: bool = False) -> D
     td = Path(target_dir)
     td.mkdir(parents=True, exist_ok=True)
     created: List[Dict[str, Any]] = []
-    for pkg_name, spec in CORE_PACKAGE_TEMPLATES.items():
+    source_root = _repo_starter_packages_root()
+    if not source_root.exists():
+        return {"ok": False, "error": f"starter package source not found: {source_root}"}
+    for source_dir in sorted(path for path in source_root.iterdir() if path.is_dir()):
+        if not any(path.exists() for path in _manifest_paths(source_dir)):
+            continue
+        manifest = read_manifest(source_dir)
+        pkg_name = normalize_name(str(manifest.get("name") or source_dir.name))
         pkg_dir = td / pkg_name
-        entry_name = Path(str(spec.get('entry', 'src/main.mellow'))).name
-        manifest = init_package(pkg_dir, name=pkg_name, entry=entry_name)
-        manifest['description'] = spec.get('description', manifest['description'])
-        manifest['keywords'] = spec.get('keywords', manifest.get('keywords', []))
-        manifest['dependencies'] = spec.get('dependencies', {})
-        manifest['entry'] = spec.get('entry', manifest['entry'])
-        _write_toml(pkg_dir / 'mellow.toml', manifest)
-        (pkg_dir / 'mellow.pkg.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-        for rel, content in (spec.get('files') or {}).items():
-            dst = pkg_dir / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(content, encoding='utf-8')
-        row = {'name': pkg_name, 'dir': str(pkg_dir), 'description': manifest['description']}
+        if source_dir.resolve() != pkg_dir.resolve():
+            shutil.copytree(
+                source_dir,
+                pkg_dir,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(".git", ".pytest_cache", "__pycache__", "*.mpkg"),
+            )
+        row = {
+            "name": pkg_name,
+            "version": str(manifest.get("version", "0.1.0")),
+            "dir": str(pkg_dir),
+            "description": str(manifest.get("description", "")),
+        }
         if publish_local:
             pub = publish_from_dir(pkg_dir)
-            row['published_to'] = pub.get('published_to')
+            if not pub.get("ok", True):
+                return pub
+            row["published_to"] = pub.get("published_to")
         created.append(row)
-    return {'ok': True, 'root': str(td), 'items': created, 'published_local': publish_local}
+    return {"ok": True, "root": str(td), "items": created, "published_local": publish_local}
 
 
 def list_installed() -> List[Dict[str, Any]]:
