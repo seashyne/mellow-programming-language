@@ -4,6 +4,7 @@ __pycache__/
 *.pyd
 *.egg-info/
 .mellow/
+.mellow-release-gate-work/
 .pytest_cache/
 pytest-cache-files-*/
 .tmp_money_finance_test/

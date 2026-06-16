@@ -203,7 +203,7 @@ read_job_api_status = _lazy_attr(_AG, "read_job_api_status")
 # - No breaking removals in v1.x (only additive).
 # ============================================================
 
-MODERN_CMDS = {"agent", "check", "compile", "doctor", "explain", "fmt", "help", "init", "new", "install", "login", "logout", "lsp", "modules", "native", "standalone", "pack", "pkg", "publish", "registry", "run", "search", "seed-core", "sync-imports", "resolve-runtime", "uninstall", "update", "test", "replay", "diff", "assistant", "whoami", "add", "remove", "diagnose-imports", "playground", "desktop", "mmg", "sm", "melv"}
+MODERN_CMDS = {"agent", "bench", "check", "compile", "doctor", "explain", "fmt", "help", "init", "new", "install", "login", "logout", "lsp", "modules", "native", "release-gate", "security", "standalone", "pack", "pkg", "publish", "registry", "run", "search", "seed-core", "sync-imports", "resolve-runtime", "uninstall", "update", "test", "replay", "diff", "assistant", "whoami", "add", "remove", "diagnose-imports", "playground", "desktop", "mmg", "sm", "melv"}
 MODERN_CMDS |= {"doctor", "pack", "explain"}
 
 
@@ -515,6 +515,9 @@ Modern commands:
   {prog} run <file>            Run a script
   {prog} check <file>          Lint / syntax check
   {prog} assistant <file>      Code assistant (summary + hints)
+  {prog} bench                 Run performance smoke benchmarks
+  {prog} security audit        Run local security checks
+  {prog} release-gate          Run benchmark + sandbox + package integrity gates
   {prog} fmt <files...>        Format source
   {prog} init <dir>            Create a project
   {prog} modules [--json]      List allowed host modules
@@ -610,6 +613,21 @@ Modern commands:
     pcompile.add_argument("--dump-ssa-optimized", action="store_true", help="Print SSA metadata after optimization")
     pcompile.add_argument("--dump-format", choices=["text", "json"], default="text")
     pcompile.add_argument("--no-optimize", action="store_true", help="Disable IR optimization passes")
+
+    pbench = sub.add_parser("bench", help="Run performance smoke benchmarks")
+    pbench.add_argument("--rounds", type=int, default=5)
+    pbench.add_argument("--json", action="store_true")
+
+    psec = sub.add_parser("security", help="Security tools")
+    sec_sub = psec.add_subparsers(dest="security_cmd")
+    psec_audit = sec_sub.add_parser("audit", help="Run sandbox, AI policy, and package trust checks")
+    psec_audit.add_argument("--no-packages", action="store_true", help="Skip package trust checks")
+    psec_audit.add_argument("--strict", action="store_true", help="Treat warnings as failures")
+    psec_audit.add_argument("--json", action="store_true")
+
+    prg = sub.add_parser("release-gate", help="Run benchmark + sandbox + package integrity gates")
+    prg.add_argument("--rounds", type=int, default=3)
+    prg.add_argument("--json", action="store_true")
 
     ppkg = sub.add_parser("pkg", help="Package manager (local + online registry)")
     pkg_sub = ppkg.add_subparsers(dest="pkg_cmd")
@@ -1542,6 +1560,62 @@ def _cmd_doctor(json_out: bool, strict: bool = False) -> int:
             if check.get('fix'):
                 print(f"         fix: {check['fix']}")
     return 2 if strict and info.get('has_mismatch') else 0
+
+
+def _cmd_bench(rounds: int, json_out: bool) -> int:
+    from ..benchmarking import run_benchmarks
+
+    result = run_benchmarks(rounds=rounds)
+    if json_out:
+        _json_print(result)
+        return 0 if result.get("ok") else 1
+    _cli_line("Mellow performance benchmark", kind="ok" if result.get("ok") else "warn")
+    for suite in result.get("suites", []):
+        name = suite.get("name")
+        fields = ", ".join(f"{k}={v}" for k, v in suite.items() if k not in {"name", "cache"})
+        print(f"  {name}: {fields}")
+    return 0 if result.get("ok") else 1
+
+
+def _cmd_security_audit(include_packages: bool, strict: bool, json_out: bool) -> int:
+    from ..security_audit import run_security_audit
+
+    result = run_security_audit(include_packages=include_packages)
+    if strict and result.get("warnings"):
+        result = dict(result)
+        result["ok"] = False
+    if json_out:
+        _json_print(result)
+        return 0 if result.get("ok") else 1
+    _cli_line("Mellow security audit", kind="ok" if result.get("ok") else "warn")
+    for check in result.get("checks", []):
+        status = "OK" if check.get("ok") else check.get("severity", "error").upper()
+        print(f"  [{status}] {check.get('name')}: {check.get('detail')}")
+    print(f"Errors          : {result.get('errors', 0)}")
+    print(f"Warnings        : {result.get('warnings', 0)}")
+    return 0 if result.get("ok") else 1
+
+
+def _cmd_release_gate(rounds: int, json_out: bool) -> int:
+    from ..release_gate import run_release_gate
+
+    try:
+        result = run_release_gate(rounds=rounds)
+    except Exception as exc:
+        result = {"ok": False, "error": str(exc)}
+    if json_out:
+        _json_print(result)
+        return 0 if result.get("ok") else 1
+    _cli_line("Mellow release gate", kind="ok" if result.get("ok") else "error")
+    if result.get("error"):
+        print(f"Error           : {result['error']}")
+        return 1
+    print(f"Benchmark       : {'pass' if result.get('benchmark', {}).get('ok') else 'fail'}")
+    print(f"Sandbox/security: {'pass' if result.get('sandbox', {}).get('ok') else 'fail'}")
+    pkg = result.get("package_integrity", {})
+    print(f"Package integrity: {'pass' if pkg.get('ok') else 'fail'} ({pkg.get('count', 0)} package(s))")
+    return 0 if result.get("ok") else 1
+
 
 def _cmd_native_status(json_out: bool) -> int:
     info = native_vm_status()
@@ -3005,7 +3079,8 @@ def _cmd_agent_run(task: str, model: str, memory_path: str, obs_path: str, tools
     signed_policy = None
     if policy_file and Path(policy_file).exists():
         signed_policy = load_signed_policy(policy_file, verify_key=policy_key) if policy_key else load_signed_policy(policy_file)
-    runtime = _make_agent_runtime(model, memory_path, obs_path, allow_tools, deny_tools, rag_file, tool_manifest, sandbox=sandbox, allow_caps=allow_caps, deny_caps=deny_caps, secrets=secrets, signed_policy=signed_policy)
+    effective_allow_tools = list(dict.fromkeys((allow_tools or []) + (tools or [])))
+    runtime = _make_agent_runtime(model, memory_path, obs_path, effective_allow_tools, deny_tools, rag_file, tool_manifest, sandbox=sandbox, allow_caps=allow_caps, deny_caps=deny_caps, secrets=secrets, signed_policy=signed_policy)
     auto_tool = tools[0] if tools else None
     prompt = render_prompt_file(prompt_file, _agent_prompt_context(task, runtime)) if prompt_file else None
     try:
@@ -3752,6 +3827,15 @@ def main(argv: List[str] | None = None) -> int:
             return _cmd_check(ns.file, ns.json)
         if cmd == "doctor":
             return _cmd_doctor(ns.json, getattr(ns, "strict", False))
+        if cmd == "bench":
+            return _cmd_bench(getattr(ns, "rounds", 5), getattr(ns, "json", False))
+        if cmd == "security":
+            if getattr(ns, "security_cmd", None) == "audit":
+                return _cmd_security_audit(not getattr(ns, "no_packages", False), getattr(ns, "strict", False), getattr(ns, "json", False))
+            p.print_help()
+            return 2
+        if cmd == "release-gate":
+            return _cmd_release_gate(getattr(ns, "rounds", 3), getattr(ns, "json", False))
         if cmd == "explain":
             return _cmd_explain(ns.error_id, ns.json)
         if cmd == "assistant":

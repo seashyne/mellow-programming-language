@@ -9,6 +9,7 @@ import time
 from typing import Any, Dict, Optional
 
 from ..data_core import DataCoreError, DataStreamManager
+from ..constants import Op
 from ..native_vm import native_vm_status
 
 class CVMUnsupportedOpcode(RuntimeError):
@@ -137,6 +138,45 @@ class NativeHostAdapter:
         self._data.close_all()
 
 
+def _storage_path_unsafe(value: Any) -> bool:
+    raw = ("" if value is None else str(value)).strip().strip('"').strip("'").replace("\\", "/")
+    if not raw or raw == ".":
+        return False
+    if os.path.isabs(raw):
+        return True
+    parts = [part for part in raw.split("/") if part]
+    return any(part == ".." for part in parts)
+
+
+def _validate_native_storage_bytecode(bytecode: list[tuple], config: Dict[str, Any]) -> None:
+    if not bool(config.get("allow_storage", True)):
+        return
+    stack: list[Any] = []
+    for instr in bytecode:
+        if not instr:
+            continue
+        op = instr[0]
+        if op == Op.PUSH:
+            stack.append(instr[1] if len(instr) > 1 else None)
+        elif op == Op.BUILD_MAP:
+            count = int(instr[1] if len(instr) > 1 else 0)
+            for _ in range(max(0, count) * 2):
+                if stack:
+                    stack.pop()
+            stack.append({"<map>": True})
+        elif op == Op.SAVE_VAL:
+            stack.pop() if stack else None
+            filename = stack.pop() if stack else None
+            if _storage_path_unsafe(filename):
+                raise RuntimeError("SANDBOX: invalid storage path (path traversal blocked)")
+        elif op in {Op.SAVE, Op.LOAD_F}:
+            filename = stack.pop() if stack else None
+            if _storage_path_unsafe(filename):
+                raise RuntimeError("SANDBOX: invalid storage path (path traversal blocked)")
+        else:
+            stack.clear()
+
+
 def _load_ext():
     """Try to load the native C extension. Returns None if unavailable."""
     try:
@@ -188,6 +228,7 @@ def run_bytecode_ex(
     if ext is not None:
         adapter = NativeHostAdapter(host, config)
         try:
+            _validate_native_storage_bytecode(bytecode, config)
             run_kwargs = {
                 'bytecode': bytecode,
                 'config': config,

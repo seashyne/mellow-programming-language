@@ -26,7 +26,7 @@ def capabilities() -> dict:
     return {
         "available": False,
         "backend": "python-reference",
-        "kernels": ["matmul", "softmax", "gelu", "layer_norm"],
+        "kernels": ["matmul", "softmax", "gelu", "layer_norm", "batch"],
         "devices": ["cpu"],
         "dtype": "float64",
     }
@@ -80,3 +80,47 @@ def layer_norm(values: list, gamma: list | None = None, beta: list | None = None
     var = sum((x - mean) * (x - mean) for x in xs) / len(xs)
     scale = 1.0 / math.sqrt(var + float(eps))
     return [((x - mean) * scale) * g[i] + b[i] for i, x in enumerate(xs)]
+
+
+def run_operation(item: dict) -> dict:
+    op = str(item.get("op", ""))
+    if op == "matmul":
+        return {
+            "op": op,
+            "backend": capabilities().get("backend"),
+            "values": matmul(
+                item.get("a", []),
+                item.get("b", []),
+                int(item.get("m", 0)),
+                int(item.get("n", 0)),
+                int(item.get("k", 0)),
+            ),
+        }
+    if op == "softmax":
+        return {"op": op, "backend": capabilities().get("backend"), "values": softmax(item.get("values", []))}
+    if op == "gelu":
+        return {"op": op, "backend": capabilities().get("backend"), "values": gelu(item.get("values", []))}
+    if op == "layer_norm":
+        return {
+            "op": op,
+            "backend": capabilities().get("backend"),
+            "values": layer_norm(item.get("values", []), item.get("gamma"), item.get("beta"), float(item.get("eps", 1e-5))),
+        }
+    return {"error": f"unknown tensor op: {op}"}
+
+
+def run_batch(operations: list) -> list:
+    if _native is not None and hasattr(_native, "batch"):
+        return list(_native.batch(operations))
+    results = []
+    for index, item in enumerate(operations):
+        if not isinstance(item, dict):
+            results.append({"index": index, "error": "operation must be a map"})
+            continue
+        try:
+            result = run_operation(item)
+        except Exception as exc:
+            result = {"error": f"{item.get('op', '')} failed: {exc}"}
+        result["index"] = index
+        results.append(result)
+    return results

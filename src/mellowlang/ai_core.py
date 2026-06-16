@@ -1173,36 +1173,11 @@ def ai_llm_tensor(args: List[Any]) -> Any:
 def ai_llm_tensor_batch(args: List[Any]) -> Any:
     """ai.llm_tensor_batch(operations) -> execute multiple kernels in one host call."""
     operations = args[0] if args and isinstance(args[0], list) else []
-    results = []
-    for index, item in enumerate(operations):
-        if not isinstance(item, dict):
-            results.append({"index": index, "error": "operation must be a map"})
-            continue
-        op = str(item.get("op", ""))
-        if op == "matmul":
-            call_args = [
-                op,
-                item.get("a", []),
-                item.get("b", []),
-                item.get("m", 0),
-                item.get("n", 0),
-                item.get("k", 0),
-            ]
-        elif op == "layer_norm":
-            call_args = [
-                op,
-                item.get("values", []),
-                item.get("gamma"),
-                item.get("beta"),
-                item.get("eps", 1e-5),
-            ]
-        else:
-            call_args = [op, item.get("values", [])]
-        result = ai_llm_tensor(call_args)
-        result["index"] = index
-        results.append(result)
+    from . import llm_native
+    results = llm_native.run_batch(operations)
     return {
         "operations": len(operations),
+        "backend": llm_native.capabilities().get("backend"),
         "results": results,
         "errors": sum(1 for result in results if "error" in result),
     }

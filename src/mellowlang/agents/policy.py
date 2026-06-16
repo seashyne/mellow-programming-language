@@ -82,6 +82,7 @@ class PolicyEngine:
         denied_capabilities: Iterable[str] | None = None,
         sandbox: SandboxConfig | None = None,
         signed_policy: Dict[str, Any] | None = None,
+        default_deny_tools: bool = True,
     ):
         self.allowed_tools: Set[str] = set(allowed_tools or [])
         self.denied_tools: Set[str] = set(denied_tools or [])
@@ -89,6 +90,7 @@ class PolicyEngine:
         self.denied_capabilities: Set[str] = set(denied_capabilities or [])
         self.sandbox = sandbox or SandboxConfig()
         self.signed_policy: Dict[str, Any] | None = None
+        self.default_deny_tools = bool(default_deny_tools)
         if signed_policy:
             self.apply_signed_policy(signed_policy)
 
@@ -124,6 +126,8 @@ class PolicyEngine:
             return PolicyDecision(False, f'tool `{tool_name}` denied by policy')
         if self.allowed_tools and tool_name not in self.allowed_tools:
             return PolicyDecision(False, f'tool `{tool_name}` not in allow-list')
+        if self.default_deny_tools and not self.allowed_tools:
+            return PolicyDecision(False, f'tool `{tool_name}` denied by default; add it to the allow-list')
         for capability in list(capabilities or []):
             decision = self.check_capability(capability)
             if not decision.allowed:
