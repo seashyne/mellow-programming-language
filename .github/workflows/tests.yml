@@ -19,8 +19,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .[dev]
-      - name: Run tooling and reference language gates
-        run: pytest -q tests/core tests/language -p no:cacheprovider
+      - name: Run reference core gate
+        run: pytest -q tests/core -p no:cacheprovider
+      - name: Run reference language gate
+        run: pytest -q tests/language -p no:cacheprovider
       - name: Run package registry smoke
         run: |
           pytest -q \
@@ -64,9 +66,16 @@ jobs:
       - name: Verify native extension
         run: |
           python -c "import mellowlang._mellowvm"
-      - name: Run native parity tests
-        run: |
-          pytest -q tests/native frameworks/mellow_ui/tests -p no:cacheprovider
+      - name: Run native core parity
+        run: pytest -q tests/native/test_native_core_parity.py -p no:cacheprovider
+      - name: Run native stdlib parity
+        run: pytest -q tests/native/test_native_stdlib_parity.py -p no:cacheprovider
+      - name: Run standalone C CLI tests
+        run: pytest -q tests/native/test_full_native_c_cli.py -p no:cacheprovider
+      - name: Run native architecture contracts
+        run: pytest -q tests/native/test_arm_runtime_contract.py -p no:cacheprovider
+      - name: Run Mellow UI framework tests
+        run: pytest -q frameworks/mellow_ui/tests -p no:cacheprovider
 
   native-arm64:
     runs-on: ubuntu-latest
