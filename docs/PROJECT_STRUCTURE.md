@@ -1,19 +1,65 @@
-# Mellow Project Structure
+# Mellow Project Map
 
-This repository should keep source code, fixtures, generated artifacts, and local caches clearly separated.
+You do not need to understand every directory before working on Mellow. Pick the
+area that matches the task and stay inside it.
 
-## Source Of Truth
+## Start Here
 
-- `src/mellowlang/` - Python source for the language, compiler, VM, runtimes, package manager, and CLI.
-- `native/` - Native C/CMake runtimes and extensions.
-- `stdlib/` - Built-in standard library packages.
-- `starter_packages/` - Source templates for official starter packages.
-- `frameworks/` - Optional framework packages maintained with the repo.
-- `tests/` - Test suites and stable fixtures.
-- `docs/` - Current manuals, specs, policy docs, and release documentation.
-- `examples/` - Hand-written examples that should be readable and intentionally maintained.
-- `deploy/` - Deployment projects and infrastructure source only.
-- `packaging/` - Distribution scripts/specs.
+| Task | Directory |
+| --- | --- |
+| Change syntax, compiler, CLI, or Python compatibility runtime | `src/mellowlang/` |
+| Change the default C compiler/runtime | `native/` |
+| Change the language contract | `spec/`, `SPEC.md` |
+| Add built-in library behavior | `stdlib/` |
+| Add or update tests | `tests/` |
+| Measure performance or read benchmark reports | `benchmarks/` |
+| Work on packages or frameworks | `starter_packages/`, `mellow_packages/`, `frameworks/` |
+| Work on integrations | `sdk/`, `plugin_sdk/`, `vscode-extension/` |
+| Build releases or deploy services | `packaging/`, `deploy/`, `.github/` |
+| Learn the language or add examples | `docs/`, `examples/` |
+
+## Directory Groups
+
+### Language
+
+- `src/mellowlang/` - Compiler v3 pipeline, CLI, compatibility VM, package manager, LSP, and host services.
+- `native/` - Native C compiler/runtime and CMake targets used by the default engine.
+- `spec/` - Machine-readable syntax locks and language conformance material.
+- `stdlib/` - Built-in standard-library modules.
+
+### Quality
+
+- `tests/` - Core, native parity, package, CLI, and integration tests.
+- `benchmarks/` - Benchmark programs, runners, raw results, and reports.
+
+### Ecosystem
+
+- `starter_packages/` - Source for official starter packages published to the registry.
+- `mellow_packages/` - Curated local registry fixtures; installed packages are ignored.
+- `frameworks/` - Optional framework packages maintained with the repository.
+- `sdk/`, `plugin_sdk/` - Host-language and plugin integration surfaces.
+
+### Tools And Delivery
+
+- `scripts/` - Development, verification, release, and cleanup commands.
+- `vscode-extension/` - Editor extension source.
+- `project_template/` - Template copied into new user projects.
+- `.github/` - CI and GitHub configuration.
+- `packaging/` - Native/distribution packaging configuration.
+- `deploy/` - Registry and service deployment projects.
+
+### Documentation
+
+- `docs/` - Current manuals, specifications, policies, and release notes.
+- `examples/` - Small maintained Mellow programs.
+
+## Root Files
+
+- `README.md`, `SPEC.md`, `CHANGELOG.md`, `LICENSE` - public project documents.
+- `pyproject.toml`, `setup.py` - Python tooling and compatibility distribution metadata.
+- `main.py`, `mellow.cmd`, `mellow.ps1`, `install.sh` - thin launch/install wrappers.
+
+New implementation code should not be added at the repository root.
 
 ## Generated Or Local Only
 
@@ -35,6 +81,10 @@ These should not be committed unless there is a specific fixture reason:
 - `native/**/build/`
 - root `.mellow_aliases.json`, `.mellow_imports.json`, `.mellow_runtime.json`
 - root `mellow.lock` unless it is intentionally used as a project-level fixture
+- `mellow_models/`
+
+Run `scripts/clean-worktree.ps1` to preview generated files, then
+`scripts/clean-worktree.ps1 -Apply` to remove them.
 
 ## Package Data
 
@@ -49,20 +99,6 @@ mellow_packages/
 ```
 
 Local installs should live outside the repository or under ignored cache directories.
-
-## Documentation
-
-Current docs stay in `docs/`. Historical per-version release notes live in `docs/releases/` so `docs/` remains scannable.
-
-Recommended future layout:
-
-```text
-docs/
-  guides/
-  specs/
-  policies/
-  releases/
-```
 
 ## CLI Code
 

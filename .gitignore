@@ -16,6 +16,7 @@ pytest-cache-files-*/
 .mellow-data-benchmark-*/
 tmp/
 outputs/
+mellow_models/
 node_modules/
 dist/
 build/

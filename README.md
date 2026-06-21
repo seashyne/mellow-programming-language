@@ -199,13 +199,19 @@ Direct Mellow-script imports such as `import("mellow.ui")` are planned, but the 
 
 ## Project Layout
 
-- `src/mellowlang`: compiler, VM, CLI, stdlib bridges, and runtime support
-- `tests/core`: stable core language tests
-- `tests/native`: native C VM parity tests for the stable core
-- `tests`: core, extended, and experimental tests
-- `examples`: runnable Mellow scripts
-- `stdlib`, `starter_packages`, `mellow_packages`: package and stdlib content
-- `native`, `plugin_sdk`, `deploy`, `websites`: extended platform surfaces
+Start with [`docs/PROJECT_STRUCTURE.md`](docs/PROJECT_STRUCTURE.md) when you need
+to find or add code. The short version is:
+
+- Language: `src`, `native`, `spec`, `stdlib`
+- Verification: `tests`, `benchmarks`
+- Packages and SDKs: `starter_packages`, `mellow_packages`, `sdk`, `plugin_sdk`, `frameworks`
+- Tools: `vscode-extension`, `project_template`, `scripts`
+- Delivery: `.github`, `packaging`, `deploy`
+- Learning: `docs`, `examples`
+
+Generated build files, runtime metadata, local package installs, and temporary
+benchmark workspaces are ignored. Preview or remove them with
+`scripts/clean-worktree.ps1`.
 
 ## License
 
