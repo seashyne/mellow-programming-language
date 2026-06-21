@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "mellowlang"
+NATIVE_VM = ROOT / "native" / "mellowvm" / "src"
 
 
 def _line_count(path: Path) -> int:
@@ -31,3 +32,16 @@ def test_package_facade_uses_focused_modules() -> None:
     source = (SRC / "package_manager.py").read_text(encoding="utf-8")
     for module in ("config", "metadata", "manifest", "lockfile", "project"):
         assert f"from .packages.{module} import" in source
+
+
+def test_native_vm_dispatch_and_syscalls_have_explicit_boundaries() -> None:
+    module = NATIVE_VM / "mellowvm_module.c"
+    syscalls = NATIVE_VM / "mellowvm_syscalls.inc"
+    executor = NATIVE_VM / "mellowvm_exec.inc"
+    assert syscalls.is_file()
+    assert executor.is_file()
+    assert '#include "mellowvm_syscalls.inc"' in module.read_text(encoding="utf-8")
+    assert '#include "mellowvm_exec.inc"' in module.read_text(encoding="utf-8")
+    assert _line_count(module) <= 700
+    assert _line_count(syscalls) <= 900
+    assert _line_count(executor) <= 800
