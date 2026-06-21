@@ -16,7 +16,7 @@ def run_source(source: str) -> str:
     vm = MellowVM()
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
-        vm.run(program, config=RunConfig())
+        vm.run(program, config=RunConfig(engine="py"))
     return out.getvalue()
 
 

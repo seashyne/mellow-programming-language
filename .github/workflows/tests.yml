@@ -21,8 +21,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .[dev]
-      - name: Run stable core gate
-        run: pytest -q tests/core -p no:cacheprovider
+      - name: Core language
+        run: pytest -q tests/core/test_core_language.py -p no:cacheprovider
+      - name: Core syntax reference
+        run: pytest -q tests/core/test_syntax_reference.py -p no:cacheprovider
+      - name: Core language specification
+        run: pytest -q tests/core/test_language_spec_2_9.py -p no:cacheprovider
+      - name: Core data processing
+        run: pytest -q tests/core/test_data_processing_core.py -p no:cacheprovider
+      - name: Core money and finance sandbox
+        run: pytest -q tests/core/test_money_and_finance_sandbox.py -p no:cacheprovider
+      - name: Core ledger
+        run: pytest -q tests/core/test_ledger_core.py -p no:cacheprovider
+      - name: Core SDK
+        run: pytest -q tests/core/test_sdk_core.py -p no:cacheprovider
+      - name: Core interop
+        run: pytest -q tests/core/test_interop_core.py -p no:cacheprovider
       - name: Run stable language gate
         run: pytest -q tests/language -p no:cacheprovider
       - name: Run package registry smoke
