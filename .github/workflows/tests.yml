@@ -20,32 +20,32 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .[dev]
       - name: Reference core language
-        run: pytest -q tests/core/test_core_language.py -p no:cacheprovider
+        run: python -m pytest -q tests/core/test_core_language.py -p no:cacheprovider
       - name: Reference syntax and specification
         run: |
-          pytest -q \
+          python -m pytest -q \
             tests/core/test_syntax_reference.py \
             tests/core/test_language_spec_2_9.py \
             -p no:cacheprovider
       - name: Reference data and interop
         run: |
-          pytest -q \
+          python -m pytest -q \
             tests/core/test_data_processing_core.py \
             tests/core/test_interop_core.py \
             -p no:cacheprovider
       - name: Reference money and ledger
         run: |
-          pytest -q \
+          python -m pytest -q \
             tests/core/test_money_and_finance_sandbox.py \
             tests/core/test_ledger_core.py \
             -p no:cacheprovider
       - name: Reference SDK
-        run: pytest -q tests/core/test_sdk_core.py -p no:cacheprovider
+        run: python -m pytest -q tests/core/test_sdk_core.py -p no:cacheprovider
       - name: Run reference language gate
-        run: pytest -q tests/language -p no:cacheprovider
+        run: python -m pytest -q tests/language -p no:cacheprovider
       - name: Run package registry smoke
         run: |
-          pytest -q \
+          python -m pytest -q \
             tests/test_v152_online_registry.py \
             tests/test_v153_public_registry.py \
             tests/test_v154_cli_registry.py \
@@ -87,25 +87,25 @@ jobs:
         run: |
           python -c "import mellowlang._mellowvm"
       - name: Verify native C default engine
-        run: pytest -q tests/native/test_native_core_parity.py -k default_engine -p no:cacheprovider
+        run: python -m pytest -q tests/native/test_native_core_parity.py -k default_engine -p no:cacheprovider
       - name: Verify native arithmetic parity
-        run: pytest -q tests/native/test_native_core_parity.py -k print_arithmetic_and_variables -p no:cacheprovider
+        run: python -m pytest -q tests/native/test_native_core_parity.py -k print_arithmetic_and_variables -p no:cacheprovider
       - name: Verify native function parity
-        run: pytest -q tests/native/test_native_core_parity.py -k function_call -p no:cacheprovider
+        run: python -m pytest -q tests/native/test_native_core_parity.py -k function_call -p no:cacheprovider
       - name: Verify native while parity
-        run: pytest -q tests/native/test_native_core_parity.py -k while_loop -p no:cacheprovider
+        run: python -m pytest -q tests/native/test_native_core_parity.py -k while_loop -p no:cacheprovider
       - name: Verify native range parity
-        run: pytest -q tests/native/test_native_core_parity.py -k range_loop -p no:cacheprovider
+        run: python -m pytest -q tests/native/test_native_core_parity.py -k range_loop -p no:cacheprovider
       - name: Verify native collection parity
-        run: pytest -q tests/native/test_native_core_parity.py -k list_and_map_indexing -p no:cacheprovider
+        run: python -m pytest -q tests/native/test_native_core_parity.py -k list_and_map_indexing -p no:cacheprovider
       - name: Run native stdlib parity
-        run: pytest -q tests/native/test_native_stdlib_parity.py -p no:cacheprovider
+        run: python -m pytest -q tests/native/test_native_stdlib_parity.py -p no:cacheprovider
       - name: Run standalone C CLI tests
-        run: pytest -q tests/native/test_full_native_c_cli.py -p no:cacheprovider
+        run: python -m pytest -q tests/native/test_full_native_c_cli.py -p no:cacheprovider
       - name: Run native architecture contracts
-        run: pytest -q tests/native/test_arm_runtime_contract.py -p no:cacheprovider
+        run: python -m pytest -q tests/native/test_arm_runtime_contract.py -p no:cacheprovider
       - name: Run Mellow UI framework tests
-        run: pytest -q frameworks/mellow_ui/tests -p no:cacheprovider
+        run: python -m pytest -q frameworks/mellow_ui/tests -p no:cacheprovider
 
   native-arm64:
     runs-on: ubuntu-latest
@@ -151,7 +151,7 @@ jobs:
           python -m pip install -e .[dev,security]
       - name: Run package tests
         run: |
-          pytest -q \
+          python -m pytest -q \
             tests/test_v152_online_registry.py \
             tests/test_v153_public_registry.py \
             tests/test_v154_cli_registry.py \
