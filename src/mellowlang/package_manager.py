@@ -19,8 +19,8 @@ from .host.modules import MODULE_ALLOWLIST
 from .packages.config import (
     DEFAULT_REGISTRY, _aliases_path, _default_alias, cache_root_path, clear_auth_token, config_file_path,
     config_home_path, ensure_user_dirs, get_auth_token, get_registry_url,
-    keys_dir_path, load_aliases, load_config, remember_alias, resolve_alias,
-    save_aliases, save_config, set_auth_token, set_registry,
+    keys_dir_path, load_aliases, load_config as _load_config_impl, remember_alias, resolve_alias,
+    save_aliases, save_config as _save_config_impl, set_auth_token, set_registry,
     suggest_aliases_for_package, trust_author, trusted_authors,
 )
 from .packages.metadata import (
@@ -57,6 +57,30 @@ LOCKFILE_NAME = "mellow.lock"
 IMPORT_MAP_NAME = ".mellow_imports.json"
 RUNTIME_MAP_NAME = ".mellow_runtime.json"
 ALIASES_FILE_NAME = ".mellow_aliases.json"
+_DEFAULT_CONFIG_HOME = config_home_path()
+_DEFAULT_CONFIG_FILE = config_file_path()
+CONFIG_HOME = _DEFAULT_CONFIG_HOME
+CONFIG_FILE = _DEFAULT_CONFIG_FILE
+def load_config() -> Dict[str, Any]:
+    path = Path(CONFIG_FILE)
+    if path == _DEFAULT_CONFIG_FILE and Path(CONFIG_HOME) == _DEFAULT_CONFIG_HOME:
+        return _load_config_impl()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        cfg = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except Exception:
+        cfg = {}
+    cfg.setdefault("registry", DEFAULT_REGISTRY)
+    cfg.setdefault("auth", {})
+    cfg.setdefault("default_scope", "public")
+    return cfg
+def save_config(cfg: Dict[str, Any]) -> None:
+    path = Path(CONFIG_FILE)
+    if path == _DEFAULT_CONFIG_FILE and Path(CONFIG_HOME) == _DEFAULT_CONFIG_HOME:
+        _save_config_impl(cfg)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
