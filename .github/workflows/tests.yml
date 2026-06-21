@@ -27,8 +27,8 @@ jobs:
       - name: Reference syntax and specification
         run: |
           python -m pytest -q \
-            tests/core/test_syntax_reference.py \
             tests/core/test_language_spec_2_9.py \
+            tests/language/test_compiler_v3.py \
             -p no:cacheprovider
       - name: Reference data and interop
         run: |
