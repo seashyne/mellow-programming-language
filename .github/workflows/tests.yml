@@ -113,6 +113,20 @@ jobs:
         run: python -m pytest -q tests/native/test_arm_runtime_contract.py -p no:cacheprovider
       - name: Run Mellow UI framework tests
         run: python -m pytest -q frameworks/mellow_ui/tests -p no:cacheprovider
+      - name: Benchmark native x64 runtime
+        run: |
+          python benchmarks/standalone_runtime_benchmark.py \
+            --binary build/standalone-x64/mellow \
+            --source tests/fixtures/native_benchmark.mellow \
+            --architecture x86_64 \
+            --mode native \
+            --repeats 7 \
+            --output x64-benchmark.json
+      - name: Upload native x64 benchmark
+        uses: actions/upload-artifact@v6
+        with:
+          name: mellow-native-x64-benchmark
+          path: x64-benchmark.json
 
   native-arm64:
     runs-on: ubuntu-latest
@@ -140,6 +154,21 @@ jobs:
             build/standalone-arm64/mellow tests/fixtures/full_native_core.mellow \
             | tee arm64-core.out
           diff -u tests/fixtures/full_native_core.expected arm64-core.out
+      - name: Benchmark ARM64 runtime under QEMU
+        run: |
+          python3 benchmarks/standalone_runtime_benchmark.py \
+            --binary build/standalone-arm64/mellow \
+            --source tests/fixtures/native_benchmark.mellow \
+            --command-prefix "qemu-aarch64 -L /usr/aarch64-linux-gnu" \
+            --architecture arm64 \
+            --mode qemu-emulated \
+            --repeats 7 \
+            --output arm64-qemu-benchmark.json
+      - name: Upload ARM64 benchmark
+        uses: actions/upload-artifact@v6
+        with:
+          name: mellow-arm64-qemu-benchmark
+          path: arm64-qemu-benchmark.json
 
   package-release-gate:
     runs-on: ubuntu-latest
