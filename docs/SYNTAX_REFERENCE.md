@@ -861,7 +861,7 @@ mellow doctor
 mellow check app.mellow
 mellow fmt --check app.mellow
 mellow fmt -w app.mellow
-mellow run examples\syntax_tour_v280.mellow
+mellow run tests\fixtures\full_native_core.mellow
 ```
 
 ดู stable core และความสามารถ runtime เพิ่มเติม:

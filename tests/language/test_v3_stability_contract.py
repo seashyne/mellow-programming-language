@@ -35,6 +35,8 @@ def test_v3_manifest_is_planned_stability_release() -> None:
     assert manifest["baseline"]["manifest"] == "spec/mellow-2.9-core.json"
     assert manifest["draft_spec"] == "docs/LANGUAGE_SPEC_3_0.md"
     assert manifest["runtime_parity"] == "docs/RUNTIME_PARITY_3_0.md"
+    assert manifest["compiler"]["documentation"] == "docs/COMPILER_V3.md"
+    assert manifest["compiler"]["legacy_fallback"] is False
     assert "tests/core" in manifest["required_gates"]
     assert "tests/language" in manifest["required_gates"]
 

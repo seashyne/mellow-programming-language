@@ -28,6 +28,7 @@ The v3 track is governed by:
 - `docs/RUNTIME_PARITY_3_0.md`
 - `spec/mellow-3.0-stability.json`
 - `tests/language/`
+- `docs/COMPILER_V3.md`
 
 ## Compatibility Rules
 
@@ -72,6 +73,6 @@ py -3.11 -m pytest -q tests/native -p no:cacheprovider
 ## Patch Release 2.9.4
 
 - Manifest: `spec/mellow-2.9.4-stability.json`
-- Canonical runtime modules: `compiler/bytecode.py`, `host/runtime.py`, and
-  `vm/python_vm.py`
+- Canonical runtime modules: `compiler/compiler.py`, `compiler/ir_lowering.py`,
+  `compiler/bytecode_backend.py`, `host/runtime.py`, and `vm/python_vm.py`
 - Experimental docs index: `docs/experimental/README.md`

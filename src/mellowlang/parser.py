@@ -1056,7 +1056,8 @@ def _parse_block(lines: List[str], start: int, base_indent: int, filename: str |
                 if raw_value.endswith('.mellow'):
                     _push(ImportStmt(raw_value, alias))
                 else:
-                    _push(ImportStmt(f"pkg:{raw_value}", alias))
+                    package_path = raw_value if raw_value.startswith("pkg:") else f"pkg:{raw_value}"
+                    _push(ImportStmt(package_path, alias))
             else:
                 if any(ch in mod_src for ch in ('-', '/', '@')):
                     _push(ImportStmt(f"pkg:{mod_src}", alias))

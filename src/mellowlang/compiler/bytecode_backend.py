@@ -57,6 +57,7 @@ class BytecodeBackend:
         "GLOBAL_SEED": lambda ins: (Op.GLOBAL_SEED,),
         "MOD": lambda ins: (Op.MOD,),
         "POW_OP": lambda ins: (Op.POW_OP,),
+        "IMPORT": lambda ins: (Op.IMPORT, ins.args[0], ins.args[1]),
     }
 
     def lower(self, ir: IRProgram) -> BytecodeBundle:

@@ -24,6 +24,11 @@ def test_use_and_need_are_package_import_syntax() -> None:
     assert len(program.body) == 2
 
 
+def test_quoted_package_import_is_normalized_once() -> None:
+    parsed = parse_program(['import "pkg:core-print" as out'])
+    assert parsed.body[0].path == "pkg:core-print"
+
+
 def test_project_runtime_records_package_imports(tmp_path: Path) -> None:
     init_package(tmp_path, name="demo-app")
     src = tmp_path / "src" / "main.mellow"

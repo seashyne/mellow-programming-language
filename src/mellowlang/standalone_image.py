@@ -606,25 +606,9 @@ def _span_tuple(span_map: list[dict[str, Any]], pc: int, compiled: CompiledProgr
 
 
 def compile_source_to_standalone_image(source: str, *, filename: str | None = None, optimize: bool = True) -> StandaloneImage:
-    # v2.3.4: try new IR compiler first; fall back to bytecode compiler for
-    # constructs (if/def) that the IR lowerer doesn't yet handle.
-    from .compiler.bytecode import Compiler as _BytecodeCompiler
-    from .error_core import MellowLangRuntimeError
+    from .compiler import Compiler
 
-    # v2.3.4: standalone always uses bytecode compiler — the new IR optimizer has
-    # known issues (variable-access after BUILD_LIST/BUILD_MAP) that cause incorrect
-    # code generation in the standalone lowering pass.  The bytecode compiler is fully
-    # tested and produces correct bytecode for all supported constructs.
-    bytecode = _BytecodeCompiler().compile(source.splitlines())
-    compiled = CompiledProgram(
-        bytecode=bytecode,
-        func_table=None,
-        event_table=None,
-        filename=filename,
-        source_lines=source.splitlines(),
-        pipeline="bytecode",
-    )
-
+    compiled = Compiler().compile(source, filename=filename, optimize=optimize)
     return lower_compiled_to_standalone_image(compiled, source_name=filename or '<memory>')
 
 

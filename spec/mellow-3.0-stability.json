@@ -15,6 +15,11 @@
   "plan": "docs/V3_STABILITY_PLAN.md",
   "draft_spec": "docs/LANGUAGE_SPEC_3_0.md",
   "runtime_parity": "docs/RUNTIME_PARITY_3_0.md",
+  "compiler": {
+    "pipeline": "source-parser-ast-ir-bytecode-native",
+    "documentation": "docs/COMPILER_V3.md",
+    "legacy_fallback": false
+  },
   "required_gates": [
     "tests/core",
     "tests/language",

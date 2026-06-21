@@ -49,7 +49,7 @@ python -m mellowlang run examples\hello.mellow
 ตัวอย่างรวมที่รันได้:
 
 ```powershell
-mellow run examples\syntax_tour_v280.mellow
+mellow run tests\fixtures\full_native_core.mellow
 ```
 
 ## Example

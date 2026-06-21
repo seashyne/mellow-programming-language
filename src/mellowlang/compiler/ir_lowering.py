@@ -16,6 +16,7 @@ from ..ast import (
     GetModuleExpr,
     GetModuleStmt,
     IfGroup,
+    ImportStmt,
     Index,
     KeepMultiStmt,
     KeepStmt,
@@ -383,6 +384,8 @@ class IRLowerer:
                 self.emit("STORE_AUTO", stmt.var_name, line=line, col=col)
             else:
                 self.emit("POP", line=line, col=col)
+        elif isinstance(stmt, ImportStmt):
+            self.emit("IMPORT", stmt.path, stmt.alias, line=line, col=col)
         else:
             raise UnsupportedLoweringError(f"AST node not supported by IR pipeline: {type(stmt).__name__}")
 

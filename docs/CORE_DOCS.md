@@ -17,6 +17,7 @@ Documents in this index define or support the **stable core** release line.
 - [`STABLE_CHECKLIST.md`](STABLE_CHECKLIST.md)
 - [`RUNTIME_PARITY_3_0.md`](RUNTIME_PARITY_3_0.md)
 - [`V3_STABILITY_PLAN.md`](V3_STABILITY_PLAN.md)
+- [`COMPILER_V3.md`](COMPILER_V3.md)
 
 ## Packages and SDK
 

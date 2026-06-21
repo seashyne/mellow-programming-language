@@ -45,3 +45,14 @@ def test_native_vm_dispatch_and_syscalls_have_explicit_boundaries() -> None:
     assert _line_count(module) <= 700
     assert _line_count(syscalls) <= 900
     assert _line_count(executor) <= 800
+
+
+def test_compiler_v3_has_no_legacy_compiler_or_silent_fallback() -> None:
+    compiler_dir = SRC / "compiler"
+    facade = (compiler_dir / "compiler.py").read_text(encoding="utf-8")
+    standalone = (SRC / "standalone_image.py").read_text(encoding="utf-8")
+
+    assert not (compiler_dir / "bytecode.py").exists()
+    assert "_BytecodeCompiler" not in facade
+    assert "compiler.bytecode" not in standalone
+    assert "v3-ir-bytecode" in facade
