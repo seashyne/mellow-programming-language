@@ -1,0 +1,6 @@
+def save_slot(name, value):
+    save value into name
+
+def load_slot(name):
+    load name into data
+    return data

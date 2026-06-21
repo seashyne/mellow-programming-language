@@ -7,15 +7,15 @@ Generated Python calls are native CPython function calls, so the overhead is
 just Python itself — no interpreter loop, no step-counting, no dict lookups
 per opcode.
 
-Expected speedup over the legacy interpreter:
+Expected speedup over the Python interpreter:
   - Tight loops:       ~15-30x
   - Recursion (fib):   ~20-40x
   - Mixed programs:    ~10-20x
 
-Limitations (addressed by falling back to legacy VM):
-  - Replay / deterministic mode needs legacy VM
-  - Sandbox step-limit enforcement uses legacy VM
-  - Some advanced opcodes (WAIT, ASK) delegate to legacy
+Limitations (addressed by falling back to Python VM):
+  - Replay / deterministic mode needs Python VM
+  - Sandbox step-limit enforcement uses Python VM
+  - Some advanced opcodes (WAIT, ASK) delegate to the Python VM
 """
 from __future__ import annotations
 import io

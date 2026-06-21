@@ -3,3 +3,10 @@ version = "0.1.0"
 description = "Desktop window helpers for Mellow app preset"
 entry = "src/main.mel"
 license = "MIT"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "desktop", "window", "ui", "starter"]
+badges = ["official"]
+official = true
+
+[dependencies]

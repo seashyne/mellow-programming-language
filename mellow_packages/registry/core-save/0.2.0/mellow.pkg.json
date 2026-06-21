@@ -1,0 +1,26 @@
+{
+  "name": "core-save",
+  "version": "0.2.0",
+  "entry": "src/main.mel",
+  "description": "Compatibility persistence helpers; prefer core-storage for new projects.",
+  "dependencies": {},
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "save",
+    "storage",
+    "compatibility",
+    "deprecated"
+  ],
+  "badges": [
+    "official",
+    "deprecated"
+  ],
+  "official": true,
+  "deprecated": true
+}

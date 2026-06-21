@@ -1,0 +1,27 @@
+{
+  "name": "core-collections",
+  "version": "0.2.0",
+  "entry": "src/main.mel",
+  "description": "List and map helpers for everyday Mellow scripts.",
+  "dependencies": {
+    "list": "host",
+    "map": "host"
+  },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "collections",
+    "list",
+    "map",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
+}

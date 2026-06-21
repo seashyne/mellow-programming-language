@@ -20,7 +20,7 @@
 - `wait()` can be disabled by `--no-wait`
 
 ## Tooling
-- CLI (legacy + modern, stable in v1.x)
+- CLI subcommands
 - VS Code extension (syntax highlighting + basic LSP)
 - Formatter: `mellow fmt`
 

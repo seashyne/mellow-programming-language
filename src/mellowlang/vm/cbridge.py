@@ -263,7 +263,7 @@ def run_bytecode_ex(
     if not allow_fallback:
         raise NativeExecutionRequiredError('python-fallback-disabled')
 
-    from .legacy import MellowLangVM
+    from .python_vm import MellowLangVM
 
     vm = MellowLangVM(
         bytecode,

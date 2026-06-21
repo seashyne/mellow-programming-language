@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+import sys
 import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -132,14 +134,53 @@ def run_package_integrity_gate() -> dict[str, Any]:
     return {"ok": True, "packages": rows, "count": len(rows)}
 
 
-def run_release_gate(*, rounds: int = 3) -> dict[str, Any]:
+def run_stability_pytest_gate() -> dict[str, Any]:
+    suites = [
+        ["tests/core", "tests/language"],
+        [
+            "tests/test_v152_online_registry.py",
+            "tests/test_v153_public_registry.py",
+            "tests/test_v154_cli_registry.py",
+            "tests/test_v157_core_packages.py",
+            "tests/test_v158_lockfile.py",
+            "tests/test_v159_runtime_and_imports.py",
+            "tests/test_v215_package_runtime_integration.py",
+            "tests/test_v216_project_templates.py",
+        ],
+    ]
+    rows: list[dict[str, Any]] = []
+    for suite in suites:
+        cmd = [sys.executable, "-m", "pytest", "-q", *suite, "-p", "no:cacheprovider"]
+        proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+        rows.append(
+            {
+                "suite": " ".join(suite) if len(suite) <= 2 else f"{len(suite)} registry smoke tests",
+                "ok": proc.returncode == 0,
+                "returncode": proc.returncode,
+                "stdout": (proc.stdout or "")[-4000:],
+                "stderr": (proc.stderr or "")[-4000:],
+            }
+        )
+        if proc.returncode != 0:
+            return {"ok": False, "suites": rows}
+    return {"ok": True, "suites": rows}
+
+
+def run_release_gate(*, rounds: int = 3, include_stability: bool = True) -> dict[str, Any]:
     benchmark = run_benchmarks(rounds=rounds)
     security = run_security_audit(include_packages=False)
     package_integrity = run_package_integrity_gate()
-    ok = bool(benchmark.get("ok") and security.get("ok") and package_integrity.get("ok"))
+    stability = run_stability_pytest_gate() if include_stability else {"ok": True, "skipped": True}
+    ok = bool(
+        benchmark.get("ok")
+        and security.get("ok")
+        and package_integrity.get("ok")
+        and stability.get("ok")
+    )
     return {
         "ok": ok,
         "benchmark": benchmark,
         "sandbox": security,
         "package_integrity": package_integrity,
+        "stability": stability,
     }

@@ -4,7 +4,10 @@ description = "Prompt and retrieval helpers on top of the built-in AI runtime."
 entry = "src/main.mel"
 license = "MIT"
 visibility = "public"
-keywords = ["ai", "runtime", "rag", "starter"]
 
+authors = ["Mellow Code Team"]
+keywords = ["core", "ai", "rag", "prompt", "starter"]
+badges = ["official"]
+official = true
 [dependencies]
 ai = "host"

@@ -1,0 +1,17 @@
+def println(text):
+    print(text)
+
+def spacer():
+    print("")
+
+def banner(text):
+    print("=== " + text + " ===")
+
+def kv(key, value):
+    print(key + ": " + value)
+
+def success(text):
+    print("[ok] " + text)
+
+def warn(text):
+    print("[warn] " + text)

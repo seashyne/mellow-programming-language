@@ -1,4 +1,4 @@
-# Mellow Programming Language 2.9.2
+# Mellow Programming Language 2.9.3
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -12,7 +12,7 @@ This release treats the language core as the stable surface:
 - string/math/list/map/json/money/data/ledger helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but should be treated as extended or experimental surfaces unless their own tests are green. In v2.9.2 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, and core built-ins. It can run stable `.mellow` source without CPython. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but are documented as **experimental** under [`docs/experimental/README.md`](docs/experimental/README.md). In v2.9.3 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, and core built-ins. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
 
 ## Quick Start
 
@@ -39,6 +39,8 @@ python -m mellowlang run examples\hello.mellow
 ```
 
 คู่มือ syntax ฉบับเต็ม: [`docs/SYNTAX_REFERENCE.md`](docs/SYNTAX_REFERENCE.md)
+
+คู่มือ Mellow SDK (Python vs Mellow): [`docs/MELLOW_SDK.md`](docs/MELLOW_SDK.md)
 
 ข้อกำหนดภาษา 2.9 ที่ล็อกแล้ว: [`docs/LANGUAGE_SPEC_2_9.md`](docs/LANGUAGE_SPEC_2_9.md)
 
@@ -99,7 +101,7 @@ while len(batch) > 0:
 Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
 
 Finance and data sandbox profiles, plus Ledger Core, run on the default C engine
-in v2.9.2. Native parity tests run with Python fallback disabled.
+in v2.9.3. Native parity tests run with Python fallback disabled.
 
 Build an immutable, balanced ledger:
 
@@ -130,12 +132,8 @@ mellow modules --json
 mellow doctor
 ```
 
-Legacy direct-run mode is still supported:
-
-```bash
-mellow <file>
-mellow <file> --check
-```
+Direct script invocation has been removed. Use explicit commands such as
+`mellow run <file>` and `mellow check <file-or-dir>`.
 
 ## Optional Features
 
@@ -175,11 +173,16 @@ Full suite:
 python -m pytest -q tests
 ```
 
-The full suite currently includes legacy and experimental coverage. Use `tests/core` plus `tests/native` as the release gate for stable language core and native C parity.
+The full suite includes extended and experimental coverage. Use `tests/core`
+plus `tests/native` as the release gate for stable language core and native C
+parity.
 
 ## Release Process
 
 - Stable core definition: `docs/STABLE_CORE.md`
+- Core docs index: `docs/CORE_DOCS.md`
+- Experimental docs: `docs/experimental/README.md`
+- 2.9.3 stability gates: `scripts/test-v293-stability.ps1`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Changelog: `CHANGELOG.md`
 - Windows native build helper: `scripts/build-native-windows.ps1`
@@ -199,7 +202,7 @@ Direct Mellow-script imports such as `import("mellow.ui")` are planned, but the 
 - `src/mellowlang`: compiler, VM, CLI, stdlib bridges, and runtime support
 - `tests/core`: stable core language tests
 - `tests/native`: native C VM parity tests for the stable core
-- `tests`: legacy, extended, and experimental tests
+- `tests`: core, extended, and experimental tests
 - `examples`: runnable Mellow scripts
 - `stdlib`, `starter_packages`, `mellow_packages`: package and stdlib content
 - `native`, `plugin_sdk`, `deploy`, `websites`: extended platform surfaces

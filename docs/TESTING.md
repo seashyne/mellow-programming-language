@@ -38,6 +38,27 @@ mellow fmt path/to/file.mellow --check
 mellow fmt path/to/file.mellow -w
 ```
 
+## Mellow script tests
+
+`mellow test` runs `.mellow` files directly. It is the preferred language-level
+test command for examples, conformance fixtures, and eventual native gates.
+
+```bash
+mellow test tests/language/fixtures --engine=py
+mellow test tests/language/fixtures --engine=c
+mellow test tests/language/fixtures --engine=dual
+mellow test tests/language/fixtures --engine=py --json
+mellow test tests/language/fixtures --engine=c --native-required
+```
+
+If a test file has a sibling golden output file, stdout must match exactly:
+
+- `example.mellow`
+- `example.mellow.out`
+
+Without a golden output file, the test passes when the script runs without a
+runtime error.
+
 ## Golden tests for error messages
 
 Error output is part of Mellow's UX. When changing error formatting,

@@ -38,6 +38,11 @@ Recommended fields:
 - `keywords`
 - `dependencies`
 
+`authors` is the creator display source. Registry clients should show it in
+search, info, publish, install, and installed-package list output. If an older
+package only provides `author`, `creator`, `publisher`, `maintainer`, or
+`owner`, clients may use that as a compatibility fallback.
+
 ## Package Layout
 ```text
 mypkg/
@@ -64,10 +69,17 @@ Base path: `/api/v1`
 ### Search
 - `GET /packages/search?q=<text>`
 
+### Author profile
+- `GET /authors/{author}`
+
 ### Package metadata
 - `GET /packages/{name}`
 - `GET /packages/{name}/versions/{version}`
+- `GET /packages/{name}/versions/{version}/signature`
 - `GET /packages/{name}/download/{version}`
+
+### Web browse
+- `GET /packages?q=<text>`
 
 ### Publish
 - `POST /packages/publish`
@@ -82,6 +94,8 @@ mellow pkg registry http://127.0.0.1:8089
 mellow pkg login --username admin --password admin
 mellow pkg whoami
 mellow pkg search physics
+mellow author studio
+mellow verify @studio/physics2d
 mellow pkg publish mypkg --online
 mellow pkg install @studio/physics2d --online
 ```

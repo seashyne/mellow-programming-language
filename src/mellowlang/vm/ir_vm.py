@@ -4,7 +4,7 @@ from typing import Any
 
 from ..compiler.bytecode_backend import BytecodeBackend
 from ..ir import IRProgram
-from .legacy import MellowLangVM
+from .python_vm import MellowLangVM
 
 
 class IRVM:

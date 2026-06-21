@@ -8,54 +8,56 @@ import re
 import os
 import shutil
 import sys
-import platform
 import subprocess
 import threading
-import importlib.util
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from importlib import import_module
-from importlib import metadata as importlib_metadata
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, List
 
 from .. import __version__
 from ..lint import lint_source, format_source
-from ..host.modules import MODULE_ALLOWLIST
 from ..compiler import Compiler, CompiledProgram
 from ..vm import MellowVM, RunConfig
-from ..error_explain import explain as explain_error
+from .common import (
+    _cli_line,
+    _find_project_root,
+    _json_print,
+    _lazy_attr,
+    _looks_like_script_path,
+    _print_pretty_error,
+    _prog,
+    _prompt_yes_no,
+    _read_text,
+    _start_lsp,
+)
+from .commands.system import (
+    _cmd_ask,
+    _cmd_assistant,
+    _cmd_bench,
+    _cmd_completion,
+    _cmd_config,
+    _cmd_doctor,
+    _cmd_explain,
+    _cmd_guide,
+    _cmd_modules,
+    _cmd_native_build,
+    _cmd_native_doctor,
+    _cmd_native_status,
+    _cmd_release_gate,
+    _cmd_security_audit,
+    _cmd_status,
+)
+from .ux import (
+    CLI_ALIASES,
+    MODERN_CMDS,
+    format_guide as _format_guide,
+    modern_help_text as _modern_help_text,
+    quick_help_text as _quick_help_text,
+    suggest_command as _suggest_command,
+)
+from .parser import _build_modern_parser
 
-
-class _LazyAttr:
-    def __init__(self, module_name: str, attr_name: str):
-        self._module_name = module_name
-        self._attr_name = attr_name
-        self._value: Any | None = None
-
-    def _resolve(self) -> Any:
-        if self._value is None:
-            self._value = getattr(import_module(self._module_name), self._attr_name)
-        return self._value
-
-    def __call__(self, *args, **kwargs):
-        return self._resolve()(*args, **kwargs)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._resolve(), name)
-
-    def __fspath__(self) -> str:
-        return os.fspath(self._resolve())
-
-    def __str__(self) -> str:
-        return str(self._resolve())
-
-    def __repr__(self) -> str:
-        return repr(self._resolve())
-
-
-def _lazy_attr(module_name: str, attr_name: str) -> _LazyAttr:
-    return _LazyAttr(module_name, attr_name)
 
 
 _PM = "mellowlang.package_manager"
@@ -65,6 +67,7 @@ pkg_publish_from_dir = _lazy_attr(_PM, "publish_from_dir")
 pkg_install_package = _lazy_attr(_PM, "install_package")
 pkg_build_package_archive = _lazy_attr(_PM, "build_package_archive")
 pkg_search_remote = _lazy_attr(_PM, "search_remote")
+pkg_package_info_remote = _lazy_attr(_PM, "package_info_remote")
 pkg_publish_remote = _lazy_attr(_PM, "publish_remote")
 pkg_install_remote = _lazy_attr(_PM, "install_remote")
 pkg_login_remote = _lazy_attr(_PM, "login_remote")
@@ -81,13 +84,22 @@ pkg_add_dependency = _lazy_attr(_PM, "add_dependency")
 pkg_remove_dependency = _lazy_attr(_PM, "remove_dependency")
 pkg_auto_fetch_for_run = _lazy_attr(_PM, "auto_fetch_for_run")
 pkg_load_config = _lazy_attr(_PM, "load_config")
-PKG_CONFIG_FILE = _lazy_attr(_PM, "CONFIG_FILE")
-PKG_CACHE_ROOT = _lazy_attr(_PM, "CACHE_ROOT")
+pkg_save_config = _lazy_attr(_PM, "save_config")
+pkg_config_file_path = _lazy_attr(_PM, "config_file_path")
+pkg_cache_root_path = _lazy_attr(_PM, "cache_root_path")
 pkg_interactive_pick_package = _lazy_attr(_PM, "interactive_pick_package")
 pkg_diagnose_imports = _lazy_attr(_PM, "diagnose_imports")
 pkg_suggest_aliases_for_package = _lazy_attr(_PM, "suggest_aliases_for_package")
 pkg_scaffold_project = _lazy_attr(_PM, "scaffold_project")
 pkg_ensure_project_starter_packages = _lazy_attr(_PM, "ensure_project_starter_packages")
+pkg_package_creator = _lazy_attr(_PM, "package_creator")
+pkg_author_profile_remote = _lazy_attr(_PM, "author_profile_remote")
+pkg_package_signature_remote = _lazy_attr(_PM, "package_signature_remote")
+pkg_package_signature_installed = _lazy_attr(_PM, "package_signature_installed")
+pkg_update_packages = _lazy_attr(_PM, "update_packages")
+pkg_trust_author = _lazy_attr(_PM, "trust_author")
+pkg_trusted_authors = _lazy_attr(_PM, "trusted_authors")
+pkg_check_trust_policy = _lazy_attr(_PM, "check_trust_policy")
 
 serve_playground = _lazy_attr("mellowlang.playground", "serve_playground")
 build_static_playground = _lazy_attr("mellowlang.playground", "build_static_playground")
@@ -197,1583 +209,9 @@ read_job_api_status = _lazy_attr(_AG, "read_job_api_status")
 
 
 # ============================================================
-# CLI policy (v1.0.7+)
-# - Legacy UX stays supported.
-# - Modern subcommands stay supported.
-# - No breaking removals in v1.x (only additive).
-# ============================================================
-
-MODERN_CMDS = {"agent", "bench", "check", "compile", "doctor", "explain", "fmt", "help", "init", "new", "install", "login", "logout", "lsp", "modules", "native", "release-gate", "security", "standalone", "pack", "pkg", "publish", "registry", "run", "search", "seed-core", "sync-imports", "resolve-runtime", "uninstall", "update", "test", "replay", "diff", "assistant", "whoami", "add", "remove", "diagnose-imports", "playground", "desktop", "mmg", "sm", "melv"}
-MODERN_CMDS |= {"doctor", "pack", "explain"}
-
-
-
-def _cli_palette() -> dict[str, str]:
-    if not _supports_ansi():
-        return {"reset": "", "red": "", "green": "", "yellow": "", "blue": "", "bold": "", "dim": ""}
-    return {
-        "reset": "\033[0m",
-        "red": "\033[31m",
-        "green": "\033[32m",
-        "yellow": "\033[33m",
-        "blue": "\033[34m",
-        "bold": "\033[1m",
-        "dim": "\033[2m",
-    }
-
-
-def _cli_icon(kind: str) -> str:
-    if not _supports_ansi():
-        return {"ok": "OK", "info": "*", "warn": "!", "error": "ERR", "hint": ">"}.get(kind, "*")
-    return {"ok": "✓", "info": "•", "warn": "!", "error": "✖", "hint": "→"}.get(kind, "•")
-
-
-def _cli_line(message: str, *, kind: str = "info", file=None) -> None:
-    pal = _cli_palette()
-    color = {"ok": pal["green"], "info": pal["blue"], "warn": pal["yellow"], "error": pal["red"], "hint": pal["dim"]}.get(kind, "")
-    print(f"{color}{_cli_icon(kind)}{pal['reset']} {message}", file=file or sys.stdout)
-
-
-def _looks_like_script_path(value: str | None) -> bool:
-    if not value or value.startswith('-'):
-        return False
-    low = value.lower()
-    return low.endswith('.mellow') or low.endswith('.mel')
-
-
-def _argv_prefers_direct_run(argv: list[str]) -> bool:
-    return bool(argv) and _looks_like_script_path(argv[0])
-
-
-def _suggest_command(name: str) -> str | None:
-    matches = difflib.get_close_matches(name, sorted(MODERN_CMDS), n=1, cutoff=0.5)
-    return matches[0] if matches else None
-
-
-def _prompt_yes_no(prompt: str, *, default: bool = True) -> bool:
-    if not sys.stdin.isatty():
-        return default
-    suffix = 'Y/n' if default else 'y/N'
-    try:
-        raw = input(f"{prompt} [{suffix}]: ").strip().lower()
-    except EOFError:
-        return default
-    if not raw:
-        return default
-    return raw in {"y", "yes"}
-
-def _start_lsp() -> int:
-    from ..lsp_server import start_lsp  # lazy import (pygls optional)
-    return int(start_lsp() or 0)
-
-
-def _supports_ansi() -> bool:
-    if not sys.stdout.isatty():
-        return False
-    if os.name != "nt":
-        return True
-    env = os.environ
-    return any(k in env for k in ("WT_SESSION", "TERM", "ANSICON", "ConEmuANSI")) or (
-        "vscode" in env.get("TERM_PROGRAM", "").lower()
-    )
-
-
-def _print_pretty_error(
-    err: Exception,
-    filename: str | None = None,
-    source_lines: list[str] | None = None,
-    *,
-    use_color: bool | None = None,
-) -> None:
-    """
-    Frinds-style error formatter:
-      Error: <TYPE> at <file>:<line>:<col>
-        <message>
-        <code frame + caret>
-    """
-    msg = getattr(err, "message", None) or str(err)
-
-    if use_color is None:
-        use_color = _supports_ansi()
-
-    if use_color:
-        RED = "\033[31m"
-        YELLOW = "\033[33m"
-        DIM = "\033[2m"
-        RESET = "\033[0m"
-    else:
-        RED = YELLOW = DIM = RESET = ""
-
-    # ---- Pull structured fields if present (preferred) ----
-    err_type = getattr(err, "error_type", None)
-    line_no = getattr(err, "line_num", None)
-    col = getattr(err, "col", None)
-    fn = getattr(err, "filename", None) or filename
-
-    # ---- Fallback: infer line/col from message (ParseError, etc.) ----
-    snippet = None
-    if line_no is None:
-        m = re.search(r"\bline\s+(\d+)\b", msg)
-        if m:
-            line_no = int(m.group(1))
-    if fn is None:
-        # e.g. "RUNTIME at test.fds:46: division by zero"
-        m = re.search(r"\bat\s+(.+?):(\d+)(?::(\d+))?\b", msg)
-        if m:
-            fn = m.group(1)
-            if line_no is None:
-                line_no = int(m.group(2))
-            if m.group(3) and col is None:
-                col = int(m.group(3))
-    # snippet often appears after ":" in messages like "... at line 6: kee i"
-    m = re.search(r"\bline\s+\d+\s*:\s*(.+)$", msg)
-    if m:
-        snippet = m.group(1).strip()
-
-    # --- Friendly hints (DX) ---
-    # Add small, deterministic hints for common mistakes.
-    try:
-        if (getattr(err, 'error_type', None) in (None, 'SYNTAX') and 'Unknown statement' in msg):
-            # Common case: user wrote a function call as a statement, or used named args.
-            if snippet and '(' in snippet and ')' in snippet:
-                msg += "\nHint: you can call functions as statements (game-friendly)."
-                if '=' in snippet:
-                    msg += "\nHint: named args are supported, e.g. file_write(\"a.txt\", \"hi\", mode=\"w\")."
-                msg += "\nTip: if this still errors, try `call(file_write, ...)` (legacy form)."
-    except Exception:
-        pass
-
-    if not err_type:
-        # ParseError usually means SYNTAX, everything else ERROR
-        err_type = "SYNTAX" if err.__class__.__name__ in ("ParseError",) else "ERROR"
-
-    # Compute column from snippet if possible
-    if source_lines and line_no and col is None and snippet:
-        try:
-            line_text = source_lines[int(line_no) - 1]
-            idx = line_text.find(snippet)
-            if idx >= 0:
-                col = idx + 1
-        except Exception:
-            pass
-    if col is None:
-        col = 1
-
-    # ---- Header (match Frinds look) ----
-    loc = ""
-    if fn and line_no:
-        loc = f"{fn}:{line_no}:{col}"
-    elif fn and line_no is None:
-        loc = str(fn)
-    elif line_no:
-        loc = f"line {line_no}:{col}"
-
-    print(f"{RED}Error:{RESET} {err_type}" + (f" at {loc}" if loc else ""))
-    print(f"  {msg}")
-
-    # ---- Call stack (if present) ----
-    trace = getattr(err, "trace", None)
-    if trace:
-        print(f"{DIM}Call Stack:{RESET}")
-        for fr in reversed(trace):
-            nm = fr.get("name", "<frame>")
-            ffn = fr.get("filename", fn) or "<script>"
-            ln = fr.get("line")
-            cc = fr.get("col")
-            floc = ffn if ln is None else f"{ffn}:{ln}" + (f":{cc}" if cc else "")
-            print(f"  at {nm} ({floc})")
-
-    # ---- Code frame ----
-    if not source_lines or not line_no:
-        return
-    try:
-        ln = int(line_no)
-    except Exception:
-        return
-    if ln < 1 or ln > len(source_lines):
-        return
-
-    i = ln - 1
-    lo = max(0, i - 1)
-    hi = min(len(source_lines) - 1, i + 1)
-    for j in range(lo, hi + 1):
-        prefix = ">" if j == i else " "
-        print(f"{prefix} {j+1:3d} | {source_lines[j].rstrip()}")
-        if j == i:
-            caret_pos = max(1, min(int(col), len(source_lines[j]) + 1))
-            print(f"    | {' '*(caret_pos-1)}{YELLOW}^{RESET}")
-
-
-def _prog() -> str:
-    base = os.path.basename(sys.argv[0]) or "mellow"
-    return os.path.splitext(base)[0]
-
-def _read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="replace")
-
-def _find_project_root(start: Path) -> Path | None:
-    """Find nearest parent dir containing mellow.json."""
-    try:
-        p = start.resolve()
-    except Exception:
-        p = start
-    if p.is_file():
-        p = p.parent
-    for parent in [p] + list(p.parents):
-        if (parent / "mellow.json").exists() or (parent / "mellow.toml").exists() or (parent / "mellow.pkg.json").exists():
-            return parent
-    return None
-
-def _json_print(obj: Any) -> None:
-    print(json.dumps(obj, ensure_ascii=False, indent=2))
-
-def _build_legacy_parser() -> argparse.ArgumentParser:
-    prog = _prog()
-    p = argparse.ArgumentParser(
-        prog=prog,
-        formatter_class=argparse.RawTextHelpFormatter,
-        description=f"""MellowLang {__version__}
-Friendly scripting language (game / AI focused)
-
-Legacy usage:
-  {prog} <script.mellow> [options]
-
-Modern usage:
-  {prog} run <script>
-  {prog} check <script>
-  {prog} fmt [-w] [--check] <files...>
-  {prog} init <dir> [--force]
-  {prog} modules [--json]
-  {prog} login --token <token>
-  {prog} whoami
-  {prog} registry <url>
-  {prog} search <query>
-  {prog} install <package>
-  {prog} add <package>
-  {prog} remove <package>
-  {prog} publish <dir>
-  {prog} lsp
-""",
-    )
-
-    p.add_argument("script", nargs="?", help="Path to .mellow script")
-
-    # runtime flags (legacy-compatible)
-    p.add_argument("--check", dest="check_only", action="store_true",
-                  help="Only check syntax/lint; do not run")
-    p.add_argument("--modules", dest="list_modules", action="store_true",
-                  help="List allowed host modules (same as: modules)")
-    p.add_argument("--json", action="store_true", help="Output machine-readable JSON")
-
-    mx = p.add_mutually_exclusive_group()
-    mx.add_argument("--record", dest="record_path", help="Record deterministic replay log (.jsonl)")
-    mx.add_argument("--replay", dest="replay_path", help="Replay deterministic log (.jsonl)")
-
-    p.add_argument("--seed", type=int, help="Per-script seed")
-    p.add_argument("--global-seed", type=int, help="Global base seed")
-
-    p.add_argument("--allow-ask", action="store_true", help="Enable input()/ask() in sandbox")
-    p.add_argument("--no-wait", action="store_true", help="Disable wait() in sandbox")
-    p.add_argument("--sandbox", dest="sandbox_profile", choices=["default", "finance", "data"], default="default",
-                  help="Runtime sandbox profile")
-    p.add_argument("--data-write", action="store_true", help="Allow data core writes")
-    p.add_argument("--data-batch-size", type=int, help="Maximum rows returned by data.next")
-    p.add_argument("--data-max-rows", type=int, help="Maximum SQLite query rows")
-
-    # Storage
-    p.add_argument("--no-storage", action="store_true", help="Disable storage APIs")
-    p.add_argument("--storage-dir", help="Base directory for storage (default: mellow_saves)")
-    p.add_argument("--unsafe-fs", action="store_true", help="Allow scripts to set storage_dir to absolute paths or use '..' (unsafe)")
-
-    # Debugger (v1.2.0)
-    p.add_argument("--trace", action="store_true", help="Trace executed lines")
-    p.add_argument("--step", action="store_true", help="Step execution (TTY interactive)")
-    p.add_argument("--break", dest="break_lines", help="Breakpoints by line, e.g. 12,20-25")
-    p.add_argument("--watch", help="Watch variables, e.g. hp,pos,target")
-    p.add_argument("--ai-timeline", dest="ai_timeline", help="Write AI decision timeline (.jsonl)")
-    p.add_argument("--color", action="store_true", help="Force colored errors")
-    p.add_argument("--no-color", action="store_true", help="Disable colored errors")
-
-    # compatibility flags (kept, but no longer required)
-    p.add_argument("--engine", action="store_true", help="(Compat) Ignored in v1.0.7+")
-    p.add_argument("--legacy", action="store_true", help="(Compat) Ignored in v1.0.7+")
-    p.add_argument("--emit", dest="emit_name", help="(Compat) Reserved for .fds workflows")
-    p.add_argument("--emit-args", dest="emit_args_raw", help="(Compat) JSON array args for --emit")
-
-    p.add_argument("--lsp", action="store_true", help="Start Language Server (stdio)")
-    p.add_argument("--version", action="version", version=f"{prog} {__version__}")
-    return p
-
-def _build_modern_parser() -> argparse.ArgumentParser:
-    prog = _prog()
-    p = argparse.ArgumentParser(
-        prog=prog,
-        formatter_class=argparse.RawTextHelpFormatter,
-        description=f"""MellowLang {__version__}
-
-Modern commands:
-  {prog} run <file>            Run a script
-  {prog} check <file>          Lint / syntax check
-  {prog} assistant <file>      Code assistant (summary + hints)
-  {prog} bench                 Run performance smoke benchmarks
-  {prog} security audit        Run local security checks
-  {prog} release-gate          Run benchmark + sandbox + package integrity gates
-  {prog} fmt <files...>        Format source
-  {prog} init <dir>            Create a project
-  {prog} modules [--json]      List allowed host modules
-  {prog} login --token <token> Authenticate to a registry
-  {prog} whoami                Show active registry identity
-  {prog} registry <url>        Set default registry
-  {prog} search <query>        Search packages
-  {prog} install <package>     Install package from registry
-  {prog} publish <dir>         Publish package to registry
-  {prog} seed-core <dir>       Generate starter packages for the Mellow ecosystem
-  {prog} sync-imports <dir>    Resolve imports, install missing deps, and write mellow.lock
-  {prog} resolve-runtime <dir> Build .mellow_runtime.json for package imports
-  {prog} update [name]         Update dependencies from registry/lockfile
-  {prog} uninstall <name>      Remove an installed dependency
-  {prog} lsp                   Start language server (stdio)
-""",
-    )
-    p.add_argument("--version", action="version", version=f"{prog} {__version__}")
-
-    sub = p.add_subparsers(dest="cmd")
-
-    pr = sub.add_parser("run", help="Run a script")
-    pr.add_argument("file")
-    pr.add_argument("--json", action="store_true")
-    pr.add_argument(
-        "--engine",
-        choices=["c", "auto", "py", "fast"],
-        default="c",
-        help="Execution engine (default: c; falls back to Python for unsupported runtime features)",
-    )
-    pr.add_argument("--record", dest="record_path")
-    pr.add_argument("--replay", dest="replay_path")
-    pr.add_argument("--seed", type=int)
-    pr.add_argument("--global-seed", type=int)
-    pr.add_argument("--allow-ask", action="store_true")
-    pr.add_argument("--no-wait", action="store_true")
-    pr.add_argument("--sandbox", dest="sandbox_profile", choices=["default", "finance", "data"], default="default",
-                    help="Runtime sandbox profile")
-    pr.add_argument("--data-write", action="store_true", help="Allow data.sqlite_execute and other data writes")
-    pr.add_argument("--data-batch-size", type=int, help="Maximum rows returned by data.next")
-    pr.add_argument("--data-max-rows", type=int, help="Maximum SQLite rows returned per query")
-    pr.add_argument("--data-max-record-bytes", type=int, help="Maximum encoded size of one streamed record")
-    pr.add_argument("--data-max-streams", type=int, help="Maximum concurrently open data streams")
-    pr.add_argument("--no-storage", action="store_true", help="Disable storage APIs")
-    pr.add_argument("--storage-dir", help="Base directory for storage (default: mellow_saves)")
-    pr.add_argument("--unsafe-fs", action="store_true", help="Allow scripts to set storage_dir to absolute paths or use '..' (unsafe)")
-    pr.add_argument("--max-steps", type=int, help="Sandbox step limit")
-    pr.add_argument("--max-ms", type=int, help="Sandbox time limit (milliseconds)")
-    pr.add_argument("--syscall-budget", type=int, help="Sandbox syscall budget")
-    pr.add_argument("--profile", action="store_true", help="Return execution stats")
-
-    # Debugger (v1.2.0)
-    pr.add_argument("--trace", action="store_true", help="Trace executed lines")
-    pr.add_argument("--step", action="store_true", help="Step execution (TTY interactive)")
-    pr.add_argument("--break", dest="break_lines", help="Breakpoints by line, e.g. 12,20-25")
-    pr.add_argument("--watch", help="Watch variables, e.g. hp,pos,target")
-    pr.add_argument("--ai-timeline", dest="ai_timeline", help="Write AI decision timeline (.jsonl)")
-    pr.add_argument("--registry", help="Registry base URL used for auto-resolve")
-    pr.add_argument("--no-resolve", action="store_true", help="Skip auto dependency/runtime resolution before run")
-
-    
-    pt = sub.add_parser("test", help="Run tests (optionally dual-engine)")
-    pt.add_argument("path", nargs="?", default="tests", help="File or directory (default: tests)")
-    pt.add_argument("--engine", choices=["py","c","dual"], default="dual")
-    pt.add_argument("--pattern", default="*.mellow", help="Glob pattern for test files")
-    pt.add_argument("--json", action="store_true")
-
-    prp = sub.add_parser("replay", help="Replay a recorded run")
-    prp.add_argument("file", help="Script to run")
-    prp.add_argument("--input", required=True, dest="replay_path", help="Replay log (.jsonl)")
-    prp.add_argument("--engine", choices=["auto","py","c"], default="auto")
-    prp.add_argument("--json", action="store_true")
-
-    pdiff = sub.add_parser("diff", help="Diff two replay logs (.jsonl)")
-    pdiff.add_argument("a")
-    pdiff.add_argument("b")
-    pdiff.add_argument("--json", action="store_true")
-
-    pcompile = sub.add_parser("compile", help="Compile a script to bytecode JSON or Python")
-    pcompile.add_argument("file")
-    pcompile.add_argument("--target", choices=["bytecode", "python"], default="bytecode")
-    pcompile.add_argument("--out")
-    pcompile.add_argument("--dump-ast", action="store_true", help="Print AST after parsing")
-    pcompile.add_argument("--dump-ir", action="store_true", help="Print lowered IR before optimization")
-    pcompile.add_argument("--dump-ir-optimized", action="store_true", help="Print optimized IR used for bytecode generation")
-    pcompile.add_argument("--dump-cfg", action="store_true", help="Print CFG before optimization")
-    pcompile.add_argument("--dump-cfg-optimized", action="store_true", help="Print CFG after optimization")
-    pcompile.add_argument("--dump-dom", action="store_true", help="Print dominator tree before optimization")
-    pcompile.add_argument("--dump-dom-optimized", action="store_true", help="Print dominator tree after optimization")
-    pcompile.add_argument("--dump-def-use", action="store_true", help="Print SSA-prep def-use chains before optimization")
-    pcompile.add_argument("--dump-def-use-optimized", action="store_true", help="Print SSA-prep def-use chains after optimization")
-    pcompile.add_argument("--dump-ssa", action="store_true", help="Print SSA metadata before optimization")
-    pcompile.add_argument("--dump-ssa-optimized", action="store_true", help="Print SSA metadata after optimization")
-    pcompile.add_argument("--dump-format", choices=["text", "json"], default="text")
-    pcompile.add_argument("--no-optimize", action="store_true", help="Disable IR optimization passes")
-
-    pbench = sub.add_parser("bench", help="Run performance smoke benchmarks")
-    pbench.add_argument("--rounds", type=int, default=5)
-    pbench.add_argument("--json", action="store_true")
-
-    psec = sub.add_parser("security", help="Security tools")
-    sec_sub = psec.add_subparsers(dest="security_cmd")
-    psec_audit = sec_sub.add_parser("audit", help="Run sandbox, AI policy, and package trust checks")
-    psec_audit.add_argument("--no-packages", action="store_true", help="Skip package trust checks")
-    psec_audit.add_argument("--strict", action="store_true", help="Treat warnings as failures")
-    psec_audit.add_argument("--json", action="store_true")
-
-    prg = sub.add_parser("release-gate", help="Run benchmark + sandbox + package integrity gates")
-    prg.add_argument("--rounds", type=int, default=3)
-    prg.add_argument("--json", action="store_true")
-
-    ppkg = sub.add_parser("pkg", help="Package manager (local + online registry)")
-    pkg_sub = ppkg.add_subparsers(dest="pkg_cmd")
-    pkg_init = pkg_sub.add_parser("init", help="Create mellow.pkg.json package")
-    pkg_init.add_argument("dir")
-    pkg_init.add_argument("--name")
-    pkg_init.add_argument("--entry", default="main.mellow")
-    pkg_publish = pkg_sub.add_parser("publish", help="Publish package")
-    pkg_publish.add_argument("dir")
-    pkg_publish.add_argument("--online", action="store_true", help="Publish to remote registry")
-    pkg_publish.add_argument("--registry", help="Registry base URL")
-    pkg_publish.add_argument("--token", help="Publish token; otherwise uses saved token or MELLOW_PUBLISH_TOKEN")
-    pkg_install = pkg_sub.add_parser("install", help="Install package")
-    pkg_install.add_argument("name")
-    pkg_install.add_argument("--version")
-    pkg_install.add_argument("--online", action="store_true", help="Install from remote registry")
-    pkg_install.add_argument("--registry", help="Registry base URL")
-    pkg_install.add_argument("--no-deps", action="store_true", help="Do not install package dependencies")
-    pkg_install.add_argument("--project-dir", help="Project directory to write mellow.lock into")
-    pkg_search = pkg_sub.add_parser("search", help="Search remote registry")
-    pkg_search.add_argument("query")
-    pkg_search.add_argument("--registry", help="Registry base URL")
-    pkg_login = pkg_sub.add_parser("login", help="Save token or login to remote registry")
-    pkg_login.add_argument("--token", help="Publish token")
-    pkg_login.add_argument("--username")
-    pkg_login.add_argument("--password")
-    pkg_login.add_argument("--registry", help="Registry base URL")
-    pkg_whoami = pkg_sub.add_parser("whoami", help="Show current registry identity")
-    pkg_whoami.add_argument("--registry", help="Registry base URL")
-    pkg_registry = pkg_sub.add_parser("registry", help="Configure default registry URL")
-    pkg_registry.add_argument("url")
-    pkg_list = pkg_sub.add_parser("list", help="List installed packages")
-    pkg_build = pkg_sub.add_parser("build", help="Build .mpkg archive")
-    pkg_build.add_argument("dir")
-    pkg_build.add_argument("--out")
-    pkg_seed = pkg_sub.add_parser("seed-core", help="Generate core starter packages for Mellow")
-    pkg_seed.add_argument("dir")
-    pkg_seed.add_argument("--publish-local", action="store_true", help="Publish generated packages into the local registry")
-    pkg_sync = pkg_sub.add_parser("sync-imports", help="Resolve project imports and write mellow.lock")
-    pkg_sync.add_argument("dir")
-    pkg_sync.add_argument("--registry", help="Registry base URL")
-    pkg_serve = pkg_sub.add_parser("serve", help="Run local registry server")
-    pkg_serve.add_argument("--host", default="127.0.0.1")
-    pkg_serve.add_argument("--port", type=int, default=8089)
-    pkg_serve.add_argument("--data-dir", default="mellow_registry_data")
-
-    pinstall = sub.add_parser("install", help="Install package from registry (pip-style)")
-    pinstall.add_argument("name")
-    pinstall.add_argument("--version")
-    pinstall.add_argument("--registry", help="Registry base URL")
-    pinstall.add_argument("--no-deps", action="store_true", help="Do not install package dependencies")
-    pinstall.add_argument("--project-dir", help="Project directory to write mellow.lock into")
-
-    padd = sub.add_parser("add", help="Add dependency to project manifest and install it")
-    padd.add_argument("name")
-    padd.add_argument("--version")
-    padd.add_argument("--registry", help="Registry base URL")
-    padd.add_argument("--project-dir", default=".")
-    padd.add_argument("--no-deps", action="store_true")
-    padd.add_argument("--alias", help="Install alias to remember for this package")
-    padd.add_argument("--interactive", action="store_true", help="Interactively choose from namespace suggestions")
-
-    prem = sub.add_parser("remove", help="Remove dependency from project manifest and uninstall it")
-    prem.add_argument("name")
-    prem.add_argument("--project-dir", default=".")
-
-    pdiag = sub.add_parser("diagnose-imports", help="Show import diagnostics and package suggestions")
-    pdiag.add_argument("dir")
-    pdiag.add_argument("--registry", help="Registry base URL")
-
-    psearch = sub.add_parser("search", help="Search public registry")
-    psearch.add_argument("query")
-    psearch.add_argument("--registry", help="Registry base URL")
-    psearch.add_argument("--interactive", action="store_true", help="Prompt to pick a package from results")
-
-    ppublish = sub.add_parser("publish", help="Publish package to registry")
-    ppublish.add_argument("dir")
-    ppublish.add_argument("--registry", help="Registry base URL")
-    ppublish.add_argument("--token", help="Publish token; otherwise uses saved token or MELLOW_PUBLISH_TOKEN")
-
-    pseed = sub.add_parser("seed-core", help="Generate recommended starter packages for Mellow")
-    pseed.add_argument("dir")
-    pseed.add_argument("--publish-local", action="store_true", help="Publish generated packages into the local registry")
-    psync = sub.add_parser("sync-imports", help="Resolve imports, install missing dependencies, and write mellow.lock")
-    psync.add_argument("dir")
-    psync.add_argument("--registry", help="Registry base URL")
-
-    plogin = sub.add_parser("login", help="Save a publish token for the registry")
-    plogin.add_argument("--token", help="Publish token to save")
-    plogin.add_argument("--username")
-    plogin.add_argument("--password")
-    plogin.add_argument("--registry", help="Registry base URL")
-
-    pwho = sub.add_parser("whoami", help="Show current registry identity")
-    pwho.add_argument("--registry", help="Registry base URL")
-
-    preg = sub.add_parser("registry", help="Configure default registry URL")
-    preg.add_argument("url")
-
-    plogout = sub.add_parser("logout", help="Remove saved auth token for a registry")
-    plogout.add_argument("--registry", help="Registry base URL")
-
-    pp = sub.add_parser("pack", help="Package a script (game/mod bundle)")
-    pp.add_argument("entry", help="Entry .mellow file")
-    pp.add_argument("--out", default="dist/mellow_pack.zip")
-    pp.add_argument("--include", action="append", default=[], help="Extra paths to include")
-    pp.add_argument("--name", default="mellow-pack")
-    pp.add_argument("--version", default=__version__)
-
-    pc = sub.add_parser("check", help="Check a script")
-    pc.add_argument("file")
-    pc.add_argument("--json", action="store_true")
-    pd = sub.add_parser("doctor", help="Check installation and environment")
-    pd.add_argument("--json", action="store_true")
-    pd.add_argument("--strict", action="store_true", help="Exit with code 1 when install/version mismatch is detected")
-
-    pn = sub.add_parser("native", help="Inspect or build the native Mellow VM")
-    pn_sub = pn.add_subparsers(dest="native_cmd")
-    pn_status = pn_sub.add_parser("status", help="Show native VM status")
-    pn_status.add_argument("--json", action="store_true")
-    pn_build = pn_sub.add_parser("build", help="Build the native VM extension in place")
-    pn_build.add_argument("--json", action="store_true")
-    pn_doctor = pn_sub.add_parser("doctor", help="Native VM diagnostics")
-    pn_doctor.add_argument("--json", action="store_true")
-
-    psr = sub.add_parser("standalone", help="Build or run the standalone Mellow VM runtime")
-    psr_sub = psr.add_subparsers(dest="standalone_cmd")
-    psr_status = psr_sub.add_parser("status", help="Show standalone runtime status")
-    psr_status.add_argument("--json", action="store_true")
-    psr_build = psr_sub.add_parser("build", help="Build the standalone runtime executable")
-    psr_build.add_argument("--json", action="store_true")
-    psr_build.add_argument("--build-dir")
-    psr_doctor = psr_sub.add_parser("doctor", help="Standalone runtime diagnostics")
-    psr_doctor.add_argument("--json", action="store_true")
-    psr_compile = psr_sub.add_parser("compile", help="Compile .mellow source to standalone image (.mvi)")
-    psr_compile.add_argument("input")
-    psr_compile.add_argument("-o", "--out")
-    psr_compile.add_argument("--json", action="store_true")
-    psr_compile.add_argument("--no-optimize", action="store_true")
-    psr_run = psr_sub.add_parser("run", help="Run a standalone image via the standalone Mellow VM")
-    psr_run.add_argument("image")
-    psr_run.add_argument("--binary")
-    psr_run.add_argument("--json", action="store_true")
-
-    pe = sub.add_parser("explain", help="Explain an error id")
-    pe.add_argument("error_id", help="Example: E001")
-    pe.add_argument("--json", action="store_true")
-
-    pa = sub.add_parser("assistant", help="Mellow Code Assistant (summary + hints)")
-    pa.add_argument("file")
-    pa.add_argument("--mode", choices=["summary", "diagnose"], default="summary")
-    pa.add_argument("--json", action="store_true")
-
-    pf = sub.add_parser("fmt", help="Format files")
-    pf.add_argument("files", nargs="+")
-    pf.add_argument("-w", "--write", action="store_true")
-    pf.add_argument("--check", action="store_true")
-
-    pi = sub.add_parser("init", help="Create project from template")
-    pi.add_argument("dir")
-    pi.add_argument("--force", action="store_true")
-
-    pnw = sub.add_parser("new", help="Scaffold a new Mellow project with starter packages")
-    pnw.add_argument("dir")
-    pnw.add_argument("--force", action="store_true")
-    pnw.add_argument("--no-core", action="store_true", help="Do not preload starter core packages")
-    pnw.add_argument("--preset", default="starter")
-
-    pdesk = sub.add_parser("desktop", help="Desktop/window host for Mellow app presets")
-    pdesk_sub = pdesk.add_subparsers(dest="desktop_cmd")
-    pdesk_run = pdesk_sub.add_parser("run", help="Open a desktop window from a .mel file")
-    pdesk_run.add_argument("file")
-    pdesk_run.add_argument("--dump-spec", action="store_true")
-    pdesk_build = pdesk_sub.add_parser("build", help="Build a portable desktop app bundle (no PyInstaller)")
-    pdesk_build.add_argument("file")
-    pdesk_build.add_argument("--out", default="dist/desktop")
-    pdesk_build.add_argument("--name")
-    pdesk_build.add_argument("--onefile", action="store_true")
-    pdesk_build.add_argument("--console", action="store_true")
-    pdesk_build.add_argument("--json", action="store_true")
-    pdesk_status = pdesk_sub.add_parser("status", help="Show desktop host availability")
-    pdesk_status.add_argument("--json", action="store_true")
-
-    pmmg = sub.add_parser("mmg", help="Mellow Magic Graphics runtime")
-    pmmg_sub = pmmg.add_subparsers(dest="mmg_cmd")
-    pmmg_run = pmmg_sub.add_parser("run", help="Open a MMG canvas from a .mel file")
-    pmmg_run.add_argument("file")
-    pmmg_run.add_argument("--dump-spec", action="store_true")
-    pmmg_run_native = pmmg_sub.add_parser("run-native", help="Run MMG through the native SDL2/OpenGL backend")
-    pmmg_run_native.add_argument("file")
-    pmmg_run_native.add_argument("--build-if-missing", action="store_true")
-    pmmg_run_native.add_argument("--keep-scene", action="store_true")
-    pmmg_run_native.add_argument("--scene-out")
-    pmmg_export_native = pmmg_sub.add_parser("export-native", help="Export a .mel file to a native .mmgscene command file")
-    pmmg_export_native.add_argument("file")
-    pmmg_export_native.add_argument("-o", "--out", required=True)
-    pmmg_build_native = pmmg_sub.add_parser("build-native", help="Build the native MMG SDL2/OpenGL backend")
-    pmmg_build_native.add_argument("--json", action="store_true")
-    pmmg_status = pmmg_sub.add_parser("status", help="Show MMG runtime availability")
-    pmmg_status.add_argument("--json", action="store_true")
-
-    psm = sub.add_parser("sm", help="Mellow Smallless reversible compression")
-    psm_sub = psm.add_subparsers(dest="sm_cmd")
-    psm_pack = psm_sub.add_parser("pack", help="Compress a text file into .sm")
-    psm_pack.add_argument("input")
-    psm_pack.add_argument("-o", "--out")
-    psm_pack.add_argument("--json", action="store_true")
-    psm_unpack = psm_sub.add_parser("unpack", help="Restore a .sm file")
-    psm_unpack.add_argument("input")
-    psm_unpack.add_argument("-o", "--out")
-    psm_unpack.add_argument("--json", action="store_true")
-    psm_inspect = psm_sub.add_parser("inspect", help="Inspect a .sm file")
-    psm_inspect.add_argument("input")
-    psm_inspect.add_argument("--json", action="store_true")
-
-    pmelv = sub.add_parser("melv", help="Mellow video container tools")
-    pmelv_sub = pmelv.add_subparsers(dest="melv_cmd")
-    pmelv_encode = pmelv_sub.add_parser("encode", help="Encode a video file into .melv")
-    pmelv_encode.add_argument("input")
-    pmelv_encode.add_argument("-o", "--out", required=True)
-    pmelv_encode.add_argument("--fps", type=float)
-    pmelv_encode.add_argument("--max-frames", type=int)
-    pmelv_encode.add_argument("--json", action="store_true")
-    pmelv_decode = pmelv_sub.add_parser("decode", help="Decode a .melv file back to a video")
-    pmelv_decode.add_argument("input")
-    pmelv_decode.add_argument("-o", "--out", required=True)
-    pmelv_decode.add_argument("--json", action="store_true")
-    pmelv_extract = pmelv_sub.add_parser("extract", help="Extract frames from a .melv file")
-    pmelv_extract.add_argument("input")
-    pmelv_extract.add_argument("-o", "--out", required=True)
-    pmelv_extract.add_argument("--json", action="store_true")
-    pmelv_inspect = pmelv_sub.add_parser("inspect", help="Inspect a .melv file")
-    pmelv_inspect.add_argument("input")
-    pmelv_inspect.add_argument("--json", action="store_true")
-
-    pm = sub.add_parser("modules", help="List allowed host modules")
-    pm.add_argument("--json", action="store_true")
-
-    pagent = sub.add_parser("agent", help="AI-native agent runtime")
-    pagent.set_defaults(_agent_help_parser=pagent)
-    agent_sub = pagent.add_subparsers(dest="agent_cmd")
-    pa_run = agent_sub.add_parser("run", help="Run a single agent task")
-    pa_run.add_argument("--task", required=True)
-    pa_run.add_argument("--model", default="rule-based")
-    pa_run.add_argument("--memory", default=".mellow/agent_memory.jsonl")
-    pa_run.add_argument("--obs", default=".mellow/agent_observability.jsonl")
-    pa_run.add_argument("--tool", dest="tools", action="append", default=[])
-    pa_run.add_argument("--allow-tool", dest="allow_tools", action="append", default=[])
-    pa_run.add_argument("--deny-tool", dest="deny_tools", action="append", default=[])
-    pa_run.add_argument("--rag-file")
-    pa_run.add_argument("--prompt-file")
-    pa_run.add_argument("--tool-manifest")
-    pa_run.add_argument("--package")
-    pa_run.add_argument("--sandbox", action="store_true")
-    pa_run.add_argument("--allow-cap", dest="allow_caps", action="append", default=[])
-    pa_run.add_argument("--deny-cap", dest="deny_caps", action="append", default=[])
-    pa_run.add_argument("--secret", dest="secrets", action="append", default=[])
-    pa_run.add_argument("--timeout-ms", type=int)
-    pa_run.add_argument("--debug", action="store_true")
-    pa_run.add_argument("--policy-file")
-    pa_run.add_argument("--policy-key")
-    pa_run.add_argument("--structured", choices=["auto", "text"], default="auto")
-    pa_run.add_argument("--json", action="store_true")
-
-    pa_workflow = agent_sub.add_parser("workflow", help="Run a built-in agent workflow")
-    pa_workflow.add_argument("--task", required=True)
-    pa_workflow.add_argument("--model", default="rule-based")
-    pa_workflow.add_argument("--memory", default=".mellow/agent_memory.jsonl")
-    pa_workflow.add_argument("--obs", default=".mellow/agent_observability.jsonl")
-    pa_workflow.add_argument("--rag-file")
-    pa_workflow.add_argument("--package")
-    pa_workflow.add_argument("--sandbox", action="store_true")
-    pa_workflow.add_argument("--allow-cap", dest="allow_caps", action="append", default=[])
-    pa_workflow.add_argument("--deny-cap", dest="deny_caps", action="append", default=[])
-    pa_workflow.add_argument("--secret", dest="secrets", action="append", default=[])
-    pa_workflow.add_argument("--retries", type=int, default=1)
-    pa_workflow.add_argument("--timeout-ms", type=int, default=2000)
-    pa_workflow.add_argument("--parallel", action="store_true")
-    pa_workflow.add_argument("--debug", action="store_true")
-    pa_workflow.add_argument("--policy-file")
-    pa_workflow.add_argument("--policy-key")
-    pa_workflow.add_argument("--json", action="store_true")
-
-    pa_demo = agent_sub.add_parser("demo", help="Print a concise Mellow 1.7 feature overview")
-    pa_demo.add_argument("--json", action="store_true")
-
-    pa_inspect = agent_sub.add_parser("inspect-log", help="Inspect an observability log")
-    pa_inspect.add_argument("path")
-    pa_inspect.add_argument("--json", action="store_true")
-
-    pa_trace = agent_sub.add_parser("trace", help="Summarize an observability log")
-    pa_trace.add_argument("path")
-    pa_trace.add_argument("--json", action="store_true")
-
-    pa_preview = agent_sub.add_parser("preview", help="Preview an agent package")
-    pa_preview.add_argument("ref")
-    pa_preview.add_argument("--json", action="store_true")
-
-    pa_pdebug = agent_sub.add_parser("prompt-debug", help="Render and inspect a prompt file")
-    pa_pdebug.add_argument("path")
-    pa_pdebug.add_argument("--task", default="demo task")
-    pa_pdebug.add_argument("--json", action="store_true")
-
-    pplay = sub.add_parser("playground", help="Run the Mellow code playground UI")
-    pplay.add_argument("--host", default="127.0.0.1")
-    pplay.add_argument("--port", type=int, default=8765)
-    pplay.add_argument("--build-only", action="store_true", help="Write static playground assets without starting the server")
-    pplay.add_argument("--out", default=".mellow/playground", help="Output directory for static assets")
-    pplay.add_argument("--json", action="store_true")
-
-    pa_play = agent_sub.add_parser("playground", help="Generate or serve a local playground")
-    pa_play.add_argument("--out", default=".mellow/playground/index.html")
-    pa_play.add_argument("--serve", action="store_true")
-    pa_play.add_argument("--port", type=int, default=8765)
-    pa_play.add_argument("--json", action="store_true")
-
-    pa_serve = agent_sub.add_parser("serve", help="Serve an agent package over HTTP")
-    pa_serve.add_argument("--package")
-    pa_serve.add_argument("--deployment-manifest")
-    pa_serve.add_argument("--host", default="127.0.0.1")
-    pa_serve.add_argument("--port", type=int, default=8787)
-    pa_serve.add_argument("--json", action="store_true")
-
-    pa_market = agent_sub.add_parser("marketplace", help="Browse local or remote agent marketplace results")
-    pa_market.add_argument("query", nargs='?', default="agent")
-    pa_market.add_argument("--online", action="store_true")
-    pa_market.add_argument("--registry")
-    pa_market.add_argument("--json", action="store_true")
-
-    pa_deploy = agent_sub.add_parser("deploy", help="Create a deployment bundle for an agent package")
-    pa_deploy.add_argument("ref")
-    pa_deploy.add_argument("--out", default=".mellow/deploy")
-    pa_deploy.add_argument("--public-url")
-    pa_deploy.add_argument("--host")
-    pa_deploy.add_argument("--port", type=int)
-    pa_deploy.add_argument("--target", choices=["local-http", "docker", "cloudflare-workers", "vercel"], default="local-http")
-    pa_deploy.add_argument("--control-plane")
-    pa_deploy.add_argument("--json", action="store_true")
-
-    pa_cp = agent_sub.add_parser("control-plane", help="Manage local or remote hosted deployment state")
-    cp_sub = pa_cp.add_subparsers(dest="agent_cp_cmd")
-    pa_cp_reg = cp_sub.add_parser("register", help="Register a deployment manifest in the local control plane state")
-    pa_cp_reg.add_argument("manifest")
-    pa_cp_reg.add_argument("--bundle-dir", default=".")
-    pa_cp_reg.add_argument("--control-plane")
-    pa_cp_reg.add_argument("--revision-notes")
-    pa_cp_reg.add_argument("--json", action="store_true")
-    pa_cp_sync = cp_sub.add_parser("sync", help="Sync a deployment bundle to a local or remote control plane")
-    pa_cp_sync.add_argument("manifest")
-    pa_cp_sync.add_argument("--bundle-dir", default=".")
-    pa_cp_sync.add_argument("--control-plane")
-    pa_cp_sync.add_argument("--token")
-    pa_cp_sync.add_argument("--revision-notes")
-    pa_cp_sync.add_argument("--json", action="store_true")
-    pa_cp_ls = cp_sub.add_parser("list", help="List known hosted deployments")
-    pa_cp_ls.add_argument("--control-plane")
-    pa_cp_ls.add_argument("--token")
-    pa_cp_ls.add_argument("--json", action="store_true")
-    pa_cp_status = cp_sub.add_parser("status", help="Show hosted deployment status")
-    pa_cp_status.add_argument("ref")
-    pa_cp_status.add_argument("--control-plane")
-    pa_cp_status.add_argument("--token")
-    pa_cp_status.add_argument("--json", action="store_true")
-    pa_cp_rev = cp_sub.add_parser("revisions", help="List revisions for a hosted deployment")
-    pa_cp_rev.add_argument("ref")
-    pa_cp_rev.add_argument("--control-plane")
-    pa_cp_rev.add_argument("--token")
-    pa_cp_rev.add_argument("--json", action="store_true")
-    pa_cp_roll = cp_sub.add_parser("rollout", help="Promote a deployment revision")
-    pa_cp_roll.add_argument("ref")
-    pa_cp_roll.add_argument("--revision", type=int, required=True)
-    pa_cp_roll.add_argument("--canary-percent", type=int)
-    pa_cp_roll.add_argument("--control-plane")
-    pa_cp_roll.add_argument("--token")
-    pa_cp_roll.add_argument("--json", action="store_true")
-    pa_cp_health = cp_sub.add_parser("health", help="Run deployment health checks")
-    pa_cp_health.add_argument("ref")
-    pa_cp_health.add_argument("--control-plane")
-    pa_cp_health.add_argument("--token")
-    pa_cp_health.add_argument("--json", action="store_true")
-    pa_cp_traffic = cp_sub.add_parser("traffic", help="Update stable/canary traffic split")
-    pa_cp_traffic.add_argument("ref")
-    pa_cp_traffic.add_argument("--stable", type=int, required=True)
-    pa_cp_traffic.add_argument("--canary", type=int, required=True)
-    pa_cp_traffic.add_argument("--control-plane")
-    pa_cp_traffic.add_argument("--token")
-    pa_cp_traffic.add_argument("--json", action="store_true")
-    pa_cp_rollback = cp_sub.add_parser("rollback", help="Rollback a deployment")
-    pa_cp_rollback.add_argument("ref")
-    pa_cp_rollback.add_argument("--revision", type=int)
-    pa_cp_rollback.add_argument("--control-plane")
-    pa_cp_rollback.add_argument("--token")
-    pa_cp_rollback.add_argument("--json", action="store_true")
-
-    pa_cp_metrics = cp_sub.add_parser("metrics", help="Record or inspect deployment metrics")
-    pa_cp_metrics.add_argument("ref")
-    pa_cp_metrics.add_argument("--cpu", type=float)
-    pa_cp_metrics.add_argument("--memory", type=float)
-    pa_cp_metrics.add_argument("--rps", type=float)
-    pa_cp_metrics.add_argument("--p95-ms", dest="p95_ms", type=float)
-    pa_cp_metrics.add_argument("--error-rate", dest="error_rate", type=float)
-    pa_cp_metrics.add_argument("--replicas", type=int)
-    pa_cp_metrics.add_argument("--queued-requests", dest="queued_requests", type=int)
-    pa_cp_metrics.add_argument("--in-flight", dest="in_flight", type=int)
-    pa_cp_metrics.add_argument("--control-plane")
-    pa_cp_metrics.add_argument("--token")
-    pa_cp_metrics.add_argument("--json", action="store_true")
-    pa_cp_signals = cp_sub.add_parser("signals", help="Show autoscaling signals for a deployment")
-    pa_cp_signals.add_argument("ref")
-    pa_cp_signals.add_argument("--control-plane")
-    pa_cp_signals.add_argument("--token")
-    pa_cp_signals.add_argument("--json", action="store_true")
-    pa_cp_alert_rules = cp_sub.add_parser("alert-rules", help="Set or inspect deployment alert rules")
-    pa_cp_alert_rules.add_argument("ref")
-    pa_cp_alert_rules.add_argument("--file")
-    pa_cp_alert_rules.add_argument("--control-plane")
-    pa_cp_alert_rules.add_argument("--token")
-    pa_cp_alert_rules.add_argument("--json", action="store_true")
-    pa_cp_alerts = cp_sub.add_parser("alerts", help="Evaluate deployment alert rules")
-    pa_cp_alerts.add_argument("ref")
-    pa_cp_alerts.add_argument("--control-plane")
-    pa_cp_alerts.add_argument("--token")
-    pa_cp_alerts.add_argument("--json", action="store_true")
-
-    pa_secret = agent_sub.add_parser("secret", help="Manage agent secrets")
-    secret_sub = pa_secret.add_subparsers(dest="agent_secret_cmd")
-    pa_secret_set = secret_sub.add_parser("set", help="Set a secret")
-    pa_secret_set.add_argument("name")
-    pa_secret_set.add_argument("value")
-    pa_secret_set.add_argument("--scope", dest="scopes", action="append", default=[])
-    pa_secret_set.add_argument("--description")
-    pa_secret_set.add_argument("--json", action="store_true")
-    pa_secret_rm = secret_sub.add_parser("remove", help="Remove a secret")
-    pa_secret_rm.add_argument("name")
-    pa_secret_rm.add_argument("--json", action="store_true")
-    pa_secret_ls = secret_sub.add_parser("list", help="List stored secrets")
-    pa_secret_ls.add_argument("--json", action="store_true")
-
-
-    pa_sched = agent_sub.add_parser("schedule", help="Manage scheduled agent jobs")
-    sched_sub = pa_sched.add_subparsers(dest="agent_sched_cmd")
-    pa_sched_add = sched_sub.add_parser("add", help="Add a cron-scheduled agent job")
-    pa_sched_add.add_argument("--name", required=True)
-    pa_sched_add.add_argument("--cron", required=True)
-    pa_sched_add.add_argument("--task", required=True)
-    pa_sched_add.add_argument("--kind", choices=["run", "workflow"], default="run")
-    pa_sched_add.add_argument("--package")
-    pa_sched_add.add_argument("--model", default="rule-based")
-    pa_sched_add.add_argument("--memory", default=".mellow/agent_memory.jsonl")
-    pa_sched_add.add_argument("--obs", default=".mellow/agent_observability.jsonl")
-    pa_sched_add.add_argument("--rag-file")
-    pa_sched_add.add_argument("--retries", type=int, default=1)
-    pa_sched_add.add_argument("--timeout-ms", type=int)
-    pa_sched_add.add_argument("--parallel", action="store_true")
-    pa_sched_add.add_argument("--sandbox", action="store_true")
-    pa_sched_add.add_argument("--allow-cap", dest="allow_caps", action="append", default=[])
-    pa_sched_add.add_argument("--secret", dest="secrets", action="append", default=[])
-    pa_sched_add.add_argument("--backoff", choices=["fixed", "exponential", "jitter"], default="fixed")
-    pa_sched_add.add_argument("--backoff-delay-ms", type=int, default=0)
-    pa_sched_add.add_argument("--backoff-max-ms", type=int, default=30000)
-    pa_sched_add.add_argument("--json", action="store_true")
-    pa_sched_list = sched_sub.add_parser("list", help="List scheduled jobs")
-    pa_sched_list.add_argument("--json", action="store_true")
-    pa_sched_due = sched_sub.add_parser("run-due", help="Run all jobs due right now")
-    pa_sched_due.add_argument("--json", action="store_true")
-
-    pa_runner = agent_sub.add_parser("runner", help="Run scheduled jobs in a background-style loop")
-    runner_sub = pa_runner.add_subparsers(dest="agent_runner_cmd")
-    pa_runner_start = runner_sub.add_parser("start", help="Start the runner loop")
-    pa_runner_start.add_argument("--interval-s", type=float, default=1.0)
-    pa_runner_start.add_argument("--iterations", type=int, default=1)
-    pa_runner_start.add_argument("--queue-backed", action="store_true")
-    pa_runner_start.add_argument("--queue-limit", type=int)
-    pa_runner_start.add_argument("--workers", type=int, default=1)
-    pa_runner_start.add_argument("--json", action="store_true")
-    pa_runner_status = runner_sub.add_parser("status", help="Show runner status")
-    pa_runner_status.add_argument("--json", action="store_true")
-
-    pa_trigger = agent_sub.add_parser("trigger", help="Manage event triggers")
-    trigger_sub = pa_trigger.add_subparsers(dest="agent_trigger_cmd")
-    pa_trigger_add = trigger_sub.add_parser("add", help="Add an event trigger")
-    pa_trigger_add.add_argument("--name", required=True)
-    pa_trigger_add.add_argument("--event", required=True)
-    pa_trigger_add.add_argument("--task", required=True)
-    pa_trigger_add.add_argument("--kind", choices=["run", "workflow"], default="run")
-    pa_trigger_add.add_argument("--package")
-    pa_trigger_add.add_argument("--model", default="rule-based")
-    pa_trigger_add.add_argument("--memory", default=".mellow/agent_memory.jsonl")
-    pa_trigger_add.add_argument("--obs", default=".mellow/agent_observability.jsonl")
-    pa_trigger_add.add_argument("--rag-file")
-    pa_trigger_add.add_argument("--retries", type=int, default=1)
-    pa_trigger_add.add_argument("--timeout-ms", type=int)
-    pa_trigger_add.add_argument("--parallel", action="store_true")
-    pa_trigger_add.add_argument("--sandbox", action="store_true")
-    pa_trigger_add.add_argument("--allow-cap", dest="allow_caps", action="append", default=[])
-    pa_trigger_add.add_argument("--secret", dest="secrets", action="append", default=[])
-    pa_trigger_add.add_argument("--filter", dest="filters", action="append", default=[])
-    pa_trigger_add.add_argument("--backoff", choices=["fixed", "exponential", "jitter"], default="fixed")
-    pa_trigger_add.add_argument("--backoff-delay-ms", type=int, default=0)
-    pa_trigger_add.add_argument("--backoff-max-ms", type=int, default=30000)
-    pa_trigger_add.add_argument("--json", action="store_true")
-    pa_trigger_list = trigger_sub.add_parser("list", help="List event triggers")
-    pa_trigger_list.add_argument("--json", action="store_true")
-    pa_trigger_emit = trigger_sub.add_parser("emit", help="Emit an event and enqueue matching jobs")
-    pa_trigger_emit.add_argument("event")
-    pa_trigger_emit.add_argument("--payload")
-    pa_trigger_emit.add_argument("--json", action="store_true")
-
-    pa_webhook = agent_sub.add_parser("webhook", help="Manage webhook-triggered jobs")
-    webhook_sub = pa_webhook.add_subparsers(dest="agent_webhook_cmd")
-    pa_webhook_add = webhook_sub.add_parser("add", help="Create a webhook job")
-    pa_webhook_add.add_argument("--name", required=True)
-    pa_webhook_add.add_argument("--event", required=True)
-    pa_webhook_add.add_argument("--task", required=True)
-    pa_webhook_add.add_argument("--token")
-    pa_webhook_add.add_argument("--kind", choices=["run", "workflow"], default="run")
-    pa_webhook_add.add_argument("--package")
-    pa_webhook_add.add_argument("--model", default="rule-based")
-    pa_webhook_add.add_argument("--memory", default=".mellow/agent_memory.jsonl")
-    pa_webhook_add.add_argument("--obs", default=".mellow/agent_observability.jsonl")
-    pa_webhook_add.add_argument("--rag-file")
-    pa_webhook_add.add_argument("--retries", type=int, default=1)
-    pa_webhook_add.add_argument("--timeout-ms", type=int)
-    pa_webhook_add.add_argument("--parallel", action="store_true")
-    pa_webhook_add.add_argument("--sandbox", action="store_true")
-    pa_webhook_add.add_argument("--allow-cap", dest="allow_caps", action="append", default=[])
-    pa_webhook_add.add_argument("--secret", dest="secrets", action="append", default=[])
-    pa_webhook_add.add_argument("--backoff", choices=["fixed", "exponential", "jitter"], default="fixed")
-    pa_webhook_add.add_argument("--backoff-delay-ms", type=int, default=0)
-    pa_webhook_add.add_argument("--backoff-max-ms", type=int, default=30000)
-    pa_webhook_add.add_argument("--json", action="store_true")
-    pa_webhook_list = webhook_sub.add_parser("list", help="List webhook jobs")
-    pa_webhook_list.add_argument("--json", action="store_true")
-    pa_webhook_recv = webhook_sub.add_parser("receive", help="Receive a webhook payload and enqueue matching jobs")
-    pa_webhook_recv.add_argument("name")
-    pa_webhook_recv.add_argument("--token")
-    pa_webhook_recv.add_argument("--payload")
-    pa_webhook_recv.add_argument("--json", action="store_true")
-    pa_webhook_serve = webhook_sub.add_parser("serve", help="Start an HTTP webhook server")
-    pa_webhook_serve.add_argument("--host", default="127.0.0.1")
-    pa_webhook_serve.add_argument("--port", type=int, default=8788)
-    pa_webhook_serve.add_argument("--token-header", default="X-Mellow-Webhook-Token")
-    pa_webhook_serve.add_argument("--no-job-api", action="store_true")
-    pa_webhook_serve.add_argument("--json", action="store_true")
-    pa_webhook_status = webhook_sub.add_parser("status", help="Show webhook server status")
-    pa_webhook_status.add_argument("--json", action="store_true")
-
-    pa_queue = agent_sub.add_parser("queue", help="Inspect and run queue-backed jobs")
-    queue_sub = pa_queue.add_subparsers(dest="agent_queue_cmd")
-    pa_queue_list = queue_sub.add_parser("list", help="List queue items")
-    pa_queue_list.add_argument("--json", action="store_true")
-    pa_queue_run = queue_sub.add_parser("run", help="Drain queued jobs")
-    pa_queue_run.add_argument("--limit", type=int)
-    pa_queue_run.add_argument("--workers", type=int, default=1)
-    pa_queue_run.add_argument("--json", action="store_true")
-    pa_queue_stats = queue_sub.add_parser("stats", help="Show queue stats")
-    pa_queue_stats.add_argument("--json", action="store_true")
-    pa_queue_dlq = queue_sub.add_parser("dead-letter", help="List dead-letter queue items")
-    pa_queue_dlq.add_argument("--json", action="store_true")
-    pa_queue_retry = queue_sub.add_parser("retry", help="Requeue a dead-letter item")
-    pa_queue_retry.add_argument("item_id")
-    pa_queue_retry.add_argument("--json", action="store_true")
-    pa_queue_log = queue_sub.add_parser("log", help="Show durable queue log")
-    pa_queue_log.add_argument("--limit", type=int, default=50)
-    pa_queue_log.add_argument("--json", action="store_true")
-
-    pa_jobs = agent_sub.add_parser("jobs", help="Persistent HTTP job API and direct job submission")
-    jobs_sub = pa_jobs.add_subparsers(dest="agent_jobs_cmd")
-    pa_jobs_submit = jobs_sub.add_parser("submit", help="Submit a job directly into the durable queue")
-    pa_jobs_submit.add_argument("--task", required=True)
-    pa_jobs_submit.add_argument("--name")
-    pa_jobs_submit.add_argument("--kind", choices=["run", "workflow"], default="run")
-    pa_jobs_submit.add_argument("--package")
-    pa_jobs_submit.add_argument("--model", default="rule-based")
-    pa_jobs_submit.add_argument("--memory", default=".mellow/agent_memory.jsonl")
-    pa_jobs_submit.add_argument("--obs", default=".mellow/agent_observability.jsonl")
-    pa_jobs_submit.add_argument("--rag-file")
-    pa_jobs_submit.add_argument("--retries", type=int, default=1)
-    pa_jobs_submit.add_argument("--timeout-ms", type=int)
-    pa_jobs_submit.add_argument("--parallel", action="store_true")
-    pa_jobs_submit.add_argument("--sandbox", action="store_true")
-    pa_jobs_submit.add_argument("--allow-cap", dest="allow_caps", action="append", default=[])
-    pa_jobs_submit.add_argument("--secret", dest="secrets", action="append", default=[])
-    pa_jobs_submit.add_argument("--payload")
-    pa_jobs_submit.add_argument("--backoff", choices=["fixed", "exponential", "jitter"], default="fixed")
-    pa_jobs_submit.add_argument("--backoff-delay-ms", type=int, default=0)
-    pa_jobs_submit.add_argument("--backoff-max-ms", type=int, default=30000)
-    pa_jobs_submit.add_argument("--json", action="store_true")
-    pa_jobs_list = jobs_sub.add_parser("list", help="List jobs from the durable queue")
-    pa_jobs_list.add_argument("--json", action="store_true")
-    pa_jobs_get = jobs_sub.add_parser("get", help="Get a job by id")
-    pa_jobs_get.add_argument("job_id")
-    pa_jobs_get.add_argument("--json", action="store_true")
-    pa_jobs_serve = jobs_sub.add_parser("serve", help="Serve the persistent HTTP job API")
-    pa_jobs_serve.add_argument("--host", default="127.0.0.1")
-    pa_jobs_serve.add_argument("--port", type=int, default=8788)
-    pa_jobs_serve.add_argument("--json", action="store_true")
-    pa_jobs_status = jobs_sub.add_parser("status", help="Show HTTP job API server status")
-    pa_jobs_status.add_argument("--json", action="store_true")
-
-    pa_pkg = agent_sub.add_parser("package", help="Create or run an agent package")
-    pkg_sub = pa_pkg.add_subparsers(dest="agent_pkg_cmd")
-    pa_pkg_init = pkg_sub.add_parser("init", help="Create a starter agent package")
-    pa_pkg_init.add_argument("dir")
-    pa_pkg_init.add_argument("--name", default="demo.agent")
-    pa_pkg_init.add_argument("--force", action="store_true")
-    pa_pkg_run = pkg_sub.add_parser("run", help="Run an agent package")
-    pa_pkg_run.add_argument("dir")
-    pa_pkg_run.add_argument("--task", required=True)
-    pa_pkg_run.add_argument("--json", action="store_true")
-    pa_pkg_build = pkg_sub.add_parser("build", help="Build an agent package archive")
-    pa_pkg_build.add_argument("dir")
-    pa_pkg_build.add_argument("--out")
-    pa_pkg_build.add_argument("--signing-key")
-    pa_pkg_build.add_argument("--signer")
-    pa_pkg_build.add_argument("--lock", action="store_true")
-    pa_pkg_build.add_argument("--json", action="store_true")
-    pa_pkg_publish = pkg_sub.add_parser("publish", help="Publish an agent package to local or remote registry")
-    pa_pkg_publish.add_argument("dir")
-    pa_pkg_publish.add_argument("--online", action="store_true")
-    pa_pkg_publish.add_argument("--registry")
-    pa_pkg_publish.add_argument("--token")
-    pa_pkg_publish.add_argument("--signing-key")
-    pa_pkg_publish.add_argument("--signer")
-    pa_pkg_publish.add_argument("--private", action="store_true")
-    pa_pkg_publish.add_argument("--lock", action="store_true")
-    pa_pkg_publish.add_argument("--json", action="store_true")
-    pa_pkg_install = pkg_sub.add_parser("install", help="Install an agent package from local or remote registry")
-    pa_pkg_install.add_argument("name", nargs='?')
-    pa_pkg_install.add_argument("--version")
-    pa_pkg_install.add_argument("--online", action="store_true")
-    pa_pkg_install.add_argument("--registry")
-    pa_pkg_install.add_argument("--target-dir")
-    pa_pkg_install.add_argument("--verify-key")
-    pa_pkg_install.add_argument("--lockfile")
-    pa_pkg_install.add_argument("--frozen", action="store_true")
-    pa_pkg_install.add_argument("--private", action="store_true")
-    pa_pkg_install.add_argument("--json", action="store_true")
-    pa_pkg_search = pkg_sub.add_parser("search", help="Search agent packages")
-    pa_pkg_search.add_argument("query")
-    pa_pkg_search.add_argument("--online", action="store_true")
-    pa_pkg_search.add_argument("--registry")
-    pa_pkg_search.add_argument("--private", action="store_true")
-    pa_pkg_search.add_argument("--json", action="store_true")
-    pa_pkg_graph = pkg_sub.add_parser("graph", help="Show agent package dependency graph")
-    pa_pkg_graph.add_argument("ref")
-    pa_pkg_graph.add_argument("--json", action="store_true")
-    pa_pkg_lock = pkg_sub.add_parser("lock", help="Generate an agent lockfile")
-    pa_pkg_lock.add_argument("dir")
-    pa_pkg_lock.add_argument("--json", action="store_true")
-    pa_reg = agent_sub.add_parser("registry", help="Manage agent registry auth")
-    reg_sub = pa_reg.add_subparsers(dest="agent_reg_cmd")
-    pa_reg_login = reg_sub.add_parser("login", help="Save agent registry token")
-    pa_reg_login.add_argument("--registry")
-    pa_reg_login.add_argument("--token", required=True)
-    pa_reg_login.add_argument("--private", action="store_true")
-    pa_reg_login.add_argument("--json", action="store_true")
-    pa_reg_logout = reg_sub.add_parser("logout", help="Clear agent registry token")
-    pa_reg_logout.add_argument("--registry")
-    pa_reg_logout.add_argument("--private", action="store_true")
-    pa_reg_logout.add_argument("--json", action="store_true")
-    pa_reg_whoami = reg_sub.add_parser("whoami", help="Show saved agent registry auth status")
-    pa_reg_whoami.add_argument("--registry")
-    pa_reg_whoami.add_argument("--json", action="store_true")
-
-    pa_policy = agent_sub.add_parser("policy", help="Sign or verify capability policies")
-    policy_sub = pa_policy.add_subparsers(dest="agent_policy_cmd")
-    pa_policy_sign = policy_sub.add_parser("sign", help="Sign a capability policy JSON file")
-    pa_policy_sign.add_argument("path")
-    pa_policy_sign.add_argument("--key", required=True)
-    pa_policy_sign.add_argument("--signer")
-    pa_policy_sign.add_argument("--json", action="store_true")
-    pa_policy_verify = policy_sub.add_parser("verify", help="Verify a signed capability policy JSON file")
-    pa_policy_verify.add_argument("path")
-    pa_policy_verify.add_argument("--key", required=True)
-    pa_policy_verify.add_argument("--json", action="store_true")
-
-    pa_prompt = agent_sub.add_parser("prompt", help="Render a prompt DSL file")
-    pa_prompt.add_argument("path")
-    pa_prompt.add_argument("--task", default="demo task")
-    pa_prompt.add_argument("--json", action="store_true")
-
-    sub.add_parser(
-        "lsp",
-        help="Start language server",
-        description=(
-            "Start the Mellow Language Server over stdio. Editors normally launch "
-            "this command automatically; running it directly waits for an LSP client."
-        ),
-        epilog=(
-            "VS Code setup: install dependencies in vscode-extension, package/install "
-            "the extension, then open a .mellow file. See docs/LSP.md."
-        ),
-    )
-    sub.add_parser("help", help="Show help")
-
-    return p
-
+# CLI policy
+# - Commands use the explicit subcommand interface.
 # ----------------------------
-# Command handlers
-# ----------------------------
-
-
-def _find_all_mellow_on_path() -> list[str]:
-    seen: list[str] = []
-    path_env = os.environ.get("PATH", "")
-    if not path_env:
-        return seen
-    names = ["mellow"]
-    if os.name == "nt":
-        pathext = [ext.lower() for ext in os.environ.get("PATHEXT", ".EXE;.BAT;.CMD").split(";") if ext]
-        names = [f"mellow{ext}" for ext in pathext] + ["mellow"]
-    for raw_dir in path_env.split(os.pathsep):
-        d = raw_dir.strip().strip('"')
-        if not d:
-            continue
-        for name in names:
-            candidate = Path(d) / name
-            try:
-                if candidate.exists():
-                    resolved = str(candidate.resolve())
-                    if resolved not in seen:
-                        seen.append(resolved)
-            except Exception:
-                continue
-    return seen
-
-
-def _distribution_version() -> str | None:
-    try:
-        return importlib_metadata.version("mellowlang")
-    except Exception:
-        return None
-
-
-def _read_project_version(project_root: Path | None) -> str | None:
-    if not project_root:
-        return None
-    for name in ("pyproject.toml", "setup.cfg"):
-        p = project_root / name
-        if not p.exists():
-            continue
-        try:
-            raw = p.read_text(encoding="utf-8", errors="replace")
-        except Exception:
-            continue
-        m = re.search(r"(?m)^version\s*=\s*['\"]([^'\"]+)['\"]\s*$", raw)
-        if m:
-            return m.group(1).strip()
-    return None
-
-
-def _doctor_report() -> dict[str, Any]:
-    cfg = pkg_load_config()
-    registry = cfg.get("registry") or pkg_get_registry_url()
-    cache_count = len(list(PKG_CACHE_ROOT.rglob("*.mpkg"))) if PKG_CACHE_ROOT.exists() else 0
-    project_root = _find_project_root(Path.cwd()) or Path.cwd()
-    module_file = Path(__file__).resolve()
-    module_root = str(module_file.parents[1])
-    dist_version = _distribution_version()
-    project_version = _read_project_version(project_root)
-    path_candidates = _find_all_mellow_on_path()
-    first_mellow = shutil.which("mellow")
-    checks: list[dict[str, str]] = []
-    optional: list[dict[str, Any]] = []
-
-    def add_check(name: str, status: str, detail: str, fix: str | None = None) -> None:
-        item = {"name": name, "status": status, "detail": detail}
-        if fix:
-            item["fix"] = fix
-        checks.append(item)
-
-    def add_optional(name: str, module: str, extra: str, purpose: str) -> None:
-        available = importlib.util.find_spec(module) is not None
-        optional.append({
-            "name": name,
-            "module": module,
-            "extra": extra,
-            "purpose": purpose,
-            "available": available,
-            "status": "ok" if available else "optional",
-            "fix": None if available else f"Install with `python -m pip install -e .[{extra}]`.",
-        })
-
-    if first_mellow:
-        add_check("mellow_on_path", "ok", f"CLI found on PATH: {first_mellow}")
-    else:
-        add_check("mellow_on_path", "warn", "mellow executable was not found on PATH", "Add your Python Scripts directory to PATH or run `py -m mellowlang.cli.main ...`.")
-
-    if dist_version and dist_version != __version__:
-        add_check("installed_distribution", "warn", f"Installed package version is {dist_version}, but imported mellowlang version is {__version__}.", "Reinstall from the current checkout with `pip uninstall mellowlang && pip install -e .` or `pip install .`.")
-    elif dist_version:
-        add_check("installed_distribution", "ok", f"Installed package version matches imported package ({dist_version}).")
-    else:
-        add_check("installed_distribution", "warn", "Could not read installed `mellowlang` package metadata.", "If this is a source checkout, reinstall with `pip install -e .`.")
-
-    if project_version and project_version != __version__:
-        add_check("project_checkout", "warn", f"Project version in {project_root / 'pyproject.toml'} is {project_version}, but imported mellowlang version is {__version__}.", "Update the package version files or reinstall the project so the CLI and source checkout agree.")
-    elif project_version:
-        add_check("project_checkout", "ok", f"Project checkout version matches imported package ({project_version}).")
-
-    if len(path_candidates) > 1:
-        add_check("path_duplicates", "warn", f"Found multiple `mellow` executables on PATH ({len(path_candidates)}).", "Remove stale installs from PATH or keep only the preferred Python Scripts directory first.")
-    else:
-        add_check("path_duplicates", "ok", "Only one `mellow` executable was discovered on PATH.")
-
-    try:
-        project_root_resolved = project_root.resolve()
-    except Exception:
-        project_root_resolved = project_root
-
-    if str(module_file).startswith(str(project_root_resolved)) and first_mellow and not str(first_mellow).startswith(str(project_root_resolved)):
-        add_check("editable_shadow", "warn", f"Imported source is coming from the current checkout ({module_root}) while the CLI launcher lives elsewhere ({first_mellow}).", "This usually means an editable install or stale launcher mismatch. Reinstall with `pip install -e .` from this checkout.")
-    else:
-        add_check("editable_shadow", "ok", "CLI launcher and imported package location look consistent enough for this environment.")
-
-    native = native_vm_status()
-    if native.get('available'):
-        add_check("native_vm", "ok", f"Native VM is loadable: {native.get('extension_path')}")
-    elif native.get('extension_exists'):
-        add_check("native_vm", "warn", f"Native VM binary exists but is not loadable: {native.get('load_error')}", "Rebuild the extension for this Python using `mellow native build`.")
-    else:
-        add_check("native_vm", "warn", "Native VM is not built yet.", "Run `mellow native build` after installing a compiler and Python development headers.")
-
-    add_optional("lsp", "pygls", "lsp", "Language Server Protocol support")
-    add_optional("security", "cryptography", "security", "signed saves, package signing, and agent policy signing")
-    add_optional("network", "websockets", "net", "websocket helpers and network tests")
-    add_optional("video", "cv2", "video", "MELV video encode/decode")
-
-    mismatches = [c for c in checks if c["status"] in {"warn", "error"}]
-    return {
-        "mellow_version": __version__,
-        "python": sys.version.split()[0],
-        "platform": platform.platform(),
-        "exe": sys.executable,
-        "cwd": str(Path.cwd()),
-        "ansi": _supports_ansi(),
-        "config_file": str(PKG_CONFIG_FILE),
-        "registry": registry,
-        "cache_packages": cache_count,
-        "installed_packages": len(pkg_list_installed()),
-        "scripts_on_path": first_mellow,
-        "all_scripts_on_path": path_candidates,
-        "project_root": str(project_root),
-        "module_file": str(module_file),
-        "module_root": module_root,
-        "distribution_version": dist_version,
-        "project_version": project_version,
-        "native_vm": native,
-        "optional_features": optional,
-        "checks": checks,
-        "has_mismatch": bool(mismatches),
-    }
-
-
-def _cmd_doctor(json_out: bool, strict: bool = False) -> int:
-    info = _doctor_report()
-    try:
-        from ..lsp_server import lsp_runtime_status
-        lsp_info = lsp_runtime_status()
-    except Exception as e:  # pragma: no cover
-        lsp_info = {"ready": False, "backend": "error", "error": repr(e)}
-
-    info["lsp_ready"] = bool(lsp_info.get("ready"))
-    info["lsp_backend"] = lsp_info.get("backend")
-    info["lsp_error"] = lsp_info.get("error")
-
-    checks = list(info.get("checks", []))
-    if info["lsp_ready"]:
-        checks.append({"name": "lsp_runtime", "status": "ok", "detail": f"LSP backend ready ({info['lsp_backend']})."})
-    else:
-        detail = info["lsp_error"] or "unknown LSP runtime issue"
-        checks.append({
-            "name": "lsp_runtime",
-            "status": "warn",
-            "detail": f"LSP backend is not ready: {detail}",
-            "fix": "Install compatible pygls/lsprotocol packages in the same Python environment, then reinstall Mellow with `python -m pip install -e .`."
-        })
-    info["agent_runtime_ready"] = True
-    info["checks"] = checks
-    info["has_mismatch"] = any(c.get("status") in {"warn", "error"} for c in checks)
-
-    if json_out:
-        _json_print(info)
-    else:
-        print(f"MellowLang {info['mellow_version']}")
-        print("")
-        print("Environment")
-        print(f"  Python        : {info['python']}")
-        print(f"  Platform      : {info['platform']}")
-        print(f"  Executable    : {info['exe']}")
-        print(f"  CWD           : {info['cwd']}")
-        print(f"  Project root  : {info['project_root']}")
-        print(f"  ANSI          : {info['ansi']}")
-        print("")
-        print("Packages")
-        print(f"  Registry      : {info['registry']}")
-        try:
-            who = pkg_whoami_remote(info['registry'])
-            if who.get('ok'):
-                print(f"  Registry user : {who.get('username')}")
-        except Exception:
-            pass
-        print(f"  Config        : {info['config_file']}")
-        print(f"  Installed     : {info['installed_packages']}")
-        print(f"  Cache         : {info['cache_packages']}")
-        print("")
-        print("Runtimes")
-        print(f"  Agent runtime : {'ready' if info.get('agent_runtime_ready') else 'not ready'}")
-        print(f"  LSP backend   : {info['lsp_backend']}")
-        print(f"  LSP ready     : {info['lsp_ready']}")
-        if info.get('lsp_error'):
-            print(f"  LSP reason    : {info['lsp_error']}")
-        print("")
-        print("Optional features")
-        for feature in info.get("optional_features", []):
-            status = "OK" if feature.get("available") else "OPTIONAL"
-            print(f"  [{status}] {feature['name']}: {feature['purpose']}")
-            if feature.get("fix"):
-                print(f"         {feature['fix']}")
-        print("")
-        print("Checks")
-        print(f"  mellow on PATH: {info['scripts_on_path']}")
-        if not info['scripts_on_path']:
-            print('hint: mellow executable is not on PATH; use `py -m mellowlang.cli.main ...` or add Python Scripts to PATH')
-        for check in info['checks']:
-            status = check['status']
-            icon = {'ok': 'OK', 'warn': 'WARN', 'error': 'ERR'}.get(status, status.upper())
-            print(f"  [{icon}] {check['name']}: {check['detail']}")
-            if check.get('fix'):
-                print(f"         fix: {check['fix']}")
-    return 2 if strict and info.get('has_mismatch') else 0
-
-
-def _cmd_bench(rounds: int, json_out: bool) -> int:
-    from ..benchmarking import run_benchmarks
-
-    result = run_benchmarks(rounds=rounds)
-    if json_out:
-        _json_print(result)
-        return 0 if result.get("ok") else 1
-    _cli_line("Mellow performance benchmark", kind="ok" if result.get("ok") else "warn")
-    for suite in result.get("suites", []):
-        name = suite.get("name")
-        fields = ", ".join(f"{k}={v}" for k, v in suite.items() if k not in {"name", "cache"})
-        print(f"  {name}: {fields}")
-    return 0 if result.get("ok") else 1
-
-
-def _cmd_security_audit(include_packages: bool, strict: bool, json_out: bool) -> int:
-    from ..security_audit import run_security_audit
-
-    result = run_security_audit(include_packages=include_packages)
-    if strict and result.get("warnings"):
-        result = dict(result)
-        result["ok"] = False
-    if json_out:
-        _json_print(result)
-        return 0 if result.get("ok") else 1
-    _cli_line("Mellow security audit", kind="ok" if result.get("ok") else "warn")
-    for check in result.get("checks", []):
-        status = "OK" if check.get("ok") else check.get("severity", "error").upper()
-        print(f"  [{status}] {check.get('name')}: {check.get('detail')}")
-    print(f"Errors          : {result.get('errors', 0)}")
-    print(f"Warnings        : {result.get('warnings', 0)}")
-    return 0 if result.get("ok") else 1
-
-
-def _cmd_release_gate(rounds: int, json_out: bool) -> int:
-    from ..release_gate import run_release_gate
-
-    try:
-        result = run_release_gate(rounds=rounds)
-    except Exception as exc:
-        result = {"ok": False, "error": str(exc)}
-    if json_out:
-        _json_print(result)
-        return 0 if result.get("ok") else 1
-    _cli_line("Mellow release gate", kind="ok" if result.get("ok") else "error")
-    if result.get("error"):
-        print(f"Error           : {result['error']}")
-        return 1
-    print(f"Benchmark       : {'pass' if result.get('benchmark', {}).get('ok') else 'fail'}")
-    print(f"Sandbox/security: {'pass' if result.get('sandbox', {}).get('ok') else 'fail'}")
-    pkg = result.get("package_integrity", {})
-    print(f"Package integrity: {'pass' if pkg.get('ok') else 'fail'} ({pkg.get('count', 0)} package(s))")
-    return 0 if result.get("ok") else 1
-
-
-def _cmd_native_status(json_out: bool) -> int:
-    info = native_vm_status()
-    if json_out:
-        _json_print(info)
-        return 0 if info.get('available') else 1
-    _cli_line('Native Mellow VM status', kind='ok' if info.get('available') else 'warn')
-    print(f"Available       : {info.get('available')}")
-    print(f"Extension       : {info.get('extension_path')}")
-    print(f"Compiler        : {info.get('compiler')}")
-    print(f"Python headers  : {info.get('python_include')}")
-    print(f"Build ready     : {info.get('build_ready')}")
-    if info.get('load_error'):
-        print(f"Load error      : {info.get('load_error')}")
-    print(f"Build command   : {info.get('build_command')}")
-    return 0 if info.get('available') else 1
-
-
-def _cmd_native_build(json_out: bool) -> int:
-    res = build_native_vm(inplace=True)
-    if json_out:
-        _json_print(res)
-        return 0 if res.get('ok') else 1
-    if res.get('ok'):
-        _cli_line('Native VM built successfully', kind='ok')
-    else:
-        _cli_line('Native VM build did not complete successfully', kind='warn')
-    if res.get('stdout'):
-        print(res['stdout'].rstrip())
-    if res.get('stderr'):
-        print(res['stderr'].rstrip(), file=sys.stderr)
-    status = res.get('status') or {}
-    print(f"Extension       : {status.get('extension_path')}")
-    print(f"Available       : {status.get('available')}")
-    return 0 if res.get('ok') else 1
-
-
-def _cmd_native_doctor(json_out: bool) -> int:
-    info = native_vm_status()
-    payload = {
-        'ok': bool(info.get('available')),
-        'status': info,
-        'fixes': [],
-    }
-    fixes = payload['fixes']
-    if not info.get('compiler_found'):
-        fixes.append('Install a C compiler (gcc, clang, or MSVC Build Tools).')
-    if not info.get('python_headers_found'):
-        fixes.append('Install Python development headers for your current Python version.')
-    if info.get('extension_exists') and info.get('load_error'):
-        fixes.append('Rebuild the extension for the exact Python ABI you are using now.')
-    if json_out:
-        _json_print(payload)
-        return 0 if payload['ok'] else 1
-    _cli_line('Native Mellow VM doctor', kind='ok' if payload['ok'] else 'warn')
-    print(f"OK              : {payload['ok']}")
-    for fix in fixes:
-        _cli_line(fix, kind='hint')
-    return 0 if payload['ok'] else 1
-
-
-def _cmd_modules(json_out: bool) -> int:
-    if json_out:
-        _json_print(MODULE_ALLOWLIST)
-        return 0
-    print("Allowed host modules:")
-    for mod in sorted(MODULE_ALLOWLIST.keys()):
-        print(f"  - {mod}")
-    return 0
-
-
-def _cmd_explain(error_id: str, json_out: bool) -> int:
-    info = explain_error(error_id)
-    if not info:
-        if json_out:
-            _json_print({"ok": False, "error": f"unknown error id: {error_id}"})
-        else:
-            print(f"unknown error id: {error_id}")
-            print("try: mellow explain E001")
-        return 2
-    if json_out:
-        _json_print({"ok": True, **asdict(info)})
-        return 0
-    print(f"{info.id} - {info.title}")
-    print()
-    print("What it means:")
-    print(f"  {info.what}")
-    print("Why it happens:")
-    print(f"  {info.why}")
-    print("How to fix:")
-    print(f"  {info.fix}")
-    print()
-    print("Bad:")
-    print(info.example_bad.strip("\n"))
-    print()
-    print("Good:")
-    print(info.example_good.strip("\n"))
-    return 0
-
-
-def _cmd_assistant(file: str, mode: str, json_out: bool) -> int:
-    """Built-in lightweight code assistant.
-
-    This is intentionally deterministic and offline:
-      - summary: AST-based outline + hints
-      - diagnose: try compile; if ok, print summary + lints count
-    """
-    from ..assistant import analyze_source, render_human
-
-    p = Path(file)
-    if not p.exists():
-        if json_out:
-            _json_print({"ok": False, "error": f"path not found: {p}"})
-        else:
-            print(f"error: path not found: {p}")
-        return 2
-
-    src = _read_text(p)
-
-    if mode == "diagnose":
-        # 1) compile (best signal)
-        try:
-            Compiler().compile(src, filename=str(p))
-        except Exception as e:
-            if json_out:
-                _json_print({"ok": False, "stage": "compile", "error": str(e)})
-            else:
-                _print_pretty_error(e, filename=str(p), source_lines=src.splitlines(True))
-            return 1
-
-    # 2) AST-based assistant report
-    try:
-        rep = analyze_source(src, filename=str(p))
-    except Exception as e:
-        if json_out:
-            _json_print({"ok": False, "stage": "assistant", "error": str(e)})
-        else:
-            print(f"assistant error: {e}")
-        return 2
-
-    if mode == "diagnose":
-        issues = lint_source(src)
-        payload = rep.to_dict()
-        payload["lint_issues"] = len(issues)
-        if json_out:
-            _json_print({"ok": True, **payload})
-        else:
-            print(render_human(rep), end="")
-            if issues:
-                print(f"\nLint: {len(issues)} issue(s). Run: mellow check {p}")
-        return 0
-
-    # summary
-    if json_out:
-        _json_print({"ok": True, **rep.to_dict()})
-    else:
-        print(render_human(rep), end="")
-    return 0
 
 
 def _cmd_pack(entry: str, out_path: str, include: list[str], name: str, version: str) -> int:
@@ -1822,7 +260,7 @@ def _cmd_pack(entry: str, out_path: str, include: list[str], name: str, version:
         # manifest
         z.writestr("mellow.json", json.dumps(manifest, ensure_ascii=False, indent=2))
 
-    print(f"✓ packaged: {out_p}")
+    print(f"[OK] packaged: {out_p}")
     return 0
 
 def _to_plain(value: Any) -> Any:
@@ -1901,7 +339,7 @@ def _cmd_compile(file: str, target: str, out_path: str | None, *, dump_ast: bool
         py_src = PyTranspiler().transpile(src.splitlines(), filename=str(p))
         out = Path(out_path) if out_path else p.with_suffix('.generated.py')
         out.write_text(py_src, encoding='utf-8')
-        print(f"✓ compiled to Python: {out}")
+        print(f"[OK] compiled to Python: {out}")
         return 0
     prog = Compiler().compile(src, filename=str(p), optimize=optimize)
     out = Path(out_path) if out_path else p.with_suffix('.mellowc.json')
@@ -1932,7 +370,7 @@ def _cmd_compile(file: str, target: str, out_path: str | None, *, dump_ast: bool
 
     payload = {
         'filename': prog.filename,
-        'pipeline': getattr(prog, 'pipeline', 'legacy'),
+        'pipeline': getattr(prog, 'pipeline', 'bytecode'),
         'bytecode': prog.bytecode,
         'func_table': prog.func_table or {},
         'event_table': prog.event_table or {},
@@ -1947,7 +385,7 @@ def _cmd_compile(file: str, target: str, out_path: str | None, *, dump_ast: bool
         'optimized_ssa_program': _to_plain(getattr(prog, 'optimized_ssa_program', None)),
     }
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(f"✓ compiled to bytecode: {out}")
+    print(f"[OK] compiled to bytecode: {out}")
     return 0
 
 
@@ -1975,11 +413,96 @@ def _prompt_choice(items: list[str], title: str = "Select package") -> str | Non
         return None
     return items[idx] if 0 <= idx < len(items) else None
 
+
+def _package_versions_for_display(item: dict[str, Any]) -> list[str]:
+    raw = item.get("versions")
+    if isinstance(raw, dict):
+        versions = [str(v) for v in raw.keys()]
+    elif isinstance(raw, (list, tuple, set)):
+        versions = [str(v) for v in raw]
+    elif isinstance(raw, str) and raw.strip():
+        versions = [raw.strip()]
+    else:
+        versions = []
+    latest = str(item.get("latest") or "").strip()
+    if latest and latest not in versions:
+        versions.append(latest)
+    return versions
+
+
+def _print_package_install_result(res: dict[str, Any]) -> None:
+    _cli_line(f"package installed: {res['name']}@{res['version']}", kind='ok')
+    if res.get('entry'):
+        print(f"entry   : {res['entry']}")
+    print(f"creator : {pkg_package_creator(res)}")
+    print(f"path    : {res['installed_to']}")
+    if res.get('lockfile'):
+        print(f"lockfile: {res['lockfile']}")
+    if res.get('cache'):
+        print(f"cache   : {res['cache']}")
+    if res.get('alias'):
+        print(f"alias   : {res['alias']}")
+
+
+def _fmt_list(value: Any) -> str:
+    if isinstance(value, (list, tuple, set)):
+        return ", ".join(str(v) for v in value if str(v)) or "-"
+    text = str(value or "").strip()
+    return text or "-"
+
+
+def _print_package_profile(res: dict[str, Any], author: str) -> int:
+    if res.get('error') or not res.get('ok', True):
+        _cli_line(str(res.get('error', 'profile lookup failed')), kind='error', file=sys.stderr)
+        return 2
+    items = res.get('items') or []
+    _cli_line(f"Packages by {author}: {len(items)}", kind='info')
+    for item in items:
+        badges = _fmt_list(item.get('badges'))
+        print(f"- {item.get('name')}  latest={item.get('latest') or '-'}  downloads={item.get('downloads', 0)}  badges={badges}")
+        if item.get('description'):
+            print(f"    {item.get('description')}")
+        detail = []
+        if item.get('license'):
+            detail.append(f"license={item.get('license')}")
+        if item.get('published_at'):
+            detail.append(f"published_at={item.get('published_at')}")
+        if item.get('keywords'):
+            detail.append(f"keywords={_fmt_list(item.get('keywords'))}")
+        if detail:
+            print("    " + "  ".join(detail))
+    return 0
+
+
+def _print_package_verify(res: dict[str, Any], json_out: bool = False) -> int:
+    if json_out:
+        _json_print(res)
+        return 0 if res.get('ok') else 1
+    if res.get('error') or not res.get('ok', True):
+        _cli_line(f"package verify failed: {res.get('error', 'verification failed')}", kind='error', file=sys.stderr)
+        return 1
+    _cli_line(f"package verified: {res.get('name')}@{res.get('version')}", kind='ok')
+    print(f"creator   : {pkg_package_creator(res)}")
+    print(f"sha256    : {res.get('sha256') or '-'}")
+    print(f"signed    : {'yes' if res.get('signed') else 'no'}")
+    print(f"verified  : {'yes' if res.get('verified') else 'no'}")
+    print(f"trusted   : {'yes' if res.get('trusted') else 'no'}")
+    if res.get('algorithm'):
+        print(f"algorithm : {res.get('algorithm')}")
+    if res.get('published_by'):
+        print(f"published : {res.get('published_by')}" + (f" at {res.get('published_at')}" if res.get('published_at') else ""))
+    if res.get('registry'):
+        print(f"registry  : {res.get('registry')}")
+    if res.get('installed_to'):
+        print(f"path      : {res.get('installed_to')}")
+    return 0
+
+
 def _cmd_pkg(ns: argparse.Namespace) -> int:
     pkg_cmd = getattr(ns, 'pkg_cmd', None)
     if pkg_cmd == 'init':
-        man = pkg_init_package(ns.dir, name=ns.name, entry=ns.entry)
-        print(f"✓ package initialized: {Path(ns.dir).resolve()}")
+        man = pkg_init_package(ns.dir, name=ns.name, entry=ns.entry, author=getattr(ns, 'author', None))
+        print(f"[OK] package initialized: {Path(ns.dir).resolve()}")
         print(json.dumps(man, ensure_ascii=False, indent=2))
         return 0
     if pkg_cmd == 'publish':
@@ -1990,6 +513,7 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
                 _cli_line(str(res['detail']), kind='hint', file=sys.stderr)
             return 2
         _cli_line(f"package published: {res['name']}@{res['version']}", kind='ok')
+        print(f"creator : {pkg_package_creator(res)}")
         print(res.get('published_to') or pkg_get_registry_url(ns.registry))
         return 0
     if pkg_cmd == 'install':
@@ -1999,8 +523,7 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
             if res.get('suggestions'):
                 _cli_line('Try: ' + ', '.join(res.get('suggestions', [])[:5]), kind='hint', file=sys.stderr)
             return 2
-        _cli_line(f"package installed: {res['name']}@{res['version']}", kind='ok')
-        print(res['installed_to'])
+        _print_package_install_result(res)
         return 0
     if pkg_cmd == 'search':
         res = pkg_search_remote(ns.query, registry=ns.registry)
@@ -2013,8 +536,9 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
             return 0
         _cli_line(f"Found {len(items)} package(s) for '{ns.query}'", kind='info')
         for item in items:
-            versions = ','.join(item.get('versions', []))
-            print(f"- {item['name']}  latest={item.get('latest')}  versions={versions}")
+            versions = ','.join(_package_versions_for_display(item))
+            badges = _fmt_list(item.get('badges'))
+            print(f"- {item['name']}  latest={item.get('latest') or '-'}  creator={pkg_package_creator(item)}  downloads={item.get('downloads', 0)}  badges={badges}  versions={versions or '-'}")
             if item.get('description'):
                 print(f"    {item['description']}")
         if getattr(ns, 'interactive', False):
@@ -2035,6 +559,50 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
                     if follow.get('alias'):
                         _cli_line(f"alias: {follow.get('alias')}", kind='hint')
         return 0
+    if pkg_cmd == 'info':
+        res = pkg_package_info_remote(ns.name, registry=ns.registry)
+        if res.get('error') or not res.get('ok', True):
+            _cli_line(str(res.get('error', 'package info failed')), kind='error', file=sys.stderr)
+            if res.get('suggestions'):
+                _cli_line('Try: ' + ', '.join(res.get('suggestions', [])[:5]), kind='hint', file=sys.stderr)
+            return 2
+        versions = _package_versions_for_display(res)
+        name = res.get('name') or ns.name
+        print(f"name       : {name}")
+        print(f"latest     : {res.get('latest') or '-'}")
+        if res.get('selected') and res.get('selected') != res.get('latest'):
+            print(f"selected   : {res.get('selected')}")
+        print(f"versions   : {', '.join(versions) if versions else '-'}")
+        print(f"creator    : {pkg_package_creator(res)}")
+        print(f"downloads  : {res.get('downloads', 0)}")
+        if res.get('badges'):
+            print(f"badges     : {_fmt_list(res.get('badges'))}")
+        if res.get('license'):
+            print(f"license    : {res.get('license')}")
+        if res.get('keywords'):
+            print(f"keywords   : {_fmt_list(res.get('keywords'))}")
+        if res.get('published_at'):
+            print(f"published  : {res.get('published_by') or '-'} at {res.get('published_at')}")
+        if res.get('entry'):
+            print(f"entry      : {res.get('entry')}")
+        if res.get('description'):
+            print(f"description: {res.get('description')}")
+        if res.get('registry'):
+            print(f"registry   : {res.get('registry')}")
+        print(f"install    : mellow install {name}")
+        return 0
+    if pkg_cmd in {'profile', 'author'}:
+        res = pkg_author_profile_remote(ns.author, registry=ns.registry)
+        return _print_package_profile(res, ns.author)
+    if pkg_cmd in {'verify', 'signature'}:
+        res = pkg_package_signature_installed(ns.name, project_dir=getattr(ns, 'project_dir', None)) if getattr(ns, 'installed', False) else pkg_package_signature_remote(ns.name, registry=ns.registry)
+        policy = pkg_check_trust_policy(res, strict=getattr(ns, 'strict', False))
+        res["trusted"] = policy.get("trusted", False)
+        res["trusted_authors"] = policy.get("trusted_authors", [])
+        if not policy.get("ok"):
+            res["ok"] = False
+            res["error"] = policy.get("error")
+        return _print_package_verify(res, json_out=getattr(ns, 'json', False))
     if pkg_cmd == 'login':
         if getattr(ns, 'token', None):
             res = pkg_login_with_token(ns.token, registry=ns.registry)
@@ -2050,7 +618,7 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
             if res.get('hint'):
                 print(f"hint: {res.get('hint')}")
             return 2
-        print(f"✓ logged in as {res.get('username')} -> {res.get('registry')}")
+        print(f"[OK] logged in as {res.get('username')} -> {res.get('registry')}")
         return 0
     if pkg_cmd == 'whoami':
         res = pkg_whoami_remote(registry=ns.registry)
@@ -2062,12 +630,12 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
         return 0
     if pkg_cmd == 'registry':
         res = pkg_set_registry(ns.url)
-        print(f"✓ default registry: {res['registry']}")
+        print(f"[OK] default registry: {res['registry']}")
         return 0
     if pkg_cmd == 'logout':
         from ..package_manager import clear_auth_token as pkg_clear_auth_token
         res = pkg_clear_auth_token(registry=ns.registry)
-        print(f"✓ logged out from {res['registry']}")
+        print(f"[OK] logged out from {res['registry']}")
         return 0
     if pkg_cmd == 'list':
         rows = pkg_list_installed()
@@ -2075,16 +643,16 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
             print('No packages installed.')
             return 0
         for row in rows:
-            print(f"- {row['name']}@{row['version']} -> {row['install_path']}")
+            print(f"- {row['name']}@{row['version']} by {pkg_package_creator(row)} -> {row['install_path']}")
         return 0
     if pkg_cmd == 'build':
         res = pkg_build_package_archive(ns.dir, out_path=ns.out)
-        print(f"✓ package archive built: {res['archive']}")
+        print(f"[OK] package archive built: {res['archive']}")
         print(f"sha256: {res['sha256']}")
         return 0
     if pkg_cmd == 'seed-core':
         res = pkg_seed_core_packages(ns.dir, publish_local=getattr(ns, 'publish_local', False))
-        print(f"✓ core starter packages generated: {res['root']}")
+        print(f"[OK] core starter packages generated: {res['root']}")
         for item in res.get('items', []):
             print(f"- {item['name']} -> {item['dir']}")
         if res.get('published_local'):
@@ -2095,7 +663,7 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
         if not res.get('ok'):
             print(f"error: {res.get('error', 'runtime resolution failed')}")
             return 2
-        print(f"✓ runtime map written: {res['runtime_map']}")
+        print(f"[OK] runtime map written: {res['runtime_map']}")
         if res.get('auto_added'):
             print('auto-added: ' + ', '.join(f"{k} ({v})" for k, v in res.get('auto_added', {}).items()))
         if res.get('missing'):
@@ -2106,20 +674,38 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
                         print(f"  {key} -> {', '.join(vals[:5])}")
         return 0
     if pkg_cmd == 'update':
-        res = pkg_update_remote(getattr(ns, 'name', None), registry=ns.registry, project_dir=getattr(ns, 'project_dir', '.'))
+        res = pkg_update_packages(
+            getattr(ns, 'name', None),
+            registry=ns.registry,
+            project_dir=getattr(ns, 'project_dir', '.'),
+            with_deps=not getattr(ns, 'no_deps', False),
+            check=getattr(ns, 'check', False),
+            all_packages=getattr(ns, 'all_packages', False),
+        )
         if not res.get('ok'):
             print(f"error: {res.get('error', 'update failed')}")
             return 2
-        print(f"✓ dependencies updated: {res.get('count', 0)}")
+        if getattr(ns, 'check', False):
+            print(f"[OK] update check: {res.get('update_count', 0)} update(s) available")
+            for item in res.get('items', []):
+                marker = 'UPDATE' if item.get('needs_update') else 'OK'
+                print(f"- [{marker}] {item.get('name')} {item.get('current') or '-'} -> {item.get('latest') or '-'}")
+            return 0
+        for item in res.get('plan', []):
+            if item.get('needs_update'):
+                print(f"- planned: {item.get('name')} {item.get('current') or '-'} -> {item.get('latest') or '-'}")
+        print(f"[OK] dependencies updated: {res.get('count', 0)}")
         for item in res.get('updated', []):
             print(f"- {item.get('name')}@{item.get('version')}")
+        if res.get('lockfile'):
+            print(f"lockfile: {res.get('lockfile')}")
         return 0
     if pkg_cmd == 'uninstall':
         res = pkg_uninstall_package(ns.name, project_dir=getattr(ns, 'project_dir', '.'))
         if not res.get('ok'):
             print(f"error: {res.get('error', 'uninstall failed')}")
             return 2
-        print(f"✓ package removed: {res['name']}")
+        print(f"[OK] package removed: {res['name']}")
         return 0
     if pkg_cmd == 'add':
         pick_name = ns.name
@@ -2181,13 +767,13 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
         if res.get('missing'):
             print('missing imports: ' + ', '.join(res.get('missing', [])))
             return 2
-        print('✓ import diagnostics ok')
+        print('[OK] import diagnostics ok')
         return 0
     if pkg_cmd == 'serve':
         from ..registry.server import run_registry_server
         run_registry_server(ns.host, ns.port, ns.data_dir)
         return 0
-    print('usage: mellow pkg <init|publish|install|add|remove|search|login|whoami|registry|list|build|seed-core|sync-imports|resolve-runtime|diagnose-imports|update|uninstall|serve> ...')
+    print('usage: mellow pkg <init|publish|install|add|remove|search|info|login|whoami|registry|list|build|seed-core|sync-imports|resolve-runtime|diagnose-imports|update|uninstall|serve> ...')
     return 2
 
 
@@ -2320,7 +906,7 @@ def _cmd_init(dest_dir: str, force: bool) -> int:
         shutil.rmtree(dest)
     dest.mkdir(parents=True, exist_ok=True)
     shutil.copytree(template, dest, dirs_exist_ok=True)
-    print(f"✓ created project: {dest}")
+    print(f"[OK] created project: {dest}")
     return 0
 
 
@@ -2329,9 +915,9 @@ def _cmd_new(dest_dir: str, force: bool, *, with_core: bool = True, preset: str 
     if not res.get("ok"):
         print(f"error: {res.get('error', 'project scaffold failed')}")
         return 2
-    print(f"✓ created project: {res['project_dir']}")
-    print(f"✓ manifest: {res['manifest']}")
-    print(f"✓ preset: {res.get('preset', 'starter')}")
+    print(f"[OK] created project: {res['project_dir']}")
+    print(f"[OK] manifest: {res['manifest']}")
+    print(f"[OK] preset: {res.get('preset', 'starter')}")
     if res.get('preload'):
         installed = []
         for item in res.get('preload', {}).get('installed', []):
@@ -2341,10 +927,10 @@ def _cmd_new(dest_dir: str, force: bool, *, with_core: bool = True, preset: str 
             if row not in installed:
                 installed.append(row)
         if installed:
-            print("✓ starter packages: " + ", ".join(installed))
+            print("[OK] starter packages: " + ", ".join(installed))
         runtime = (res.get('preload') or {}).get('runtime') or {}
         if runtime.get('runtime_map'):
-            print(f"✓ runtime map: {runtime['runtime_map']}")
+            print(f"[OK] runtime map: {runtime['runtime_map']}")
     return 0
 
 
@@ -2519,7 +1105,8 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
              color: bool = False, no_color: bool = False, registry: str | None = None, no_resolve: bool = False,
              sandbox_profile: str = "default", allow_data_write: bool = False,
              data_max_batch_size: int | None = None, data_max_query_rows: int | None = None,
-             data_max_record_bytes: int | None = None, data_max_open_streams: int | None = None) -> int:
+             data_max_record_bytes: int | None = None, data_max_open_streams: int | None = None,
+             native_required: bool = False) -> int:
     p = Path(file)
 
     # Secure save system default (dev-friendly). In project mode this becomes deny-by-default.
@@ -2606,7 +1193,7 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             except Exception:
                 pass
 
-        # permissions can be list[str] (preferred) or dict (legacy)
+        # permissions can be list[str] (preferred) or dict (compatibility input)
         perms = manifest_data.get("permissions")
         if isinstance(perms, dict):
             if not allow_ask and perms.get("allow_ask") is True:
@@ -2676,11 +1263,13 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
         net_ws_allow: str | None = None
         net_max_bytes: int | None = None
         net_timeout_s: float | None = None
+        interop_allow: str | None = None
         if project_mode:
             sandbox_root = str(manifest_data.get("sandbox_root") or manifest_data.get("sandbox") or "saves")
             perms = manifest_data.get("permissions")
             read_roots: list[str] = []
             write_roots: list[str] = []
+            interop_items: list[str] = []
             # Secure save system perms
             allow_save = False
             if isinstance(perms, list):
@@ -2725,6 +1314,10 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
                             net_timeout_s = float(t.split(':', 1)[1])
                         except Exception:
                             pass
+                    elif t.startswith('interop:'):
+                        interop_name = t.split(':', 1)[1].strip()
+                        if interop_name:
+                            interop_items.append(interop_name)
                     if t.startswith("fs.read:"):
                         read_roots.append(t.split(":", 1)[1])
                     elif t.startswith("fs.write:"):
@@ -2734,7 +1327,7 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
                         read_roots.append(r)
                         write_roots.append(r)
             elif isinstance(perms, dict):
-                # legacy
+                # compatibility input
                 allow_save = bool(perms.get('allow_save', True))
                 allow_net = bool(perms.get('allow_net', False))
                 try:
@@ -2751,6 +1344,11 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
                     net_http_allow = str(perms.get('net_http_allow'))
                 if perms.get('net_ws_allow'):
                     net_ws_allow = str(perms.get('net_ws_allow'))
+                raw_interop = perms.get('interop') or perms.get('interop_allow')
+                if isinstance(raw_interop, list):
+                    interop_allow = ",".join(str(item).strip() for item in raw_interop if str(item).strip())
+                elif isinstance(raw_interop, str):
+                    interop_allow = raw_interop
                 try:
                     if perms.get('save_slots_max') is not None:
                         save_slots_max = int(perms.get('save_slots_max'))
@@ -2766,6 +1364,7 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             if isinstance(perms, list):
                 net_http_allow = ",".join(http_allow) if http_allow else None
                 net_ws_allow = ",".join(ws_allow) if ws_allow else None
+                interop_allow = ",".join(interop_items) if interop_items else None
 
         if sandbox_profile == "finance":
             allow_ask = False
@@ -2792,6 +1391,8 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             record_path=record_path,
             replay_path=replay_path,
             engine=str(engine),
+            native_allow_fallback=not bool(native_required),
+            native_require=bool(native_required),
             allow_ask=allow_ask,
             allow_wait=not no_wait,
             allow_storage=allow_storage,
@@ -2808,6 +1409,7 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             net_ws_allow=net_ws_allow,
             net_max_bytes=net_max_bytes,
             net_timeout_s=net_timeout_s,
+            interop_allow=interop_allow,
             save_slots_max=save_slots_max,
             save_bytes_max=save_bytes_max,
             max_steps=max_steps,
@@ -2846,7 +1448,7 @@ def _iter_test_files(root: Path, pattern: str) -> list[Path]:
             out.append(p)
     return out
 
-def _run_one_script(path: Path, *, engine: str) -> dict[str, Any]:
+def _run_one_script(path: Path, *, engine: str, native_required: bool = False) -> dict[str, Any]:
     import io
     import contextlib
 
@@ -2854,7 +1456,11 @@ def _run_one_script(path: Path, *, engine: str) -> dict[str, Any]:
     comp = Compiler()
     program = comp.compile(src, filename=str(path))
     vm = MellowVM()
-    cfg = RunConfig(engine=engine)
+    cfg = RunConfig(
+        engine=engine,
+        native_allow_fallback=not bool(native_required),
+        native_require=bool(native_required),
+    )
 
     buf_out = io.StringIO()
     buf_err = io.StringIO()
@@ -2865,7 +1471,19 @@ def _run_one_script(path: Path, *, engine: str) -> dict[str, Any]:
     except Exception as e:
         return {"ok": False, "stdout": buf_out.getvalue(), "stderr": buf_err.getvalue(), "error": str(e), "type": e.__class__.__name__}
 
-def _cmd_test(path: str, *, engine: str, pattern: str, json_out: bool) -> int:
+
+def _golden_output_for(path: Path) -> str | None:
+    candidates = [
+        path.with_suffix(path.suffix + ".out"),
+        path.with_suffix(".out"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.read_text(encoding="utf-8")
+    return None
+
+
+def _cmd_test(path: str, *, engine: str, pattern: str, json_out: bool, native_required: bool = False) -> int:
     root = Path(path)
     files = _iter_test_files(root, pattern)
     if not files:
@@ -2893,16 +1511,28 @@ def _cmd_test(path: str, *, engine: str, pattern: str, json_out: bool) -> int:
         return True, "ok"
 
     for f in files:
+        golden = _golden_output_for(f)
         if engine == "dual":
             r_py = _run_one_script(f, engine="py")
-            r_c = _run_one_script(f, engine="c")
+            r_c = _run_one_script(f, engine="c", native_required=native_required)
             same, why = compare(r_py, r_c)
             ok = same
+            if ok and golden is not None and r_py.get("stdout") != golden:
+                ok = False
+                why = "golden stdout mismatch"
             rec = {"file": str(f), "ok": ok, "why": why, "py": r_py, "c": r_c}
+            if golden is not None:
+                rec["golden"] = str(f.with_suffix(f.suffix + ".out") if f.with_suffix(f.suffix + ".out").exists() else f.with_suffix(".out"))
         else:
-            r = _run_one_script(f, engine=engine)
+            r = _run_one_script(f, engine=engine, native_required=(native_required and engine == "c"))
             ok = bool(r.get("ok"))
-            rec = {"file": str(f), "ok": ok, "run": r}
+            why = "ok"
+            if ok and golden is not None and r.get("stdout") != golden:
+                ok = False
+                why = "golden stdout mismatch"
+            rec = {"file": str(f), "ok": ok, "why": why, "run": r}
+            if golden is not None:
+                rec["golden"] = str(f.with_suffix(f.suffix + ".out") if f.with_suffix(f.suffix + ".out").exists() else f.with_suffix(".out"))
         results.append(rec)
         if ok:
             passed += 1
@@ -2917,7 +1547,9 @@ def _cmd_test(path: str, *, engine: str, pattern: str, json_out: bool) -> int:
                     print(f"  py: {rec['py'].get('error') or rec['py'].get('result')}")
                     print(f"  c : {rec['c'].get('error') or rec['c'].get('result')}")
                 else:
-                    print(f"  {rec['run'].get('error')}")
+                    print(f"  reason: {rec.get('why')}")
+                    if rec['run'].get('error'):
+                        print(f"  {rec['run'].get('error')}")
     out = {"ok": failed == 0, "passed": passed, "failed": failed, "results": results}
     if json_out:
         _json_print(out)
@@ -2948,7 +1580,62 @@ def _cmd_replay(file: str, *, replay_path: str, engine: str, json_out: bool) -> 
         ai_timeline=None,
         color=False,
         no_color=False,
+        registry=None,
+        no_resolve=False,
+        sandbox_profile="default",
+        allow_data_write=False,
+        data_max_batch_size=None,
+        data_max_query_rows=None,
+        data_max_record_bytes=None,
+        data_max_open_streams=None,
+        native_required=False,
     )
+
+
+def _cmd_record(
+    file: str,
+    *,
+    record_path: str,
+    engine: str,
+    seed: int | None,
+    global_seed: int | None,
+    json_out: bool,
+) -> int:
+    return _cmd_run(
+        file,
+        json_out=json_out,
+        engine=engine,
+        record_path=record_path,
+        replay_path=None,
+        seed=seed,
+        global_seed=global_seed,
+        allow_ask=False,
+        no_wait=False,
+        allow_storage=True,
+        storage_dir=None,
+        allow_unsafe_fs=False,
+        max_steps=None,
+        max_ms=None,
+        syscall_budget=None,
+        profile=False,
+        trace=False,
+        step=False,
+        break_lines=None,
+        watch=None,
+        ai_timeline=None,
+        color=False,
+        no_color=False,
+        registry=None,
+        no_resolve=False,
+        sandbox_profile="default",
+        allow_data_write=False,
+        data_max_batch_size=None,
+        data_max_query_rows=None,
+        data_max_record_bytes=None,
+        data_max_open_streams=None,
+        native_required=False,
+    )
+
 
 def _cmd_diff(a: str, b: str, *, json_out: bool) -> int:
     import json
@@ -3798,11 +2485,21 @@ def _cmd_agent_inspect_log(path: str, json_out: bool) -> int:
 
 def main(argv: List[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    prog = _prog()
 
-    if _argv_prefers_direct_run(argv):
-        argv = ["run"] + argv
+    if not argv or argv in (["-h"], ["--help"]):
+        print(_quick_help_text(prog))
+        return 0
 
-    if argv and argv[0] not in MODERN_CMDS and not argv[0].startswith('-') and not _looks_like_script_path(argv[0]):
+    if argv and argv[0] in CLI_ALIASES:
+        argv = [CLI_ALIASES[argv[0]], *argv[1:]]
+
+    if argv and _looks_like_script_path(argv[0]):
+        _cli_line("direct script mode has been removed", kind="error", file=sys.stderr)
+        _cli_line(f"Use `mellow run {argv[0]}`.", kind="hint", file=sys.stderr)
+        return 2
+
+    if argv and argv[0] not in MODERN_CMDS and not argv[0].startswith('-'):
         suggestion = _suggest_command(argv[0])
         if suggestion:
             _cli_line(f"unknown command '{argv[0]}'", kind='error', file=sys.stderr)
@@ -3817,16 +2514,31 @@ def main(argv: List[str] | None = None) -> int:
 
         # help
         if cmd in (None, "help"):
-            p.print_help()
+            if getattr(ns, "full", False):
+                p.print_help()
+            elif getattr(ns, "topic", None):
+                print(_format_guide(ns.topic, _prog()))
+            else:
+                print(_modern_help_text(_prog()))
             return 0
 
         # dispatch
+        if cmd == "guide":
+            return _cmd_guide(getattr(ns, "topic", None), getattr(ns, "json", False), getattr(ns, "list", False))
+        if cmd == "ask":
+            return _cmd_ask(getattr(ns, "question", []), getattr(ns, "json", False))
         if cmd == "modules":
             return _cmd_modules(ns.json)
         if cmd == "check":
             return _cmd_check(ns.file, ns.json)
         if cmd == "doctor":
             return _cmd_doctor(ns.json, getattr(ns, "strict", False))
+        if cmd == "status":
+            return _cmd_status(getattr(ns, "json", False), getattr(ns, "strict", False))
+        if cmd == "config":
+            return _cmd_config(getattr(ns, "config_cmd", None) or "list", getattr(ns, "key", None), getattr(ns, "value", None), getattr(ns, "json", False))
+        if cmd == "completion":
+            return _cmd_completion(ns.shell)
         if cmd == "bench":
             return _cmd_bench(getattr(ns, "rounds", 5), getattr(ns, "json", False))
         if cmd == "security":
@@ -3947,6 +2659,27 @@ def main(argv: List[str] | None = None) -> int:
             return _cmd_pkg(argparse.Namespace(pkg_cmd="diagnose-imports", dir=ns.dir, registry=ns.registry))
         if cmd == "search":
             return _cmd_pkg(argparse.Namespace(pkg_cmd="search", query=ns.query, registry=ns.registry, interactive=getattr(ns, 'interactive', False)))
+        if cmd == "info":
+            return _cmd_pkg(argparse.Namespace(pkg_cmd="info", name=ns.name, registry=ns.registry))
+        if cmd in {"profile", "author"}:
+            return _cmd_pkg(argparse.Namespace(pkg_cmd="profile", author=ns.author, registry=ns.registry))
+        if cmd in {"verify", "signature"}:
+            return _cmd_pkg(argparse.Namespace(pkg_cmd="verify", name=ns.name, registry=ns.registry, installed=getattr(ns, "installed", False), project_dir=getattr(ns, "project_dir", None), strict=getattr(ns, "strict", False), json=getattr(ns, "json", False)))
+        if cmd == "trust":
+            if getattr(ns, "list", False) or not getattr(ns, "author", None):
+                authors = pkg_trusted_authors()
+                _cli_line(f"trusted creators: {len(authors)}", kind="info")
+                for author in authors:
+                    print(f"- {author}")
+                return 0
+            res = pkg_trust_author(ns.author, remove=getattr(ns, "remove", False))
+            if not res.get("ok"):
+                _cli_line(str(res.get("error", "trust policy update failed")), kind="error", file=sys.stderr)
+                return 2
+            action = "removed from trust policy" if getattr(ns, "remove", False) else "trusted"
+            _cli_line(f"{ns.author}: {action}", kind="ok")
+            print(f"config    : {res.get('saved_to')}")
+            return 0
         if cmd == "publish":
             return _cmd_pkg(argparse.Namespace(pkg_cmd="publish", dir=ns.dir, online=True, registry=ns.registry, token=ns.token))
         if cmd == "seed-core":
@@ -3956,7 +2689,15 @@ def main(argv: List[str] | None = None) -> int:
         if cmd == "resolve-runtime":
             return _cmd_pkg(argparse.Namespace(pkg_cmd="resolve-runtime", dir=ns.dir, registry=ns.registry, strict=getattr(ns, 'strict', False)))
         if cmd == "update":
-            return _cmd_pkg(argparse.Namespace(pkg_cmd="update", name=getattr(ns, 'name', None), registry=ns.registry, project_dir=ns.project_dir))
+            return _cmd_pkg(argparse.Namespace(
+                pkg_cmd="update",
+                name=getattr(ns, "name", None),
+                registry=ns.registry,
+                project_dir=ns.project_dir,
+                check=getattr(ns, "check", False),
+                all_packages=getattr(ns, "all_packages", False),
+                no_deps=getattr(ns, "no_deps", False),
+            ))
         if cmd == "uninstall":
             return _cmd_pkg(argparse.Namespace(pkg_cmd="uninstall", name=ns.name, project_dir=ns.project_dir))
         if cmd == "login":
@@ -4020,7 +2761,8 @@ def main(argv: List[str] | None = None) -> int:
             p.print_help()
             return 2
         if cmd == "lsp":
-            return int(_start_lsp() or 0)
+            show_banner = False if getattr(ns, "no_banner", False) else None
+            return int(_start_lsp(show_banner=show_banner) or 0)
         if cmd == "pack":
             return _cmd_pack(ns.entry, ns.out, ns.include, ns.name, ns.version)
         if cmd == "run":
@@ -4056,6 +2798,7 @@ def main(argv: List[str] | None = None) -> int:
                 data_max_query_rows=getattr(ns, "data_max_rows", None),
                 data_max_record_bytes=getattr(ns, "data_max_record_bytes", None),
                 data_max_open_streams=getattr(ns, "data_max_streams", None),
+                native_required=getattr(ns, "native_required", False),
             )
         if cmd == "test":
             return _cmd_test(
@@ -4063,11 +2806,29 @@ def main(argv: List[str] | None = None) -> int:
                 engine=getattr(ns, "engine", "auto"),
                 pattern=getattr(ns, "pattern", None),
                 json_out=ns.json,
+                native_required=getattr(ns, "native_required", False),
+            )
+        if cmd == "record":
+            record_path = getattr(ns, "record_path", None) or getattr(ns, "output", None)
+            if not record_path:
+                _cli_line("record needs an output log path, e.g. `mellow record app.mellow replay.jsonl`", kind="error", file=sys.stderr)
+                return 2
+            return _cmd_record(
+                ns.file,
+                record_path=record_path,
+                engine=getattr(ns, "engine", "auto"),
+                seed=getattr(ns, "seed", None),
+                global_seed=getattr(ns, "global_seed", None),
+                json_out=ns.json,
             )
         if cmd == "replay":
+            replay_path = getattr(ns, "replay_path", None) or getattr(ns, "input", None)
+            if not replay_path:
+                _cli_line("replay needs a log path, e.g. `mellow replay app.mellow replay.jsonl`", kind="error", file=sys.stderr)
+                return 2
             return _cmd_replay(
                 ns.file,
-                replay_path=ns.replay_path,
+                replay_path=replay_path,
                 engine=getattr(ns, "engine", "auto"),
                 json_out=ns.json,
             )
@@ -4080,66 +2841,9 @@ def main(argv: List[str] | None = None) -> int:
 
 
 
-    # modern-command fallback: if the first token looks like a command word,
-    # prefer the modern parser so users get proper subcommand handling/errors.
-    if argv and not argv[0].startswith('-'):
-        try:
-            p = _build_modern_parser()
-            ns = p.parse_args(argv)
-            if getattr(ns, "cmd", None):
-                return main(argv=[ns.cmd] + argv[1:])
-        except SystemExit:
-            # Fall back to legacy parsing for actual script files.
-            pass
-
-    # legacy mode
-    p = _build_legacy_parser()
-    ns = p.parse_args(argv)
-
-    if getattr(ns, "lsp", False):
-        return int(_start_lsp() or 0)
-
-    if getattr(ns, "list_modules", False):
-        return _cmd_modules(bool(ns.json))
-
-    if not ns.script:
-        p.print_help()
-        return 2
-
-    if getattr(ns, "check_only", False):
-        return _cmd_check(ns.script, bool(ns.json))
-
-    return _cmd_run(
-        ns.script,
-        json_out=bool(ns.json),
-        engine=getattr(ns, "engine", "c"),
-        record_path=getattr(ns, "record_path", None),
-        replay_path=getattr(ns, "replay_path", None),
-        seed=getattr(ns, "seed", None),
-        global_seed=getattr(ns, "global_seed", None),
-        allow_ask=getattr(ns, "allow_ask", False),
-        no_wait=getattr(ns, "no_wait", False),
-        trace=getattr(ns, "trace", False),
-        step=getattr(ns, "step", False),
-        break_lines=getattr(ns, "break_lines", None),
-        watch=getattr(ns, "watch", None),
-        ai_timeline=getattr(ns, "ai_timeline", None),
-        color=getattr(ns, "color", False),
-        no_color=getattr(ns, "no_color", False),
-        allow_storage=not getattr(ns, "no_storage", False),
-        storage_dir=getattr(ns, "storage_dir", None),
-        allow_unsafe_fs=getattr(ns, "unsafe_fs", False),
-        max_steps=getattr(ns, "max_steps", None),
-        max_ms=getattr(ns, "max_ms", None),
-        syscall_budget=getattr(ns, "syscall_budget", None),
-        profile=bool(getattr(ns, "profile", False)),
-        sandbox_profile=getattr(ns, "sandbox_profile", "default"),
-        allow_data_write=getattr(ns, "data_write", False),
-        data_max_batch_size=getattr(ns, "data_batch_size", None),
-        data_max_query_rows=getattr(ns, "data_max_rows", None),
-        data_max_record_bytes=getattr(ns, "data_max_record_bytes", None),
-        data_max_open_streams=getattr(ns, "data_max_streams", None),
-    )
+    _cli_line("a command is required", kind="error", file=sys.stderr)
+    _cli_line("Run `mellow help` to see available commands.", kind="hint", file=sys.stderr)
+    return 2
 
 
 def _scheduled_job_callback(job: dict[str, Any]) -> dict[str, Any]:

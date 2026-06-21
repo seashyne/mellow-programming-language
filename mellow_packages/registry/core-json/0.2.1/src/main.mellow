@@ -1,0 +1,11 @@
+def encode(value):
+    return json.encode(value)
+
+def decode(text):
+    return json.decode(text)
+
+def clone(value):
+    return json.decode(json.encode(value))
+
+def pretty(value):
+    return json.encode(value)

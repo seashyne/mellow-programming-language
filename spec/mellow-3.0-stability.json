@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "language": "Mellow Programming Language",
+  "target_version": "3.0",
+  "status": "planned",
+  "goal": "Language Stability Release",
+  "baseline": {
+    "version": "2.9",
+    "patch": "2.9.3",
+    "manifest": "spec/mellow-2.9-core.json",
+    "patch_manifest": "spec/mellow-2.9.3-stability.json",
+    "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
+  },
+  "entrypoint": "SPEC.md",
+  "plan": "docs/V3_STABILITY_PLAN.md",
+  "draft_spec": "docs/LANGUAGE_SPEC_3_0.md",
+  "runtime_parity": "docs/RUNTIME_PARITY_3_0.md",
+  "required_gates": [
+    "tests/core",
+    "tests/language",
+    "package-registry-smoke",
+    "native-core-parity-or-documented-partial"
+  ],
+  "stable_feature_rule": [
+    "documented",
+    "tested",
+    "classified_as_core_extended_or_experimental"
+  ],
+  "release_commands": [
+    "py -3.11 -m pytest -q tests/core tests/language -p no:cacheprovider",
+    "py -3.11 -m pytest -q tests/test_v152_online_registry.py tests/test_v153_public_registry.py tests/test_v154_cli_registry.py tests/test_v157_core_packages.py tests/test_v158_lockfile.py tests/test_v159_runtime_and_imports.py tests/test_v215_package_runtime_integration.py tests/test_v216_project_templates.py -p no:cacheprovider"
+  ]
+}

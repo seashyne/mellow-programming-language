@@ -1,0 +1,26 @@
+{
+  "name": "mellow-sdk",
+  "version": "0.3.0",
+  "description": "OpenAI-compatible chat SDK for DeepSeek, OpenAI, and compatible providers.",
+  "entry": "src/main.mel",
+  "visibility": "public",
+  "dependencies": {
+    "sdk": "host"
+  },
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "sdk",
+    "openai",
+    "deepseek",
+    "chat",
+    "provider",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
+}

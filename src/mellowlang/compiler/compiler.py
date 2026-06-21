@@ -12,7 +12,7 @@ from ..ast import Call, GetModuleExpr, GetModuleStmt, IfGroup, Index, LoopCount,
 from .bytecode_backend import BytecodeBackend
 from .ir_lowering import IRLowerer, UnsupportedLoweringError
 from .optimizer import ControlFlowGraph, DefUseInfo, DominatorTree, IROptimizer, OptimizationSummary, SSAProgram
-from .legacy import Compiler as _LegacyCompiler
+from .bytecode import Compiler as _BytecodeCompiler
 
 
 _COMPILE_CACHE_MAX = 128
@@ -53,12 +53,12 @@ class CompiledProgram:
     optimized_def_use: DefUseInfo | None = None
     ssa_program: SSAProgram | None = None
     optimized_ssa_program: SSAProgram | None = None
-    pipeline: str = "legacy"
+    pipeline: str = "bytecode"
 
 
 class Compiler:
     def __init__(self) -> None:
-        self._legacy = _LegacyCompiler()
+        self._bytecode_compiler = _BytecodeCompiler()
 
     def compile(self, source: str, *, filename: str | None = None, optimize: bool = True) -> CompiledProgram:
         global _COMPILE_CACHE_HITS, _COMPILE_CACHE_MISSES
@@ -166,33 +166,32 @@ class Compiler:
                 pipeline="ast-ir-opt-bytecode" if use_optimizer else "ast-ir-bytecode",
             )
         except UnsupportedLoweringError:
-            # Fall through to the battle-tested compiler so existing language
-            # features keep working while the new IR pipeline expands.
+            # Fall through to the complete bytecode compiler for language
+            # features that the IR lowering pipeline does not cover yet.
             pass
         except MellowLangRuntimeError:
             raise
         except Exception:
-            # The IR/backend path is still expanding. If it cannot lower or
-            # emit a valid program yet, preserve stable language behavior by
-            # falling back to the legacy bytecode compiler below.
+            # Preserve stable behavior through the complete bytecode compiler
+            # when the newer IR/backend path cannot emit a valid program.
             pass
 
         try:
-            bytecode = self._legacy.compile(lines, filename=filename)
+            bytecode = self._bytecode_compiler.compile(lines, filename=filename)
         except MellowLangRuntimeError:
             raise
         except Exception as e:
             raise MellowLangRuntimeError('COMPILER', str(e), None, filename=filename)
         return CompiledProgram(
             bytecode=bytecode,
-            func_table=getattr(self._legacy, "functions", None),
-            event_table=getattr(self._legacy, "events", None),
+            func_table=getattr(self._bytecode_compiler, "functions", None),
+            event_table=getattr(self._bytecode_compiler, "events", None),
             filename=filename,
             source_lines=lines,
-            line_map=getattr(self._legacy, 'line_map', None),
-            col_map=getattr(self._legacy, 'col_map', None),
-            end_line_map=getattr(self._legacy, 'line_map', None),
-            end_col_map=getattr(self._legacy, 'col_map', None),
+            line_map=getattr(self._bytecode_compiler, 'line_map', None),
+            col_map=getattr(self._bytecode_compiler, 'col_map', None),
+            end_line_map=getattr(self._bytecode_compiler, 'line_map', None),
+            end_col_map=getattr(self._bytecode_compiler, 'col_map', None),
             span_map=None,
             ast=ast,
             ir=ir,
@@ -206,7 +205,7 @@ class Compiler:
             optimized_def_use=optimized_def_use,
             ssa_program=ssa_program,
             optimized_ssa_program=optimized_ssa_program,
-            pipeline="legacy",
+            pipeline="bytecode",
         )
 
 

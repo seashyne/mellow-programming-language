@@ -3,17 +3,24 @@
   "version": "0.1.0",
   "entry": "src/main.mel",
   "description": "Time helpers for timestamps and lightweight elapsed measurements.",
-  "authors": [],
-  "license": "MIT",
   "dependencies": {
     "time": "host"
   },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
   "keywords": [
     "core",
     "time",
     "clock",
+    "timestamp",
     "starter"
   ],
-  "visibility": "public",
-  "namespace": ""
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

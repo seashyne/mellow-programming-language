@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 import pytest
 from mellowlang.compiler import Compiler
 from mellowlang.vm.vm import MellowVM, RunConfig
-from mellowlang.compiler.legacy import Compiler as LegacyCompiler
+from mellowlang.compiler.bytecode import Compiler as BytecodeCompiler
 from mellowlang.vm.cbridge import run_bytecode, c_vm_available
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -331,9 +331,9 @@ show n
 # ── 6. C VM bridge ────────────────────────────────────────────────────────────
 
 def test_cvm_fallback():
-    c = LegacyCompiler()
+    c = BytecodeCompiler()
     bytecode = c.compile(['keep x = 2 + 3', 'show x'])
-    from mellowlang.host.legacy import default_host
+    from mellowlang.host.runtime import default_host
     run_bytecode(bytecode=bytecode, host=default_host(), config={"allow_ask": False},
                  func_table=c.functions, event_table=c.events)
 

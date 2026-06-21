@@ -2,7 +2,7 @@
 
 ## Set the official registry
 ```bash
-mellow pkg registry https://registry.mellowlang.org
+mellow pkg registry https://mellow-public-registry.jirayut-wh.workers.dev
 ```
 
 ## Save a publish token

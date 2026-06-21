@@ -1,0 +1,26 @@
+{
+  "name": "core-math",
+  "version": "0.2.0",
+  "entry": "src/main.mel",
+  "description": "Friendly math helpers and interpolation wrappers.",
+  "dependencies": {
+    "math": "host"
+  },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "math",
+    "numbers",
+    "interpolation",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
+}

@@ -1,0 +1,22 @@
+use mellow-sdk as openai
+
+let client = openai.OpenAI({
+    "api_key_env": "DEEPSEEK_API_KEY",
+    "base_url": "https://api.deepseek.com"
+})
+
+let response = call chat.completions_create(
+    client,
+    "deepseek-chat",
+    [
+        {"role": "system", "content": "You are a helpful assistant"},
+        {"role": "user", "content": "Hello"}
+    ],
+    {
+        "stream": false,
+        "reasoning_effort": "high",
+        "extra_body": {"thinking": {"type": "enabled"}}
+    }
+)
+
+print(response["choices"][0]["message"]["content"])

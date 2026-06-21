@@ -1,36 +1,9 @@
-# MellowLang CLI (v2.8.0)
+# MellowLang CLI (v2.9.3)
 
-MellowLang v1.0.3 คืน **CLI แบบเดิม** (Frinds-style) และยังคง **CLI แบบใหม่ (subcommands)** ไว้ด้วย
+MellowLang ใช้ CLI แบบ subcommand เท่านั้น เพื่อให้คำสั่งชัดเจนและเหมาะกับ
+terminal, editor และ CI
 
-## 1) Legacy-compatible mode (เหมือนเดิม)
-รูปแบบ:
-- `mellow <script> [options...]`
-- `mellow --lsp`
-- `mellow --modules`
-
-ตัวอย่าง:
-```bash
-mellow examples/hello.mellow
-mellow examples/hello.mellow --seed 123 --record out.jsonl
-mellow examples/events.fds --emit Spawn --emit-args "["p1",10]"
-mellow --check examples/loops.mellow
-mellow --lsp
-```
-
-Options สำคัญ:
-- `--lsp` เริ่ม Language Server
-- `--emit/--emit-args` emit event หลังรันจบ
-- `--record/--replay` deterministic replay
-- `--seed/--global-seed` ควบคุม randomness
-- `--sandbox=finance` ปิด ask/wait/storage/save/network สำหรับ rule scripts ที่ต้องเข้มขึ้น
-- `--sandbox=data` ใช้ได้ทั้ง Python/C VM พร้อม batch/query/time limits สำหรับงานข้อมูล
-- `--data-write` เปิด SQLite writes แบบ explicit
-- `--data-batch-size`, `--data-max-rows` จำกัด memory/result size
-- `--color/--no-color` สี error
-- `--json` output แบบเครื่องอ่านได้
-- `--engine/--legacy` (compat) คงไว้เพื่อความคุ้นเคย
-
-## 2) Modern subcommands (แนะนำสำหรับ tooling)
+## คำสั่งหลัก
 ```bash
 mellow run <file>
 mellow run <file> --sandbox=finance
@@ -42,9 +15,7 @@ mellow modules [--json]
 mellow lsp
 ```
 
-## 3) ความเข้ากันได้
-- ถ้า arg แรกเป็น `run/check/fmt/init/modules/lsp` → ใช้โหมดใหม่
-- อย่างอื่น → ใช้โหมดเดิมอัตโนมัติ
+การเรียก `mellow <file>` ถูกถอดออกแล้ว ให้ใช้ `mellow run <file>` เสมอ
 
 
 ## Package Registry (v1.5.2)

@@ -8,6 +8,7 @@
     "db:migrate": "wrangler d1 execute REGISTRY_DB --file=./migrations/001_init.sql"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260613.1",
     "typescript": "^5.7.0",
     "wrangler": "^4.11.0"
   }

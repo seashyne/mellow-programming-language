@@ -1,0 +1,38 @@
+def OpenAI(config):
+    if config == none:
+        return sdk.openai_client({})
+    return sdk.openai_client(config)
+
+def DeepSeek(config):
+    if config == none:
+        return sdk.deepseek_client({})
+    return sdk.deepseek_client(config)
+
+def chat_completions_create(client, model, messages, options):
+    if options == none:
+        return sdk.chat_completions_create(client, model, messages, {})
+    return sdk.chat_completions_create(client, model, messages, options)
+
+def response_content(response):
+    return response["content"]
+
+def response_message_content(response):
+    return response["choices"][0]["message"]["content"]
+
+# Legacy aliases kept for older examples.
+def client(config):
+    return OpenAI(config)
+
+def deepseek(config):
+    return DeepSeek(config)
+
+def openai(config):
+    if config == none:
+        return sdk.openai_preset_client({})
+    return sdk.openai_preset_client(config)
+
+def chat(client_config, model, messages, options):
+    return chat_completions_create(client_config, model, messages, options)
+
+def text(result):
+    return response_content(result)

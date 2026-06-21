@@ -1,0 +1,17 @@
+def prompt(text):
+    return ai.prompt_template(text, {})
+
+def complete(text):
+    return ai.chat(text)
+
+def session(prompt_name):
+    return ai.session_open(prompt_name)
+
+def ask(session_id, prompt):
+    return ai.session_message(session_id, prompt)
+
+def answer(query, docs):
+    return ai.rag_answer(query, docs, 3)
+
+def search(query, docs):
+    return ai.vector_search(query, docs, 3)

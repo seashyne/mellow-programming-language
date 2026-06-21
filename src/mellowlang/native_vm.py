@@ -78,6 +78,64 @@ def source_files() -> list[Path]:
     ]
 
 
+def _normalize_machine(value: str | None = None) -> str:
+    raw = (value or platform.machine() or "").lower().replace("-", "_")
+    aliases = {
+        "amd64": "x86_64",
+        "x64": "x86_64",
+        "i386": "x86",
+        "i686": "x86",
+        "arm64": "arm64",
+        "aarch64": "arm64",
+        "armv8": "arm64",
+        "armv7l": "arm32",
+        "armv6l": "arm32",
+    }
+    return aliases.get(raw, raw or "unknown")
+
+
+def cpu_runtime_profile(machine: str | None = None) -> dict[str, Any]:
+    """Return the native CPU backend plan used by status/doctor/build metadata.
+
+    The runtime always keeps a portable C path. Architecture-specific backends are
+    selected only when the target CPU family is known.
+    """
+    arch = _normalize_machine(machine)
+    backends = ["generic-c"]
+    features: list[str] = []
+    preferred = "generic-c"
+    vector_width_bits: int | None = None
+
+    if arch == "x86_64":
+        backends.append("x86_64-simd")
+        features.extend(["sse2-baseline", "avx2-if-compiled"])
+        preferred = "x86_64-simd"
+        vector_width_bits = 128
+    elif arch == "arm64":
+        backends.append("arm64-neon")
+        features.extend(["neon-baseline", "sve-if-compiled"])
+        preferred = "arm64-neon"
+        vector_width_bits = 128
+    elif arch == "arm32":
+        backends.append("arm32-neon-optional")
+        features.append("neon-if-available")
+        preferred = "generic-c"
+
+    return {
+        "machine": platform.machine(),
+        "normalized_arch": arch,
+        "portable_backend": "generic-c",
+        "preferred_backend": preferred,
+        "available_backends": backends,
+        "cpu_features": features,
+        "vector_width_bits": vector_width_bits,
+        "multi_core_workers": os.cpu_count() or 1,
+        "arm64_ready": arch == "arm64",
+        "x86_64_ready": arch == "x86_64",
+        "fallback_policy": "generic-c",
+    }
+
+
 def native_vm_status() -> dict[str, Any]:
     ext = current_extension_path()
     header_candidates = _python_header_candidates()
@@ -91,6 +149,7 @@ def native_vm_status() -> dict[str, Any]:
         if marker in name:
             abi_tag = name.split(marker, 1)[1].split('-', 1)[0]
     current_abi = f"{sys.version_info.major}{sys.version_info.minor}"
+    cpu_profile = cpu_runtime_profile()
     return {
         'available': load_error is None,
         'load_error': load_error,
@@ -102,6 +161,13 @@ def native_vm_status() -> dict[str, Any]:
         'extension_suffixes': list(EXTENSION_SUFFIXES),
         'python': sys.version.split()[0],
         'platform': platform.platform(),
+        'machine': cpu_profile['machine'],
+        'normalized_arch': cpu_profile['normalized_arch'],
+        'cpu_profile': cpu_profile,
+        'native_backend': cpu_profile['preferred_backend'],
+        'available_native_backends': cpu_profile['available_backends'],
+        'portable_backend': cpu_profile['portable_backend'],
+        'multi_core_workers': cpu_profile['multi_core_workers'],
         'python_include': str(header) if header else None,
         'python_header_candidates': [str(p) for p in header_candidates],
         'python_headers_found': bool(header),

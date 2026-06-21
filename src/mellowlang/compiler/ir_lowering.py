@@ -44,7 +44,7 @@ from ..ast import (
     WaitStmt,
 )
 from ..ir import IRFunction, IRInstruction, IRProgram
-from ..host.legacy import MODULE_ALLOWLIST
+from ..host.runtime import MODULE_ALLOWLIST
 
 
 STDLIB_CALLS = {

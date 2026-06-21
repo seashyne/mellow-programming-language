@@ -3,17 +3,24 @@
   "version": "0.1.0",
   "entry": "src/main.mel",
   "description": "Friendly math helpers and interpolation wrappers.",
-  "authors": [],
-  "license": "MIT",
   "dependencies": {
     "math": "host"
   },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
   "keywords": [
     "core",
     "math",
     "numbers",
+    "interpolation",
     "starter"
   ],
-  "visibility": "public",
-  "namespace": ""
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

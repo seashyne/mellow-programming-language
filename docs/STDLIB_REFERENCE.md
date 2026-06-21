@@ -12,7 +12,7 @@ This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
 - `input(prompt)` *(requires `--allow-ask`)*
 - `range(a, b)`
 - `len(x)`
-- `call(fn, ...args)` *(legacy escape hatch)*
+- `call(fn, ...args)` *(dynamic function call)*
 
 ## Math / vectors
 
@@ -109,6 +109,29 @@ Parameterized SQLite:
 - `data_sqlite_close(db)`
 
 Writes require `--data-write`. Query values must use `?` or named placeholders.
+
+## Interop
+
+External language interop is available through the allowlisted `interop` module.
+It is deny-by-default and should be enabled per project:
+
+```json
+{
+  "permissions": ["interop:node"]
+}
+```
+
+```mellow
+keep result = get interop.run("node", ["tools/hello.js"], {"name": "Mellow"})
+print(result)
+```
+
+- `interop.available(command)`
+- `interop.describe()`
+- `interop.run(command, args=[], payload={}, options={})`
+
+See `docs/INTEROP.md` for the JSON stdio protocol and examples for
+JavaScript, Go, Rust, Java, C++, C#, TypeScript, COBOL, and other runtimes.
 
 ## Random (deterministic)
 

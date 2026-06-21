@@ -209,11 +209,11 @@ def lower_compiled_to_standalone_image(compiled: CompiledProgram, *, source_name
     globals_map: dict[str, int] = {}
 
     # ── build func_table ──────────────────────────────────────────────────
-    # New IR compiler populates func_table; legacy compiler does not.
-    # For legacy bytecode, reconstruct func_table by scanning ARG markers.
+    # New IR compiler populates func_table; bytecode compiler does not.
+    # For bytecode, reconstruct func_table by scanning ARG markers.
     func_table = {k: dict(v) for k, v in (compiled.func_table or {}).items()}
     if not func_table:
-        # Legacy scan: JUMP target → [ARG b, ARG a, ...body..., RETURN]
+        # Bytecode scan: JUMP target -> [ARG b, ARG a, ...body..., RETURN]
         _current_func = None
         _pending_args: list[str] = []
         for _pc, _ins in enumerate(bytecode):
@@ -260,8 +260,8 @@ def lower_compiled_to_standalone_image(compiled: CompiledProgram, *, source_name
                         break
 
     # v2.3.4: scope-aware slot allocation
-    # Build per-function local variable maps from ARG sequences in legacy bytecode.
-    # Each function body is preceded by ARG('paramN'), ARG('paramN-1'), ... in legacy.
+    # Build per-function local variable maps from ARG sequences in bytecode.
+    # Each function body is preceded by ARG('paramN'), ARG('paramN-1'), ... .
     # The function's locals are: params first (in declaration order), then other vars.
     _func_locals: dict[str, dict[str, int]] = {}   # func_name → {var: slot}
     _func_ranges: list[tuple[int, int, str]] = []  # (start_pc, end_pc, func_name)
@@ -606,23 +606,23 @@ def _span_tuple(span_map: list[dict[str, Any]], pc: int, compiled: CompiledProgr
 
 
 def compile_source_to_standalone_image(source: str, *, filename: str | None = None, optimize: bool = True) -> StandaloneImage:
-    # v2.3.4: try new IR compiler first; fall back to legacy compiler for
+    # v2.3.4: try new IR compiler first; fall back to bytecode compiler for
     # constructs (if/def) that the IR lowerer doesn't yet handle.
-    from .compiler.legacy import Compiler as _LegacyCompiler
+    from .compiler.bytecode import Compiler as _BytecodeCompiler
     from .error_core import MellowLangRuntimeError
 
-    # v2.3.4: standalone always uses legacy compiler — the new IR optimizer has
+    # v2.3.4: standalone always uses bytecode compiler — the new IR optimizer has
     # known issues (variable-access after BUILD_LIST/BUILD_MAP) that cause incorrect
-    # code generation in the standalone lowering pass.  The legacy compiler is fully
+    # code generation in the standalone lowering pass.  The bytecode compiler is fully
     # tested and produces correct bytecode for all supported constructs.
-    legacy_bytecode = _LegacyCompiler().compile(source.splitlines())
+    bytecode = _BytecodeCompiler().compile(source.splitlines())
     compiled = CompiledProgram(
-        bytecode=legacy_bytecode,
+        bytecode=bytecode,
         func_table=None,
         event_table=None,
         filename=filename,
         source_lines=source.splitlines(),
-        pipeline="legacy",
+        pipeline="bytecode",
     )
 
     return lower_compiled_to_standalone_image(compiled, source_name=filename or '<memory>')

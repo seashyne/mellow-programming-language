@@ -41,7 +41,7 @@ class Op:
     WAIT      = 19
 
     # Storage
-    SAVE      = 23      # legacy: SAVE var_name (filename on stack)
+    SAVE      = 23      # bytecode: SAVE var_name (filename on stack)
     LOAD_F    = 24      # LOAD_F var_name (filename on stack)
     SAVE_VAL  = 32      # SAVE_VAL (stack: filename, value)
 

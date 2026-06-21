@@ -17,7 +17,7 @@ class Token:
 # - The caller can provide (line, base_col) so tokens can carry precise line:col.
 
 KEYWORDS = {
-    # legacy / mellow
+    # language keywords
     "keep","show","precision","check","also","else","loop","skill","return",
     "stop","wait","save","load","into","put","in","and","or","not","true","false","none","null",
     "try","catch","finally","repeat","until","break","continue","import","on","do",

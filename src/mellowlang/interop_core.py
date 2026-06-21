@@ -87,7 +87,7 @@ def _parse_stdout(text: str) -> Any:
 
 
 def register_interop_functions(host: Any) -> None:
-    from .host.legacy import HostFunction
+    from .host.runtime import HostFunction
 
     def _available(args: list[Any]) -> bool:
         command = str(args[0]).strip()

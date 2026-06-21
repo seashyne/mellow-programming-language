@@ -1,0 +1,20 @@
+def project(rows, fields):
+    return data.project(rows, fields)
+
+def where(rows, field, operator, value):
+    return data.where(rows, field, operator, value)
+
+def sum(rows, field):
+    return data.sum(rows, field)
+
+def open_jsonl(path):
+    return data.open_jsonl(path)
+
+def open_csv(path):
+    return data.open_csv(path)
+
+def next(stream):
+    return data.next(stream)
+
+def close(stream):
+    return data.close(stream)

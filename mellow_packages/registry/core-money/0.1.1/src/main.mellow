@@ -1,0 +1,26 @@
+def of(amount, currency):
+    return money.of(amount, currency)
+
+def add(left, right):
+    return money.add(left, right)
+
+def sub(left, right):
+    return money.sub(left, right)
+
+def mul(value, factor):
+    return money.mul(value, factor)
+
+def div(value, divisor):
+    return money.div(value, divisor)
+
+def quantize(value, places):
+    return money.quantize(value, places)
+
+def format(value):
+    return money.format(value)
+
+def amount(value):
+    return money.amount(value)
+
+def currency(value):
+    return money.currency(value)

@@ -1,0 +1,13 @@
+name = "core-ai"
+version = "0.2.0"
+description = "Prompt and retrieval helpers on top of the built-in AI runtime."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "ai", "rag", "prompt", "starter"]
+badges = ["official"]
+official = true
+[dependencies]
+ai = "host"

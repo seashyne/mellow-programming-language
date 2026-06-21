@@ -1,0 +1,4 @@
+import "pkg:core-math" as mathx
+
+print(mathx.clamp01(2))
+print(mathx.lerp(0, 10, 0.5))

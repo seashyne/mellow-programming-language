@@ -18,7 +18,7 @@ This folder is the deployable starter for the public Mellow package registry.
 
 ## Expected client setup
 ```bash
-mellow pkg registry https://registry.mellowlang.org
+mellow pkg registry https://mellow-public-registry.jirayut-wh.workers.dev
 mellow login --token <publish-token>
 mellow publish ./physics2d
 mellow install physics2d

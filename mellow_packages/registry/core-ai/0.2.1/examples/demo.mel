@@ -1,0 +1,3 @@
+import "pkg:core-ai" as ml
+
+print(ml.answer("What is Mellow?", ["Mellow is a scripting language."]))

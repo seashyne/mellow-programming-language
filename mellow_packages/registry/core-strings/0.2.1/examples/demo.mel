@@ -1,0 +1,4 @@
+import "pkg:core-strings" as text
+
+print(text.upper("mellow"))
+print(text.surround("ok", "[", "]"))

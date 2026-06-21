@@ -312,7 +312,7 @@ static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t ar
 /* ── entry point ─────────────────────────────────────────────────────────── */
 static void usage(const char *argv0){
     fprintf(stderr,
-        "Mellow Programming Language 2.9.2 (Full Native C)\n"
+        "Mellow Programming Language 2.9.3 (Full Native C)\n"
         "Usage: %s <program.mellow|program.mvi>\n"
         "       %s check <program.mellow>\n"
         "       %s --version\n",argv0,argv0,argv0);
@@ -322,7 +322,7 @@ int main(int argc, char **argv){
     int check_only=0;
     if(argc<2){usage(argv[0]);return 1;}
     if(!strcmp(argv[1],"--version")||!strcmp(argv[1],"-V")){
-        puts("Mellow Programming Language 2.9.2 (Full Native C)");
+        puts("Mellow Programming Language 2.9.3 (Full Native C)");
         return 0;
     }
     if(!strcmp(argv[1],"check")){

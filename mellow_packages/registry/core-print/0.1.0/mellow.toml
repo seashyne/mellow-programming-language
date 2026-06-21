@@ -4,7 +4,10 @@ description = "Console output helpers and lightweight formatting for Mellow."
 entry = "src/main.mel"
 license = "MIT"
 visibility = "public"
-keywords = ["core", "console", "output", "starter"]
 
+authors = ["Mellow Code Team"]
+keywords = ["core", "console", "output", "formatting", "starter"]
+badges = ["official"]
+official = true
 [dependencies]
 # no external dependencies

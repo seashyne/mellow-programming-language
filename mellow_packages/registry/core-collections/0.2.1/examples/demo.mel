@@ -1,0 +1,5 @@
+import "pkg:core-collections" as col
+
+keep items = [1, 2]
+col.push(items, 3)
+print(col.size(items))

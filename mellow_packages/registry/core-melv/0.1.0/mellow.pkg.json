@@ -2,5 +2,20 @@
   "name": "core-melv",
   "version": "0.1.0",
   "entry": "src/main.mel",
-  "kind": "starter-package"
+  "kind": "starter-package",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "media",
+    "video",
+    "codec",
+    "melv"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

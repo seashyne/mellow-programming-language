@@ -1,0 +1,12 @@
+name = "core-storage"
+version = "0.2.0"
+description = "Persistence helpers using Mellow save/load statements."
+entry = "src/main.mellow"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "storage", "persistence", "save", "starter"]
+badges = ["official"]
+official = true
+[dependencies]

@@ -1,0 +1,13 @@
+name = "core-data"
+version = "0.1.1"
+description = "Bounded data transforms and SQLite helpers."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "data", "csv", "jsonl", "sqlite", "starter"]
+badges = ["official"]
+official = true
+[dependencies]
+data = "host"

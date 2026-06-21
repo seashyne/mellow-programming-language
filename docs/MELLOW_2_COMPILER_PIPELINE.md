@@ -16,7 +16,7 @@ This pack adds a real compiler pipeline:
   - Executes IR by lowering into the stable VM backend
 - `src/mellowlang/compiler/compiler.py`
   - Stable compiler facade now prefers the AST -> IR -> bytecode pipeline
-  - Falls back to the legacy compiler for unsupported features
+  - Falls back to the complete bytecode compiler for unsupported IR features
 
 ## Supported by the new IR path
 
@@ -33,7 +33,7 @@ This pack adds a real compiler pipeline:
 
 ## Current fallback behavior
 
-Some advanced nodes still compile through the legacy backend for compatibility, including examples such as:
+Some advanced nodes compile through the complete bytecode backend, including:
 
 - try/catch/finally
 - default/variadic skill defs (`SkillDefV2`)
@@ -47,7 +47,7 @@ That means existing projects keep working while the new compiler pipeline grows.
 
 - `ast`
 - `ir`
-- `pipeline` (`"ast-ir-bytecode"` or `"legacy"`)
+- `pipeline` (`"ast-ir-bytecode"` or `"bytecode"`)
 
 So later you can add:
 
@@ -63,7 +63,7 @@ Examples verified during packaging:
 
 - `examples/hello.mellow` -> `ast-ir-bytecode`
 - `examples/modern_quickstart.mellow` -> `ast-ir-bytecode`
-- `examples/try_catch.mellow` -> `legacy`
+- `examples/try_catch.mellow` -> `bytecode`
 
 ## Next recommended steps
 

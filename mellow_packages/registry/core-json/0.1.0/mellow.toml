@@ -4,7 +4,10 @@ description = "JSON encode/decode wrappers for app and API scripts."
 entry = "src/main.mel"
 license = "MIT"
 visibility = "public"
-keywords = ["core", "json", "data", "starter"]
 
+authors = ["Mellow Code Team"]
+keywords = ["core", "json", "data", "decode", "starter"]
+badges = ["official"]
+official = true
 [dependencies]
 json = "host"

@@ -1,0 +1,3 @@
+import "pkg:core-gamekit" as g
+
+print(g.tween(0, 100, 0.5))

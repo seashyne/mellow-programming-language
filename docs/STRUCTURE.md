@@ -38,14 +38,14 @@ src/mellowlang/
 ├─ cli.py
 ├─ compiler/
 │  ├─ compiler.py
-│  ├─ legacy.py
+│  ├─ bytecode.py
 │  └─ errors.py
 ├─ vm/
 │  ├─ vm.py
-│  └─ legacy.py
+│  └─ runtime.py
 ├─ host/
 │  ├─ modules.py
 │  ├─ registry.py
-│  └─ legacy.py
+│  └─ python_vm.py
 └─ ... (parser/lexer/stdlib/lsp)
 ```

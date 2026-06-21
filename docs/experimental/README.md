@@ -1,0 +1,45 @@
+# Experimental and Extended Surfaces
+
+These documents describe **non-core** features. They do not block stable
+2.9.x releases unless their own tests are explicitly added to a release gate.
+
+For the stable language contract, start with:
+
+- [`../STABLE_CORE.md`](../STABLE_CORE.md)
+- [`../SYNTAX_REFERENCE.md`](../SYNTAX_REFERENCE.md)
+- [`../LANGUAGE_SPEC_2_9.md`](../LANGUAGE_SPEC_2_9.md)
+
+## Agents and hosted platform
+
+- [`AGENT_REGISTRY.md`](AGENT_REGISTRY.md)
+- [`AGENT_PACKAGES.md`](AGENT_PACKAGES.md)
+- [`AGENT_LOCKFILE_AND_PRIVATE_REGISTRY.md`](AGENT_LOCKFILE_AND_PRIVATE_REGISTRY.md)
+- [`AGENT_SIGNING_AND_DEPENDENCIES.md`](AGENT_SIGNING_AND_DEPENDENCIES.md)
+- [`AI_NATIVE_OVERVIEW.md`](AI_NATIVE_OVERVIEW.md)
+- [`AI_SECURITY_PERFORMANCE_POLICY.md`](AI_SECURITY_PERFORMANCE_POLICY.md)
+- [`DEPLOYMENT_TARGETS.md`](DEPLOYMENT_TARGETS.md)
+- [`SDK_AND_HOSTED_ECOSYSTEM.md`](SDK_AND_HOSTED_ECOSYSTEM.md)
+
+## MMG, video, and graphics
+
+- [`MMG_RUNTIME.md`](MMG_RUNTIME.md)
+- [`MMG_RENDER_CORE.md`](MMG_RENDER_CORE.md)
+- [`MMG_NATIVE_PIPELINE.md`](MMG_NATIVE_PIPELINE.md)
+- [`MMG_NATIVE_BUILD_PARITY.md`](MMG_NATIVE_BUILD_PARITY.md)
+- [`MMG_GPU_NEXT.md`](MMG_GPU_NEXT.md)
+- [`MMG_GPU_NATIVE_ENGINE.md`](MMG_GPU_NATIVE_ENGINE.md)
+- [`SMALLLESS_AND_MELV.md`](SMALLLESS_AND_MELV.md)
+
+## Playground and desktop
+
+- [`PLAYGROUND.md`](PLAYGROUND.md)
+- [`PLAYGROUND_PRO.md`](PLAYGROUND_PRO.md)
+- [`PLAYGROUND_DEBUGGER_FULL_VM.md`](PLAYGROUND_DEBUGGER_FULL_VM.md)
+- [`PLAYGROUND_TIME_TRAVEL.md`](PLAYGROUND_TIME_TRAVEL.md)
+- [`DESKTOP_RUNTIME.md`](DESKTOP_RUNTIME.md)
+- [`DESKTOP_NATIVE_RUNTIME.md`](DESKTOP_NATIVE_RUNTIME.md)
+
+## Historical overviews
+
+- [`MELLOW_151_OVERVIEW.md`](MELLOW_151_OVERVIEW.md)
+- [`MELLOW_160_OVERVIEW.md`](MELLOW_160_OVERVIEW.md)

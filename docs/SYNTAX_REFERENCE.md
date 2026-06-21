@@ -26,11 +26,13 @@ mellow run hello.mellow
 ```powershell
 mellow run hello.mellow --engine=py
 mellow run hello.mellow --engine=c
+mellow run hello.mellow --engine=c --native-required
 ```
 
 `--engine=c` เป็นค่าเริ่มต้นและยอม fallback ไป Python หาก feature ยังไม่มี native
 parity เช่น debugger, events และ record/replay ส่วน `--engine=py` ใช้บังคับ Python
-VM และ `--engine=auto` ยังรองรับเพื่อ compatibility
+VM และ `--engine=auto` ยังรองรับเพื่อ compatibility ถ้าต้องการให้ล้มทันทีเมื่อ C
+runtime ไม่รองรับ ให้ใช้ `--native-required`
 
 ## 2. รูปแบบไฟล์และ block
 
@@ -129,7 +131,7 @@ x, y = y, x
 
 ```mellow
 var lives = 3
-keep legacy_name = "supported"
+keep display_name = "supported"
 ```
 
 Mellow เป็นภาษา dynamic typing จึงไม่ต้องประกาศ type แต่ควรรักษาชนิดข้อมูลของ
@@ -253,7 +255,7 @@ comparison เช่น `0 < x < 10`
 
 ```mellow
 print("score:", score)
-show "legacy output:", score
+show "output:", score
 ```
 
 `show` เป็น compatibility alias ของ `print`

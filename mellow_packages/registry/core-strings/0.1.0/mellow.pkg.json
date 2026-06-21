@@ -3,17 +3,24 @@
   "version": "0.1.0",
   "entry": "src/main.mel",
   "description": "String helpers built on top of the host string module.",
-  "authors": [],
-  "license": "MIT",
   "dependencies": {
     "string": "host"
   },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
   "keywords": [
     "core",
     "strings",
     "text",
+    "formatting",
     "starter"
   ],
-  "visibility": "public",
-  "namespace": ""
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

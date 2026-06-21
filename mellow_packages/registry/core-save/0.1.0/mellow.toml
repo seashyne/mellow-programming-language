@@ -4,7 +4,11 @@ description = "Small persistence helpers using built-in save/load APIs."
 entry = "src/main.mel"
 license = "MIT"
 visibility = "public"
-keywords = ["core", "save", "storage", "starter"]
 
+authors = ["Mellow Code Team"]
+keywords = ["core", "save", "storage", "compatibility", "deprecated"]
+badges = ["official", "deprecated"]
+official = true
+deprecated = true
 [dependencies]
 # no external dependencies

@@ -5,9 +5,8 @@ from typing import Optional, Any, Dict
 
 from ..replay import ReplayConfig
 from ..host import HostRegistry, default_host
-from .legacy import MellowLangVM as _LegacyVM
+from .python_vm import MellowLangVM as _PythonVM
 from .cbridge import run_bytecode_ex, CVMUnsupportedOpcode, NativeExecutionRequiredError, c_vm_capabilities, c_vm_debug_supported
-from ..compiler import Compiler as _LegacyCompiler
 from ..compiler.compiler import CompiledProgram
 from ..error_core import MellowLangRuntimeError
 
@@ -53,6 +52,9 @@ class RunConfig:
     net_ws_allow: Optional[str] = None    # comma-separated allowlist prefixes (e.g. wss://ws.game.com/)
     net_max_bytes: Optional[int] = None   # max payload/response bytes
     net_timeout_s: Optional[float] = None
+
+    # External process interop (deny-by-default; comma-separated command allowlist)
+    interop_allow: Optional[str] = None
 
     # Limits / budgets (sandbox)
     max_steps: Optional[int] = None
@@ -136,6 +138,8 @@ class MellowVM:
             config_dict['net_max_bytes'] = int(getattr(cfg, 'net_max_bytes'))
         if getattr(cfg, 'net_timeout_s', None) is not None:
             config_dict['net_timeout_s'] = float(getattr(cfg, 'net_timeout_s'))
+        if getattr(cfg, 'interop_allow', None):
+            config_dict['interop_allow'] = str(getattr(cfg, 'interop_allow'))
 
         if cfg.max_steps is not None:
             config_dict["max_steps"] = int(cfg.max_steps)
@@ -154,6 +158,9 @@ class MellowVM:
         config_dict["allow_data_write"] = bool(cfg.allow_data_write)
         if cfg.profile:
             config_dict["profile"] = True
+
+        if hasattr(self._host, "set_runtime_config"):
+            self._host.set_runtime_config(config_dict)
 
         # Debugger
         if cfg.trace:
@@ -191,7 +198,7 @@ class MellowVM:
         if engine not in ("auto", "py", "c"):
             engine = "c"
 
-        # v1.3.0: deterministic record/replay is guaranteed on the legacy Python VM.
+        # Deterministic record/replay is guaranteed on the Python VM.
         # (C VM replay parity will be completed in a later release.)
         if (cfg.record_path or cfg.replay_path) and engine in ("auto", "c"):
             if native_require or not native_allow_fallback:
@@ -302,12 +309,12 @@ class MellowVM:
                         filename=program.filename,
                     ) from e
 
-        # ---- Legacy Python VM ----
+        # ---- Python VM ----
         self.last_engine = "py"
         if not self.last_engine_detail:
-            self.last_engine_detail = "python-legacy-vm"
+            self.last_engine_detail = "python-vm"
         self.last_native_result = {'native_available': bool(native_caps.get('available')), 'used_fallback': False, 'detail': self.last_engine_detail}
-        vm = _LegacyVM(
+        vm = _PythonVM(
             program.bytecode,
             func_table=getattr(program, "func_table", None),
             event_table=getattr(program, "event_table", None),

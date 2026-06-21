@@ -1,3 +1,5 @@
 from .vm import MellowVM, RunConfig
 
-__all__=['MellowVM','RunConfig']
+# Public VM surface.
+
+__all__ = ["MellowVM", "RunConfig"]

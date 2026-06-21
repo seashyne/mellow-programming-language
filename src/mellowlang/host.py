@@ -10,6 +10,6 @@ Re-exports:
 
 from __future__ import annotations
 
-from .host.legacy import MODULE_ALLOWLIST, HostRegistry, HostFunction, default_host
+from .host.runtime import MODULE_ALLOWLIST, HostRegistry, HostFunction, default_host
 
 __all__ = ["MODULE_ALLOWLIST", "HostRegistry", "HostFunction", "default_host"]
