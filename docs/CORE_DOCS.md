@@ -1,4 +1,4 @@
-# Core Documentation Index (2.9.3)
+# Core Documentation Index (2.9.4)
 
 Documents in this index define or support the **stable core** release line.
 
@@ -8,7 +8,7 @@ Documents in this index define or support the **stable core** release line.
 - [`LANGUAGE_SPEC_2_9.md`](LANGUAGE_SPEC_2_9.md)
 - [`LANGUAGE_SPEC_3_0.md`](LANGUAGE_SPEC_3_0.md) (draft v3 track)
 - [`../spec/mellow-2.9-core.json`](../spec/mellow-2.9-core.json)
-- [`../spec/mellow-2.9.3-stability.json`](../spec/mellow-2.9.3-stability.json)
+- [`../spec/mellow-2.9.4-stability.json`](../spec/mellow-2.9.4-stability.json)
 
 ## Language and runtime
 

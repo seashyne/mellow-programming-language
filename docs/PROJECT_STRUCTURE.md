@@ -70,20 +70,51 @@ The CLI should remain modular:
 
 ```text
 src/mellowlang/cli/
-  main.py          entrypoint, dispatch, and runtime/package/agent commands
+  main.py          thin entrypoint and command dispatch only
   common.py        shared CLI helpers, JSON output, error formatting, lazy imports
   parser.py        argparse definitions
   ux.py            help, guide, ask, aliases
   commands/
-    system.py      doctor/status/config/bench/security/native/explain helpers
+    agents.py      agent runtime, workflow, queue, policy, and marketplace commands
+    compiler.py    compile and pack commands
+    media.py       desktop, MMG, MELV, and state-machine commands
+    packages.py    package and registry commands
+    project.py     init, new, check, and format commands
+    runtime.py     run, test, record, replay, and diff commands
+    standalone.py  standalone native runtime commands
+    system.py      doctor, status, config, bench, security, and native commands
 ```
 
-Next command groups to extract from `main.py`:
+`main.py` must not define command handlers. New command families belong in
+`cli/commands/`; parser definitions remain in `cli/parser.py`.
 
-- `commands/package.py`
-- `commands/agent.py`
-- `commands/runtime.py`
-- `commands/project.py`
+## Package System
+
+`package_manager.py` is the compatibility facade for existing imports. Focused
+implementation lives under `src/mellowlang/packages/`:
+
+```text
+packages/
+  config.py        registry/auth/trust configuration and aliases
+  metadata.py      package names, creators, authors, and versions
+  manifest.py      manifest discovery and TOML serialization
+  lockfile.py      lockfile, import map, and runtime map handling
+  project.py       project roots, presets, local packages, and scaffolding
+```
+
+New package features should be implemented in the focused module and exported
+through `package_manager.py` only when compatibility requires it.
+
+## VM Code
+
+The Python VM keeps execution and opcode dispatch in `vm/python_vm.py`. Services
+with a separate concern are mixed in without changing the public VM class:
+
+- `vm/debugger.py` - breakpoints, snapshots, stepping, and watch expressions.
+- `vm/storage.py` - sandboxed paths, filesystem permissions, and JSON storage.
+
+Keep hot opcode execution in the VM core unless profiling proves a different
+boundary is better.
 
 ## Cleanup Rules
 

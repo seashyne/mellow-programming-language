@@ -11,8 +11,8 @@ EXPERIMENTAL = ROOT / "docs" / "experimental" / "README.md"
 CORE_DOCS = ROOT / "docs" / "CORE_DOCS.md"
 
 
-def test_release_version_is_2_9_3() -> None:
-    assert mellowlang.__version__ == "2.9.3"
+def test_historical_release_manifest_is_2_9_3() -> None:
+    assert MANIFEST.is_file()
 
 
 def test_patch_stability_manifest_exists() -> None:
@@ -30,7 +30,7 @@ def test_core_docs_index_points_to_stable_and_experimental_split() -> None:
     text = CORE_DOCS.read_text(encoding="utf-8")
     assert "STABLE_CORE.md" in text
     assert "experimental/README.md" in text
-    assert "mellow-2.9.3-stability.json" in text
+    assert "mellow-2.9.4-stability.json" in text
 
 
 def test_removed_compatibility_modules_do_not_return() -> None:

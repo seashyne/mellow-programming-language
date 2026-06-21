@@ -97,8 +97,9 @@ def _normalize_machine(value: str | None = None) -> str:
 def cpu_runtime_profile(machine: str | None = None) -> dict[str, Any]:
     """Return the native CPU backend plan used by status/doctor/build metadata.
 
-    The runtime always keeps a portable C path. Architecture-specific backends are
-    selected only when the target CPU family is known.
+    The runtime currently executes the portable C backend on every architecture.
+    CPU features are reported separately and must not be treated as optimized
+    kernels until those kernels are implemented and release-gated.
     """
     arch = _normalize_machine(machine)
     backends = ["generic-c"]
@@ -107,19 +108,13 @@ def cpu_runtime_profile(machine: str | None = None) -> dict[str, Any]:
     vector_width_bits: int | None = None
 
     if arch == "x86_64":
-        backends.append("x86_64-simd")
         features.extend(["sse2-baseline", "avx2-if-compiled"])
-        preferred = "x86_64-simd"
         vector_width_bits = 128
     elif arch == "arm64":
-        backends.append("arm64-neon")
         features.extend(["neon-baseline", "sve-if-compiled"])
-        preferred = "arm64-neon"
         vector_width_bits = 128
     elif arch == "arm32":
-        backends.append("arm32-neon-optional")
         features.append("neon-if-available")
-        preferred = "generic-c"
 
     return {
         "machine": platform.machine(),
@@ -132,6 +127,7 @@ def cpu_runtime_profile(machine: str | None = None) -> dict[str, Any]:
         "multi_core_workers": os.cpu_count() or 1,
         "arm64_ready": arch == "arm64",
         "x86_64_ready": arch == "x86_64",
+        "optimized_kernels": False,
         "fallback_policy": "generic-c",
     }
 

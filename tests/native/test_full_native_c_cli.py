@@ -32,6 +32,7 @@ def native_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
         str(NATIVE / "include"),
         str(NATIVE / "src" / "mellowrt_core.c"),
         str(NATIVE / "src" / "mellowrt_debug.c"),
+        str(NATIVE / "src" / "mellowrt_platform.c"),
         str(NATIVE / "src" / "mellowc.c"),
         str(NATIVE / "src" / "mellowrt_main.c"),
         "-o",
@@ -51,7 +52,25 @@ def test_full_native_version_has_no_python_runtime(native_binary: Path) -> None:
         check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == "Mellow Programming Language 2.9.3 (Full Native C)"
+    assert result.stdout.strip() == "Mellow Programming Language 2.9.4 (Full Native C)"
+
+
+def test_full_native_reports_runtime_platform(native_binary: Path) -> None:
+    result = subprocess.run(
+        [str(native_binary), "--runtime-info"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    info = json.loads(result.stdout)
+    assert info["runtime"] == "mellow-c"
+    assert info["backend"] == "generic-c"
+    assert info["architecture"] in {"x86", "x86_64", "arm32", "arm64", "unknown"}
+    assert info["pointer_bits"] in {32, 64}
+    assert isinstance(info["little_endian"], bool)
+    assert isinstance(info["arm_neon_available"], bool)
+    assert info["optimized_kernels"] is False
 
 
 def test_full_native_compiles_checks_and_runs_source(native_binary: Path) -> None:

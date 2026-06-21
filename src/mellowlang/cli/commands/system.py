@@ -662,7 +662,7 @@ def _cmd_assistant(file: str, mode: str, json_out: bool) -> int:
       - summary: AST-based outline + hints
       - diagnose: try compile; if ok, print summary + lints count
     """
-    from ..assistant import analyze_source, render_human
+    from ...assistant import analyze_source, render_human
 
     p = Path(file)
     if not p.exists():

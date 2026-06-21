@@ -6,9 +6,9 @@
   "goal": "Language Stability Release",
   "baseline": {
     "version": "2.9",
-    "patch": "2.9.3",
+    "patch": "2.9.4",
     "manifest": "spec/mellow-2.9-core.json",
-    "patch_manifest": "spec/mellow-2.9.3-stability.json",
+    "patch_manifest": "spec/mellow-2.9.4-stability.json",
     "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
   },
   "entrypoint": "SPEC.md",

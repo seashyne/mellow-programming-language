@@ -38,7 +38,7 @@ for the stable core.
 - `mellow fmt <files...>`
 - `mellow modules --json`
 - `mellow doctor`
-- `mellow release-gate` (includes stability pytest gates in 2.9.3+)
+- `mellow release-gate` (includes stability pytest gates in 2.9.4+)
 
 ## Optional But Supported
 
@@ -60,17 +60,17 @@ These features are allowed to be missing from a default install and should be re
 These surfaces may be present in the repository but must not block a stable
 release unless they are explicitly added to a release gate:
 
-- extended regression suite (`tests/test_v*` outside the 2.9.3 smoke list)
+- extended regression suite (`tests/test_v*` outside the 2.9.4 smoke list)
 - agent runtime and hosted platform → [`experimental/README.md`](experimental/README.md)
 - MMG and video runtime → [`experimental/README.md`](experimental/README.md)
 - desktop/playground runtimes → [`experimental/README.md`](experimental/README.md)
 
 ## Release Rule
 
-A **2.9.3** patch release is considered stable when:
+A **2.9.4** patch release is considered stable when:
 
 ```powershell
-.\scripts\test-v293-stability.ps1
+.\scripts\test-v294-stability.ps1
 ```
 
 This runs:

@@ -1,4 +1,4 @@
-# Mellow Programming Language 2.9.3
+# Mellow Programming Language 2.9.4
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -12,7 +12,7 @@ This release treats the language core as the stable surface:
 - string/math/list/map/json/money/data/ledger helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but are documented as **experimental** under [`docs/experimental/README.md`](docs/experimental/README.md). In v2.9.3 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, and core built-ins. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but are documented as **experimental** under [`docs/experimental/README.md`](docs/experimental/README.md). In v2.9.4 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, and core built-ins. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
 
 ## Quick Start
 
@@ -101,7 +101,7 @@ while len(batch) > 0:
 Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
 
 Finance and data sandbox profiles, plus Ledger Core, run on the default C engine
-in v2.9.3. Native parity tests run with Python fallback disabled.
+in v2.9.4. Native parity tests run with Python fallback disabled.
 
 Build an immutable, balanced ledger:
 
@@ -182,7 +182,7 @@ parity.
 - Stable core definition: `docs/STABLE_CORE.md`
 - Core docs index: `docs/CORE_DOCS.md`
 - Experimental docs: `docs/experimental/README.md`
-- 2.9.3 stability gates: `scripts/test-v293-stability.ps1`
+- 2.9.4 stability gates: `scripts/test-v294-stability.ps1`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Changelog: `CHANGELOG.md`
 - Windows native build helper: `scripts/build-native-windows.ps1`

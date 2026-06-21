@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2.9.4 - 2026-06-21
+
+### Runtime Structure
+- Split CLI commands, package services, and Python VM debugger/storage into
+  focused modules with architecture guard tests.
+
+### ARM64 Portability
+- Add standalone C runtime platform metadata and `--runtime-info`.
+- Add ARM64 CMake detection and a cross-build/QEMU CI gate.
+- Report `generic-c` until optimized architecture kernels exist.
+
 ## 2.9.3 - 2026-06-18
 
 ### Stability and Documentation

@@ -46,3 +46,13 @@ Run source directly:
 ./native/standalone/build/mellow examples/hello.mellow
 ./native/standalone/build/mellow check examples/hello.mellow
 ```
+
+Inspect the binary's actual target and backend:
+
+```bash
+./native/standalone/build/mellow --runtime-info
+```
+
+ARM64 is release-gated through an `aarch64-linux-gnu-gcc` cross-build and QEMU
+execution in CI. The current ARM64 backend is portable `generic-c`; NEON is
+reported as a CPU capability but no optimized NEON kernel is claimed yet.

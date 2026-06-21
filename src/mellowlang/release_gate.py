@@ -137,6 +137,7 @@ def run_package_integrity_gate() -> dict[str, Any]:
 def run_stability_pytest_gate() -> dict[str, Any]:
     suites = [
         ["tests/core", "tests/language"],
+        ["tests/native"],
         [
             "tests/test_v152_online_registry.py",
             "tests/test_v153_public_registry.py",

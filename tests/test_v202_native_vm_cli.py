@@ -18,16 +18,17 @@ def test_native_vm_status_shape():
 def test_cpu_runtime_profile_x86_64():
     info = cpu_runtime_profile('AMD64')
     assert info['normalized_arch'] == 'x86_64'
-    assert info['preferred_backend'] == 'x86_64-simd'
+    assert info['preferred_backend'] == 'generic-c'
     assert 'generic-c' in info['available_backends']
-    assert 'x86_64-simd' in info['available_backends']
     assert info['x86_64_ready'] is True
+    assert info['optimized_kernels'] is False
 
 
 def test_cpu_runtime_profile_arm64():
     info = cpu_runtime_profile('aarch64')
     assert info['normalized_arch'] == 'arm64'
-    assert info['preferred_backend'] == 'arm64-neon'
+    assert info['preferred_backend'] == 'generic-c'
     assert 'generic-c' in info['available_backends']
-    assert 'arm64-neon' in info['available_backends']
     assert info['arm64_ready'] is True
+    assert 'neon-baseline' in info['cpu_features']
+    assert info['optimized_kernels'] is False

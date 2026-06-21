@@ -312,17 +312,30 @@ static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t ar
 /* ── entry point ─────────────────────────────────────────────────────────── */
 static void usage(const char *argv0){
     fprintf(stderr,
-        "Mellow Programming Language 2.9.3 (Full Native C)\n"
+        "Mellow Programming Language 2.9.4 (Full Native C)\n"
         "Usage: %s <program.mellow|program.mvi>\n"
         "       %s check <program.mellow>\n"
-        "       %s --version\n",argv0,argv0,argv0);
+        "       %s --runtime-info\n"
+        "       %s --version\n",argv0,argv0,argv0,argv0);
 }
 
 int main(int argc, char **argv){
     int check_only=0;
     if(argc<2){usage(argv[0]);return 1;}
     if(!strcmp(argv[1],"--version")||!strcmp(argv[1],"-V")){
-        puts("Mellow Programming Language 2.9.3 (Full Native C)");
+        puts("Mellow Programming Language 2.9.4 (Full Native C)");
+        return 0;
+    }
+    if(!strcmp(argv[1],"--runtime-info")){
+        MRuntimePlatform platform=mellow_runtime_platform();
+        printf("{\"runtime\":\"mellow-c\",\"architecture\":\"%s\","
+               "\"backend\":\"%s\",\"pointer_bits\":%u,"
+               "\"little_endian\":%s,\"arm_neon_available\":%s,"
+               "\"optimized_kernels\":%s}\n",
+               platform.architecture,platform.backend,platform.pointer_bits,
+               platform.little_endian?"true":"false",
+               platform.arm_neon_available?"true":"false",
+               platform.optimized_kernels?"true":"false");
         return 0;
     }
     if(!strcmp(argv[1],"check")){

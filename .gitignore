@@ -12,6 +12,7 @@ tests/.pytest-work/
 pytest-cache-files-*/
 .tmp_money_finance_test/
 .tmp_data_core_test/
+.tmp/
 .mellow-data-benchmark-*/
 tmp/
 outputs/
@@ -37,3 +38,4 @@ deploy/cloudflare-public-registry/.wrangler/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+mellow-*-check.exe

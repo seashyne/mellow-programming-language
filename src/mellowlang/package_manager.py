@@ -16,11 +16,29 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from .host.modules import MODULE_ALLOWLIST
-
-try:
-    import tomllib  # py311+
-except Exception:  # pragma: no cover
-    tomllib = None
+from .packages.config import (
+    DEFAULT_REGISTRY, _aliases_path, _default_alias, cache_root_path, clear_auth_token, config_file_path,
+    config_home_path, ensure_user_dirs, get_auth_token, get_registry_url,
+    keys_dir_path, load_aliases, load_config, remember_alias, resolve_alias,
+    save_aliases, save_config, set_auth_token, set_registry,
+    suggest_aliases_for_package, trust_author, trusted_authors,
+)
+from .packages.metadata import (
+    HOST_DEP_SENTINELS, _choose_version, _normalized_versions, _split_pkg_ref,
+    _version_key, _version_satisfies, bare_package_name, canonical_package_name,
+    normalize_name, package_authors, package_creator, split_namespace,
+)
+from .packages.project import (
+    _project_installed_root, _project_registry_root, _repo_registry_root,
+    _repo_starter_packages_root, ensure_project_starter_packages,
+    install_local_package_into_project, scaffold_project,
+)
+from .packages.manifest import _manifest_paths, _write_toml, read_manifest
+from .packages.lockfile import (
+    _load_lockfile, _load_runtime_map, _lockfile_path, _read_project_manifest_if_present,
+    _runtime_map_path, _save_import_map, _save_lockfile, _scan_imports,
+    _update_lock_entry, resolve_import_entry,
+)
 
 try:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
@@ -33,159 +51,15 @@ except Exception:  # pragma: no cover
 PKG_ROOT = Path("mellow_packages")
 REGISTRY_ROOT = PKG_ROOT / "registry"
 INSTALLED_ROOT = PKG_ROOT / "installed"
-DEFAULT_REGISTRY = os.environ.get(
-    "MELLOW_REGISTRY_URL",
-    "https://mellow-public-registry.jirayut-wh.workers.dev",
-)
 CLIENT_USER_AGENT = f"MellowCLI/{os.environ.get('MELLOW_CLI_VERSION', '2.9.0')} (+https://mellowlang.org)"
 REQUEST_TIMEOUT = int(os.environ.get("MELLOW_HTTP_TIMEOUT", "30"))
-CONFIG_HOME = Path(os.environ.get("MELLOW_CONFIG_DIR", str(Path.home() / ".mellow")))
-CONFIG_FILE = CONFIG_HOME / "config.json"
 LOCKFILE_NAME = "mellow.lock"
 IMPORT_MAP_NAME = ".mellow_imports.json"
 RUNTIME_MAP_NAME = ".mellow_runtime.json"
 ALIASES_FILE_NAME = ".mellow_aliases.json"
-CACHE_ROOT = CONFIG_HOME / "cache" / "packages"
-KEYS_DIR = CONFIG_HOME / "keys"
-HOST_DEP_SENTINELS = {"host", "builtin", "built-in", "internal"}
-
-
-def _normalize_authors(value: Any) -> List[str]:
-    if value is None:
-        return []
-    if isinstance(value, str):
-        return [value.strip()] if value.strip() else []
-    if isinstance(value, (list, tuple)):
-        out: List[str] = []
-        for item in value:
-            text = str(item).strip()
-            if text and text not in out:
-                out.append(text)
-        return out
-    return [str(value).strip()] if str(value).strip() else []
-
-
-def package_authors(manifest_or_item: Dict[str, Any] | None) -> List[str]:
-    data = manifest_or_item or {}
-    authors = _normalize_authors(data.get("authors"))
-    for key in ("author", "creator", "publisher", "maintainer", "owner"):
-        if not authors:
-            authors = _normalize_authors(data.get(key))
-    metadata = data.get("metadata")
-    if not authors and isinstance(metadata, dict):
-        authors = package_authors(metadata)
-    manifest = data.get("manifest")
-    if not authors and isinstance(manifest, dict):
-        authors = package_authors(manifest)
-    return authors
-
-
-def package_creator(manifest_or_item: Dict[str, Any] | None) -> str:
-    authors = package_authors(manifest_or_item)
-    return ", ".join(authors) if authors else "unknown"
-
-
-def config_home_path() -> Path:
-    return Path(os.environ.get("MELLOW_CONFIG_DIR", str(Path.home() / ".mellow")))
-
-
-def config_file_path() -> Path:
-    return config_home_path() / "config.json"
-
-
-def cache_root_path() -> Path:
-    return config_home_path() / "cache" / "packages"
-
-
-def keys_dir_path() -> Path:
-    return config_home_path() / "keys"
-
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
-
-
-def _json_load(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return default
-
-
-def _aliases_path(project_dir: str | Path | None = None) -> Path:
-    base = Path(project_dir) if project_dir else Path.cwd()
-    return base / ALIASES_FILE_NAME
-
-
-def load_aliases(project_dir: str | Path | None = None) -> Dict[str, Any]:
-    data = _json_load(_aliases_path(project_dir), {"aliases": {}, "packages": {}})
-    if not isinstance(data, dict):
-        data = {"aliases": {}, "packages": {}}
-    data.setdefault("aliases", {})
-    data.setdefault("packages", {})
-    return data
-
-
-def save_aliases(data: Dict[str, Any], project_dir: str | Path | None = None) -> Path:
-    path = _aliases_path(project_dir)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return path
-
-
-def suggest_aliases_for_package(name: str) -> List[str]:
-    norm = normalize_name(name)
-    bare = norm[1:].split('/', 1)[1] if norm.startswith('@') and '/' in norm else norm
-    pieces = [p for p in re.split(r"[-_/]+", bare) if p]
-    out: List[str] = []
-    for candidate in [bare.replace('-', '_'), bare.replace('-', ''), pieces[-1] if pieces else bare, pieces[0] if pieces else bare]:
-        candidate = re.sub(r"[^a-zA-Z0-9_]", "_", candidate or "")
-        if candidate and candidate not in out:
-            out.append(candidate)
-    return out[:8] or ["pkg"]
-
-
-def _default_alias(name: str) -> str:
-    return suggest_aliases_for_package(name)[0]
-
-
-def remember_alias(name: str, alias: str | None = None, project_dir: str | Path | None = None) -> Path:
-    pkg_name = normalize_name(name)
-    chosen = alias or _default_alias(pkg_name)
-    data = load_aliases(project_dir)
-    data.setdefault("aliases", {})[chosen] = pkg_name
-    data.setdefault("packages", {})[pkg_name] = chosen
-    return save_aliases(data, project_dir)
-
-
-def resolve_alias(name_or_alias: str, project_dir: str | Path | None = None) -> str:
-    norm = normalize_name(name_or_alias)
-    data = load_aliases(project_dir)
-    aliases = data.get("aliases", {}) or {}
-    packages = data.get("packages", {}) or {}
-    if norm in aliases:
-        return normalize_name(aliases[norm])
-    if norm in packages:
-        return norm
-    return norm
-
-
-def split_namespace(name: str) -> tuple[str | None, str]:
-    norm = normalize_name(name)
-    if norm.startswith('@') and '/' in norm:
-        ns, rest = norm[1:].split('/', 1)
-        return ns or None, rest
-    return None, norm
-
-
-def canonical_package_name(name: str) -> str:
-    return normalize_name(name)
-
-
-def bare_package_name(name: str) -> str:
-    return split_namespace(name)[1]
-
 
 def autocomplete_remote_name(name: str, registry: str | None = None) -> Dict[str, Any]:
     norm = normalize_name(name)
@@ -206,7 +80,6 @@ def autocomplete_remote_name(name: str, registry: str | None = None) -> Dict[str
                     suggestions.append(item)
     return {"ok": bool(suggestions), "query": norm, "selected": suggestions[0] if len(suggestions) == 1 else None, "suggestions": suggestions[:8], "count": len(suggestions), "items": [{"name": s} for s in suggestions[:20]], "registry": get_registry_url(registry)}
 
-
 def interactive_pick_package(query: str, registry: str | None = None, limit: int = 10) -> Dict[str, Any]:
     res = autocomplete_remote_name(query, registry)
     items = list(res.get("items") or [])[:limit]
@@ -216,7 +89,6 @@ def interactive_pick_package(query: str, registry: str | None = None, limit: int
         item = items[0]
         return {"ok": True, "selected": str(item.get("name")), "item": item, "index": 0, "suggestions": res.get("suggestions", [])}
     return {"ok": True, "interactive": True, "items": items, "suggestions": res.get("suggestions", [])}
-
 
 def diagnose_imports(project_dir: str | Path, registry: str | None = None) -> Dict[str, Any]:
     base = Path(project_dir)
@@ -248,543 +120,10 @@ def diagnose_imports(project_dir: str | Path, registry: str | None = None) -> Di
         rows.append({"import": name, "resolved": resolved, "status": status, "detail": detail})
     return {"ok": True, "project_dir": str(base), "imports": imports, "rows": rows, "missing": missing, "suggestions": suggestions, "aliases_file": str(_aliases_path(base))}
 
-
-def _project_package_root(project_dir: str | Path | None = None) -> Path:
-    if project_dir is None:
-        return PKG_ROOT
-    return Path(project_dir) / "mellow_packages"
-
-
-def _project_registry_root(project_dir: str | Path | None = None) -> Path:
-    if project_dir is None:
-        return REGISTRY_ROOT
-    return _project_package_root(project_dir) / "registry"
-
-
-def _project_installed_root(project_dir: str | Path | None = None) -> Path:
-    if project_dir is None:
-        return INSTALLED_ROOT
-    return _project_package_root(project_dir) / "installed"
-
-
-def _repo_registry_root() -> Path:
-    return _repo_root() / "mellow_packages" / "registry"
-
-
-def _repo_starter_packages_root() -> Path:
-    return _repo_root() / "starter_packages"
-
-
-def _entry_candidates(entry: str) -> list[str]:
-    entry = str(entry or "src/main.mel").replace("\\", "/")
-    out = [entry]
-    if entry.endswith(".mellow"):
-        out.append(entry[:-7] + ".mel")
-    elif entry.endswith(".mel"):
-        out.append(entry[:-4] + ".mellow")
-    return list(dict.fromkeys(out))
-
-
-def _resolve_existing_entry(package_dir: Path, manifest: Dict[str, Any]) -> str:
-    entry = str(manifest.get("entry", "src/main.mel"))
-    for candidate in _entry_candidates(entry):
-        if (package_dir / candidate).exists():
-            return candidate
-    return entry
-
-
-def _load_manifest_from_source_dir(src: Path) -> Dict[str, Any]:
-    manifest = read_manifest(src)
-    manifest = dict(manifest)
-    manifest["entry"] = _resolve_existing_entry(src, manifest)
-    return manifest
-
-
-def _find_local_package_source(name: str, version: str | None = None, project_dir: str | Path | None = None) -> tuple[Path | None, str | None, str | None]:
-    base_name, version_from_ref = _split_pkg_ref(name)
-    chosen_version = version or version_from_ref
-    roots = []
-    if project_dir is not None:
-        roots.append(_project_registry_root(project_dir))
-    roots.extend([REGISTRY_ROOT, _repo_registry_root()])
-    for root in roots:
-        pkg_root = root / base_name
-        if not pkg_root.exists():
-            continue
-        versions = sorted([p.name for p in pkg_root.iterdir() if p.is_dir()])
-        if not versions:
-            continue
-        ver = chosen_version or versions[-1]
-        src = pkg_root / ver
-        if src.exists():
-            return src, ver, "registry"
-    starter = _repo_starter_packages_root() / base_name
-    if starter.exists():
-        return starter, chosen_version or str(read_manifest(starter).get("version", "0.1.0")), "starter"
-    return None, None, None
-
-
-def install_local_package_into_project(name: str, project_dir: str | Path, version: str | None = None, *, with_deps: bool = True, _visited: set[str] | None = None) -> Dict[str, Any]:
-    base = Path(project_dir)
-    base_name, version_from_ref = _split_pkg_ref(name)
-    chosen_version = version or version_from_ref
-    src, resolved_version, source_kind = _find_local_package_source(base_name, chosen_version, project_dir=base)
-    if src is None:
-        return {"ok": False, "error": f"local package not found: {base_name}"}
-    manifest = _load_manifest_from_source_dir(src)
-    resolved_version = resolved_version or str(manifest.get("version", "0.1.0"))
-    installed_root = _project_installed_root(base)
-    dst = installed_root / base_name / "current"
-    if dst.parent.exists():
-        shutil.rmtree(dst.parent)
-    (dst / "package").mkdir(parents=True, exist_ok=True)
-    shutil.copytree(src, dst / "package", dirs_exist_ok=True)
-    (dst / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    alias_path = remember_alias(base_name, project_dir=base)
-    lockfile_path = _update_lock_entry(base_name, resolved_version, manifest, registry="local", project_dir=base)
-    installed = [{"name": base_name, "version": resolved_version}]
-    visited = _visited or set()
-    visit_key = f"{base_name}@{resolved_version}"
-    if visit_key in visited:
-        return {"ok": True, "name": base_name, "version": resolved_version, "installed_to": str(dst.parent), "entry": str(manifest.get("entry", "")), "authors": package_authors(manifest), "creator": package_creator(manifest), "installed": installed, "lockfile": str(lockfile_path), "aliases_file": str(alias_path), "source_kind": source_kind}
-    visited.add(visit_key)
-    if with_deps:
-        for dep_name, dep_spec in (manifest.get("dependencies", {}) or {}).items():
-            if str(dep_spec).strip().lower() in HOST_DEP_SENTINELS:
-                continue
-            dep_res = install_local_package_into_project(dep_name, base, version=str(dep_spec), with_deps=True, _visited=visited)
-            if not dep_res.get("ok"):
-                return dep_res
-            installed.extend(dep_res.get("installed", [{"name": dep_name, "version": dep_res.get("version")}]))
-    return {"ok": True, "name": base_name, "version": resolved_version, "installed_to": str(dst.parent), "entry": str(manifest.get("entry", "")), "authors": package_authors(manifest), "creator": package_creator(manifest), "installed": installed, "lockfile": str(lockfile_path), "aliases_file": str(alias_path), "source_kind": source_kind}
-
-
-
-def _preset_dependencies(preset: str = "starter") -> Dict[str, str]:
-    preset = (preset or "starter").strip().lower()
-    presets: Dict[str, Dict[str, str]] = {
-        "starter": {
-            "core-print": "^0.2.0",
-            "core-strings": "^0.2.0",
-            "core-collections": "^0.2.0",
-            "core-math": "^0.2.0",
-            "core-json": "^0.2.0",
-            "core-time": "^0.2.0",
-        },
-        "app": {
-            "core-print": "^0.2.0",
-            "core-strings": "^0.2.0",
-            "core-storage": "^0.2.0",
-            "core-window": "^0.2.0",
-        },
-        "automation": {
-            "core-print": "^0.2.0",
-            "core-json": "^0.2.0",
-            "core-time": "^0.2.0",
-            "core-workflow": "^0.2.0",
-        },
-        "ai-agent": {
-            "core-print": "^0.2.0",
-            "core-strings": "^0.2.0",
-            "core-json": "^0.2.0",
-            "core-ai": "^0.2.0",
-        },
-        "gamekit": {
-            "core-print": "^0.2.0",
-            "core-math": "^0.2.0",
-            "core-gamekit": "^0.2.0",
-        },
-        "api-webhook": {
-            "core-print": "^0.2.0",
-            "core-json": "^0.2.0",
-            "core-http": "^0.2.0",
-            "core-workflow": "^0.2.0",
-        },
-        "finance": {
-            "core-print": "^0.2.0",
-            "core-json": "^0.2.0",
-            "core-money": "^0.1.0",
-            "core-ledger": "^0.1.0",
-        },
-        "data": {
-            "core-print": "^0.2.0",
-            "core-json": "^0.2.0",
-            "core-data": "^0.1.0",
-        },
-    }
-    return dict(presets.get(preset, presets["starter"]))
-
-
-def _default_starter_dependencies() -> Dict[str, str]:
-    return _preset_dependencies("starter")
-
-
-def _preset_entry_source(preset: str = "starter") -> str:
-    preset = (preset or "starter").strip().lower()
-    samples: Dict[str, str] = {
-        "starter": """import "pkg:core-print" as out
-import "pkg:core-strings" as text
-import "pkg:core-math" as mathx
-import "pkg:core-workflow" as wf
-
-out.banner(text.upper("mellow starter"))
-keep task = wf.job("demo.run", {"score": mathx.clamp01(2)})
-out.kv("task", wf.to_json(task))
-out.success("starter packages ready")
-""",
-        "app": """import "pkg:core-print" as out
-import "pkg:core-window" as win
-
-keep count = 0
-keep name = "Mellow"
-
-keep app = win.window("Mellow Desktop App", 960, 640)
-win.menu(app, "File", ["About"])
-win.menu_item(app, "File", "Quit", "close")
-win.label(app, "Hello Mellow")
-win.input(app, "Mellow")
-win.button(app, "Count +1", "inc:count")
-win.label(app, "Count = {{state.count}}")
-win.button(app, "Close", "close")
-win.run(app)
-out.success("desktop app spec ready")
-""",
-        "automation": """import "pkg:core-print" as out
-import "pkg:core-json" as jsonx
-import "pkg:core-time" as time
-import "pkg:core-workflow" as wf
-
-keep payload = {"kind": "nightly.sync", "at": time.unix()}
-keep job = wf.job("sync.users", payload)
-out.kv("job", wf.to_json(job))
-out.kv("payload", jsonx.pretty(payload))
-""",
-        "ai-agent": """import "pkg:core-print" as out
-import "pkg:core-ai" as ai
-
-keep plan = ai.prompt("Summarize user onboarding steps for a small SaaS")
-out.banner("AI Agent Preset")
-out.kv("prompt", plan)
-""",
-        "gamekit": """import "pkg:core-print" as out
-import "pkg:core-gamekit" as game
-import "pkg:core-math" as mathx
-
-keep hero = game.entity("hero", {"x": 10, "y": 5, "speed": mathx.clamp01(1)})
-out.kv("hero", game.to_json(hero))
-out.success("gamekit preset ready")
-""",
-        "api-webhook": """import "pkg:core-print" as out
-import "pkg:core-http" as http
-import "pkg:core-json" as jsonx
-
-keep route = http.route("POST", "/webhooks/orders")
-keep sample = {"route": route, "body": {"ok": true}}
-out.kv("webhook", jsonx.pretty(sample))
-""",
-        "finance": """import "pkg:core-print" as out
-import "pkg:core-money" as money
-import "pkg:core-ledger" as ledger
-
-keep book = ledger.create("USD")
-keep amount = money.of("125.50", "USD")
-ledger.post(book, "cash", "revenue", amount, "sale-001")
-out.kv("balance", money.format(ledger.balance(book, "cash")))
-""",
-        "data": """import "pkg:core-print" as out
-import "pkg:core-data" as data
-
-keep rows = [{"kind": "sale", "amount": 10}, {"kind": "sale", "amount": 15}]
-keep sales = data.where(rows, "kind", "eq", "sale")
-out.kv("total", data.sum(sales, "amount"))
-""",
-    }
-    return samples.get(preset, samples["starter"])
-
-def ensure_project_starter_packages(project_dir: str | Path, packages: List[str] | None = None, *, resolve_runtime_map: bool = True) -> Dict[str, Any]:
-    base = Path(project_dir)
-    selected = [normalize_name(p) for p in (packages or list(_default_starter_dependencies().keys()))]
-    installed_rows: List[Dict[str, Any]] = []
-    for pkg in selected:
-        res = install_local_package_into_project(pkg, base, with_deps=True)
-        if not res.get("ok"):
-            return res
-        installed_rows.extend(res.get("installed", [{"name": pkg, "version": res.get("version")}]))
-    runtime = None
-    if resolve_runtime_map:
-        runtime = resolve_project_runtime(base, install_missing=False, strict=False)
-    return {"ok": True, "project_dir": str(base), "packages": selected, "installed": installed_rows, "runtime": runtime}
-
-
-
-def scaffold_project(target_dir: str | Path, *, force: bool = False, with_core: bool = True, preset: str = "starter") -> Dict[str, Any]:
-    dest = Path(target_dir).resolve()
-    template = _repo_root() / "project_template"
-    if not template.exists():
-        return {"ok": False, "error": "project_template not found"}
-    if dest.exists() and any(dest.iterdir()) and not force:
-        return {"ok": False, "error": "destination not empty. Use --force."}
-    if dest.exists() and force:
-        shutil.rmtree(dest)
-    dest.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(template, dest, dirs_exist_ok=True)
-
-    preset_name = (preset or "starter").strip().lower()
-    deps = _preset_dependencies(preset_name) if with_core else {}
-
-    src_dir = dest / "src"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    entry_name = "src/main.mel"
-    (src_dir / "main.mel").write_text(_preset_entry_source(preset_name), encoding="utf-8")
-
-    if preset_name == "app":
-        desktop_dir = dest / "desktop"
-        desktop_dir.mkdir(parents=True, exist_ok=True)
-        (desktop_dir / "window.json").write_text(json.dumps({
-            "title": f"{dest.name} App",
-            "width": 960,
-            "height": 640,
-            "source": entry_name,
-            "engine": "tkinter-host",
-        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    elif preset_name == "api-webhook":
-        api_dir = dest / "api"
-        api_dir.mkdir(parents=True, exist_ok=True)
-        (api_dir / "routes.json").write_text(json.dumps({
-            "routes": [{"method": "POST", "path": "/webhooks/orders", "source": entry_name}],
-        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    mj = dest / "mellow.json"
-    if mj.exists():
-        try:
-            data = json.loads(mj.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-        data["entry"] = entry_name
-        data["name"] = normalize_name(dest.name)
-        data["preset"] = preset_name
-        data["starter_packages"] = list(deps.keys()) if with_core else []
-        mj.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    manifest = {
-        "name": normalize_name(dest.name),
-        "version": "0.1.0",
-        "description": f"Mellow {preset_name} project scaffold",
-        "entry": entry_name,
-        "license": "MIT",
-        "visibility": "private",
-        "namespace": "",
-        "preset": preset_name,
-        "dependencies": deps,
-    }
-    _write_toml(dest / "mellow.toml", manifest)
-
-    readme_text = (
-        f"# {dest.name}\n\n"
-        f"Scaffolded with `mellow new --preset {preset_name}`.\n\n"
-        "## Run\n\n"
-        "```bash\n"
-        "mellow run src/main.mel\n"
-        "```\n\n"
-    )
-    if preset_name == "app":
-        readme_text += (
-            "## Desktop window\n\n"
-            "```bash\n"
-            "mellow desktop run src/main.mel\n"
-            "```\n\n"
-        )
-    readme_text += "## Starter packages\n\n"
-    if with_core and deps:
-        readme_text += ''.join(f"- {name}\n" for name in deps.keys())
-    else:
-        readme_text += "No starter packages preloaded.\n"
-    (dest / "README.md").write_text(readme_text, encoding="utf-8")
-
-    result = {
-        "ok": True,
-        "project_dir": str(dest),
-        "manifest": str(dest / "mellow.toml"),
-        "entry": entry_name,
-        "preset": preset_name,
-        "with_core": with_core,
-    }
-    if with_core and deps:
-        preload = ensure_project_starter_packages(dest, packages=list(deps.keys()), resolve_runtime_map=True)
-        if not preload.get("ok"):
-            return preload
-        result["preload"] = preload
-    return result
-
-def ensure_user_dirs() -> None:
-    config_home_path().mkdir(parents=True, exist_ok=True)
-    cache_root_path().mkdir(parents=True, exist_ok=True)
-    keys_dir_path().mkdir(parents=True, exist_ok=True)
-
-
 def ensure_dirs() -> None:
     REGISTRY_ROOT.mkdir(parents=True, exist_ok=True)
     INSTALLED_ROOT.mkdir(parents=True, exist_ok=True)
     ensure_user_dirs()
-
-
-def normalize_name(name: str) -> str:
-    safe = "".join(ch.lower() if ch.isalnum() or ch in "-_/@." else "-" for ch in (name or "pkg"))
-    return safe.strip("-") or "pkg"
-
-
-def _split_pkg_ref(name: str) -> Tuple[str, str | None]:
-    if "@" in name[1:]:
-        base, ver = name.rsplit("@", 1)
-        if re.match(r"^[0-9A-Za-z][0-9A-Za-z.+\-]{0,63}$", ver or ""):
-            return normalize_name(base), ver
-    return normalize_name(name), None
-
-
-def _json_load(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return default
-
-
-def load_config() -> Dict[str, Any]:
-    ensure_user_dirs()
-    cfg = _json_load(config_file_path(), {})
-    cfg.setdefault("registry", DEFAULT_REGISTRY)
-    cfg.setdefault("auth", {})
-    cfg.setdefault("default_scope", "public")
-    return cfg
-
-
-def save_config(cfg: Dict[str, Any]) -> None:
-    ensure_user_dirs()
-    config_file_path().write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def set_registry(url: str) -> Dict[str, Any]:
-    cfg = load_config()
-    cfg["registry"] = url.rstrip("/")
-    save_config(cfg)
-    return {"registry": cfg["registry"], "config": str(config_file_path())}
-
-
-def get_registry_url(explicit: str | None = None) -> str:
-    return (explicit or load_config().get("registry") or DEFAULT_REGISTRY).rstrip("/")
-
-
-def get_auth_token(registry: str | None = None) -> str | None:
-    reg = get_registry_url(registry)
-    env_token = os.environ.get("MELLOW_PUBLISH_TOKEN") or os.environ.get("MELLOW_REGISTRY_TOKEN")
-    if env_token:
-        return env_token
-    cfg = load_config()
-    return cfg.get("auth", {}).get(reg)
-
-
-def set_auth_token(registry: str, token: str) -> None:
-    cfg = load_config()
-    cfg.setdefault("auth", {})[registry.rstrip("/")] = token
-    save_config(cfg)
-
-def clear_auth_token(registry: str | None = None) -> Dict[str, Any]:
-    reg = get_registry_url(registry)
-    cfg = load_config()
-    auth = cfg.setdefault("auth", {})
-    auth.pop(reg, None)
-    save_config(cfg)
-    return {"ok": True, "registry": reg, "saved_to": str(config_file_path())}
-
-
-def _manifest_paths(package_dir: Path) -> List[Path]:
-    return [package_dir / "mellow.toml", package_dir / "mellow.pkg.json"]
-
-
-def _parse_toml(path: Path) -> Dict[str, Any]:
-    if tomllib is None:
-        raise RuntimeError("tomllib not available; use mellow.pkg.json or Python 3.11+")
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
-    return {
-        "name": data.get("name", path.parent.name),
-        "version": data.get("version", "0.1.0"),
-        "entry": data.get("entry", "src/main.mellow"),
-        "description": data.get("description", "Mellow package"),
-        "authors": data.get("authors", []),
-        "license": data.get("license", "MIT"),
-        "keywords": data.get("keywords", ["mellow"]),
-        "badges": data.get("badges", []),
-        "official": bool(data.get("official", False)),
-        "deprecated": bool(data.get("deprecated", False)),
-        "dependencies": data.get("dependencies", {}) or {},
-        "visibility": data.get("visibility", "public"),
-        "namespace": data.get("namespace", ""),
-    }
-
-
-def _write_toml(path: Path, manifest: Dict[str, Any]) -> None:
-    deps = manifest.get("dependencies", {}) or {}
-    lines = [
-        f'name = "{manifest.get("name", path.parent.name)}"',
-        f'version = "{manifest.get("version", "0.1.0")}"',
-        f'description = "{manifest.get("description", "Mellow package")}"',
-        f'entry = "{manifest.get("entry", "src/main.mellow")}"',
-        f'license = "{manifest.get("license", "MIT")}"',
-        f'visibility = "{manifest.get("visibility", "public")}"',
-    ]
-    namespace = (manifest.get("namespace") or "").strip()
-    if namespace:
-        lines.append(f'namespace = "{namespace}"')
-    authors = manifest.get("authors", []) or []
-    if authors:
-        lines.append("authors = [" + ", ".join(json.dumps(a, ensure_ascii=False) for a in authors) + "]")
-    keywords = manifest.get("keywords", []) or []
-    if keywords:
-        lines.append("keywords = [" + ", ".join(json.dumps(k, ensure_ascii=False) for k in keywords) + "]")
-    badges = manifest.get("badges", []) or []
-    if badges:
-        lines.append("badges = [" + ", ".join(json.dumps(b, ensure_ascii=False) for b in badges) + "]")
-    if manifest.get("official"):
-        lines.append("official = true")
-    if manifest.get("deprecated"):
-        lines.append("deprecated = true")
-    lines.append("")
-    lines.append("[dependencies]")
-    if deps:
-        for k, v in deps.items():
-            lines.append(f'{k} = "{v}"')
-    else:
-        lines.append("# add package = \"^1.0.0\"")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def read_manifest(path: str | Path) -> Dict[str, Any]:
-    p = Path(path)
-    if p.is_dir():
-        for cand in _manifest_paths(p):
-            if cand.exists():
-                p = cand
-                break
-        else:
-            raise FileNotFoundError(f"no package manifest found in {p}; expected one of: mellow.toml, mellow.pkg.json")
-    if not p.exists():
-        raise FileNotFoundError(f"manifest not found: {p}")
-    if p.is_dir():
-        raise IsADirectoryError(f"expected a manifest file, got directory: {p}")
-    data = _parse_toml(p) if p.suffix == ".toml" else json.loads(p.read_text(encoding="utf-8"))
-    data.setdefault("name", p.parent.name)
-    data.setdefault("version", "0.1.0")
-    data.setdefault("entry", "src/main.mellow")
-    data.setdefault("description", "Mellow package")
-    data.setdefault("authors", [])
-    data.setdefault("dependencies", {})
-    data.setdefault("visibility", "public")
-    data.setdefault("namespace", "")
-    data["authors"] = package_authors(data)
-    data["creator"] = package_creator(data)
-    return data
-
 
 def init_package(target_dir: str | Path, name: str | None = None, entry: str = "main.mellow", author: str | None = None) -> Dict[str, Any]:
     ensure_dirs()
@@ -816,72 +155,6 @@ def init_package(target_dir: str | Path, name: str | None = None, entry: str = "
     if not (td / "tests" / "basic_test.mellow").exists():
         (td / "tests" / "basic_test.mellow").write_text('print("basic package test")\n', encoding="utf-8")
     return manifest
-
-
-
-
-def _version_key(version: str) -> Tuple[int, ...]:
-    nums = [int(x) for x in re.findall(r"\d+", version or "0")[:3]]
-    while len(nums) < 3:
-        nums.append(0)
-    return tuple(nums)
-
-
-def _version_satisfies(version: str, spec: str | None) -> bool:
-    spec = (spec or "").strip()
-    if not spec or spec in {"*", "latest"}:
-        return True
-    if spec in HOST_DEP_SENTINELS:
-        return True
-    parts = [p.strip() for p in re.split(r"[, ]+", spec) if p.strip()]
-    vkey = _version_key(version)
-
-    def _one(part: str) -> bool:
-        if part in {"*", "latest"}:
-            return True
-        if part.startswith("^"):
-            base = part[1:].strip()
-            major = _version_key(base)[0]
-            return vkey[0] == major and vkey >= _version_key(base)
-        if part.startswith("~"):
-            base = part[1:].strip()
-            bkey = _version_key(base)
-            return vkey[:2] == bkey[:2] and vkey >= bkey
-        for op in (">=", "<=", ">", "<"):
-            if part.startswith(op):
-                rhs = _version_key(part[len(op):].strip())
-                return {">=": vkey >= rhs, "<=": vkey <= rhs, ">": vkey > rhs, "<": vkey < rhs}[op]
-        return version == part
-
-    return all(_one(part) for part in parts)
-
-
-def _choose_version(versions: List[str], spec: str | None) -> str | None:
-    if not versions:
-        return None
-    ordered = sorted(versions, key=_version_key)
-    candidates = [v for v in ordered if _version_satisfies(v, spec)]
-    if candidates:
-        return candidates[-1]
-    if spec and spec not in {"*", "latest"}:
-        return None
-    return ordered[-1]
-
-
-def _normalized_versions(value: Any, latest: Any = None) -> List[str]:
-    if isinstance(value, dict):
-        versions = [str(v) for v in value.keys()]
-    elif isinstance(value, (list, tuple, set)):
-        versions = [str(v) for v in value]
-    elif isinstance(value, str) and value.strip():
-        versions = [value.strip()]
-    else:
-        versions = []
-    latest_text = str(latest).strip() if latest is not None else ""
-    if latest_text and latest_text not in versions:
-        versions.append(latest_text)
-    return sorted(versions, key=_version_key)
-
 
 def _pkg_cache_path(name: str, version: str) -> Path:
     ensure_user_dirs()
@@ -918,7 +191,6 @@ def _select_meta_candidate(registry: str, auth_token: str | None, name: str) -> 
         meta_error["suggestions"] = list(auto.get("suggestions") or [])
     return meta_error, None
 
-
 def _signature_payload(manifest: Dict[str, Any], sha256: str) -> bytes:
     payload = {
         "name": normalize_name(str(manifest.get("name", "pkg"))),
@@ -927,7 +199,6 @@ def _signature_payload(manifest: Dict[str, Any], sha256: str) -> bytes:
         "sha256": sha256.lower(),
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-
 
 def ensure_signing_keypair() -> Dict[str, str]:
     ensure_user_dirs()
@@ -952,7 +223,6 @@ def ensure_signing_keypair() -> Dict[str, str]:
     pub_path.write_bytes(pub_bytes)
     return {"private": str(priv_path), "public": str(pub_path)}
 
-
 def sign_manifest(manifest: Dict[str, Any], sha256: str) -> Dict[str, Any]:
     if Ed25519PrivateKey is None or serialization is None:
         return manifest
@@ -969,7 +239,6 @@ def sign_manifest(manifest: Dict[str, Any], sha256: str) -> Dict[str, Any]:
     }
     return signed
 
-
 def verify_signed_manifest(manifest: Dict[str, Any], sha256: str) -> Dict[str, Any]:
     info = dict((manifest or {}).get("signing") or {})
     if not info:
@@ -983,7 +252,6 @@ def verify_signed_manifest(manifest: Dict[str, Any], sha256: str) -> Dict[str, A
         return {"ok": True, "signed": True, "algorithm": info.get("algorithm", "ed25519")}
     except Exception as e:
         return {"ok": False, "signed": True, "error": f"signature verification failed: {e}"}
-
 
 def package_signature_remote(name: str, registry: str | None = None) -> Dict[str, Any]:
     reg = get_registry_url(registry)
@@ -1022,7 +290,6 @@ def package_signature_remote(name: str, registry: str | None = None) -> Dict[str
         "error": verify.get("error"),
     }
 
-
 def package_signature_installed(name: str, project_dir: str | Path | None = None) -> Dict[str, Any]:
     base_name, _ = _split_pkg_ref(name)
     norm = normalize_name(resolve_alias(base_name, project_dir))
@@ -1048,7 +315,6 @@ def package_signature_installed(name: str, project_dir: str | Path | None = None
         "authors": package_authors(manifest),
         "error": verify.get("error"),
     }
-
 
 def add_dependency(
     name: str,
@@ -1109,7 +375,6 @@ def add_dependency(
         install_res["suggestions"] = suggestions
     return install_res
 
-
 def remove_dependency(name: str, project_dir: str | Path = '.') -> Dict[str, Any]:
     base = Path(project_dir)
     manifest_path = next((p for p in _manifest_paths(base) if p.exists()), None)
@@ -1134,134 +399,6 @@ def remove_dependency(name: str, project_dir: str | Path = '.') -> Dict[str, Any
     uninstall_res["removed_alias"] = alias_name
     return uninstall_res
 
-
-def _lockfile_path(project_dir: str | Path | None = None) -> Path:
-    base = Path(project_dir) if project_dir else Path.cwd()
-    return base / LOCKFILE_NAME
-
-
-def _load_lockfile(project_dir: str | Path | None = None) -> Dict[str, Any]:
-    path = _lockfile_path(project_dir)
-    data = _json_load(path, {})
-    if not isinstance(data, dict):
-        data = {}
-    data.setdefault("lockfile_version", 1)
-    data.setdefault("registry", get_registry_url())
-    data.setdefault("packages", {})
-    data.setdefault("root", {"dependencies": {}, "imports": []})
-    return data
-
-
-def _save_lockfile(data: Dict[str, Any], project_dir: str | Path | None = None) -> Path:
-    path = _lockfile_path(project_dir)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return path
-
-
-def _update_lock_entry(name: str, version: str, manifest: Dict[str, Any], *, registry: str, project_dir: str | Path | None = None, sha256: str | None = None) -> Path:
-    lock = _load_lockfile(project_dir)
-    lock["registry"] = registry
-    lock.setdefault("packages", {})[normalize_name(name)] = {
-        "version": version,
-        "entry": manifest.get("entry", "src/main.mellow"),
-        "authors": package_authors(manifest),
-        "creator": package_creator(manifest),
-        "dependencies": manifest.get("dependencies", {}) or {},
-        "sha256": sha256,
-    }
-    root_deps = lock.setdefault("root", {}).setdefault("dependencies", {})
-    root_deps.setdefault(normalize_name(name), version)
-    return _save_lockfile(lock, project_dir)
-
-
-def _scan_imports(project_dir: str | Path) -> List[str]:
-    base = Path(project_dir)
-    found: List[str] = []
-    seen = set()
-    for pattern in ("*.mellow", "*.mel"):
-        for file in base.rglob(pattern):
-            try:
-                lines = file.read_text(encoding="utf-8").splitlines()
-            except Exception:
-                continue
-            for line in lines:
-                stripped = line.strip()
-                for keyword in ("import ", "use ", "need "):
-                    if not stripped.startswith(keyword):
-                        continue
-                    rest = stripped[len(keyword):].strip()
-                    mod_src = rest.split(" as ", 1)[0].strip() if " as " in rest else rest
-                    if (mod_src.startswith('"') and mod_src.endswith('"')) or (mod_src.startswith("'") and mod_src.endswith("'")):
-                        mod_src = mod_src[1:-1]
-                    if mod_src.startswith("pkg:"):
-                        mod_src = mod_src[4:]
-                    if mod_src.endswith(".mellow") or mod_src.endswith(".mel"):
-                        break
-                    name = normalize_name(mod_src)
-                    if name and name not in seen:
-                        seen.add(name)
-                        found.append(name)
-                    break
-    return found
-
-
-def _read_project_manifest_if_present(project_dir: str | Path) -> Dict[str, Any] | None:
-    for mp in _manifest_paths(Path(project_dir)):
-        if mp.exists():
-            return read_manifest(mp)
-    return None
-
-
-def _save_import_map(project_dir: str | Path, imports: List[str]) -> Path:
-    base = Path(project_dir)
-    mapping: Dict[str, Any] = {"imports": {}, "generated_by": "mellow-1.5.9"}
-    for name in imports:
-        installed_manifest = _project_installed_root(base) / normalize_name(name) / "current" / "manifest.json"
-        if installed_manifest.exists():
-            manifest = json.loads(installed_manifest.read_text(encoding="utf-8"))
-            pkg_dir = _project_installed_root(base) / normalize_name(name) / "current" / "package"
-            mapping["imports"][name] = {
-                "entry": str(pkg_dir / manifest.get("entry", "src/main.mellow")),
-                "version": manifest.get("version"),
-                "package_dir": str(pkg_dir),
-            }
-    path = base / IMPORT_MAP_NAME
-    path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return path
-
-
-def _runtime_map_path(project_dir: str | Path | None = None) -> Path:
-    base = Path(project_dir) if project_dir else Path.cwd()
-    return base / RUNTIME_MAP_NAME
-
-
-def _load_runtime_map(project_dir: str | Path | None = None) -> Dict[str, Any]:
-    return _json_load(_runtime_map_path(project_dir), {"imports": {}, "missing": []})
-
-
-def resolve_import_entry(name: str, project_dir: str | Path | None = None) -> str | None:
-    norm = normalize_name(resolve_alias(name, project_dir))
-    runtime_map = _load_runtime_map(project_dir)
-    for key in {name, norm}:
-        row = (runtime_map.get("imports") or {}).get(key)
-        if isinstance(row, dict) and row.get("entry"):
-            return str(row["entry"])
-    import_map = _json_load((Path(project_dir) if project_dir else Path.cwd()) / IMPORT_MAP_NAME, {"imports": {}})
-    for key in {name, norm}:
-        row = (import_map.get("imports") or {}).get(key)
-        if isinstance(row, dict) and row.get("entry"):
-            return str(row["entry"])
-    installed_manifest = _project_installed_root(project_dir) / norm / "current" / "manifest.json"
-    if installed_manifest.exists():
-        try:
-            manifest = json.loads(installed_manifest.read_text(encoding="utf-8"))
-            pkg_dir = _project_installed_root(project_dir) / norm / "current" / "package"
-            return str((pkg_dir / manifest.get("entry", "src/main.mellow")).resolve())
-        except Exception:
-            return None
-    return None
-
-
 def uninstall_package(name: str, project_dir: str | Path | None = None) -> Dict[str, Any]:
     ensure_dirs()
     base_name, _ = _split_pkg_ref(name)
@@ -1275,7 +412,6 @@ def uninstall_package(name: str, project_dir: str | Path | None = None) -> Dict[
     lock_path = _save_lockfile(lock, project_dir)
     return {"ok": True, "name": base_name, "removed": str(target_root), "lockfile": str(lock_path)}
 
-
 def _installed_version(name: str, project_dir: str | Path | None = None) -> str | None:
     norm = normalize_name(resolve_alias(name, project_dir))
     manifest_path = _project_installed_root(project_dir) / norm / "current" / "manifest.json"
@@ -1288,7 +424,6 @@ def _installed_version(name: str, project_dir: str | Path | None = None) -> str 
         if normalize_name(str(row.get("name"))) == norm:
             return str(row.get("version") or "")
     return None
-
 
 def package_update_plan(name: str | None = None, registry: str | None = None, *, project_dir: str | Path | None = None, all_packages: bool = False) -> Dict[str, Any]:
     reg = get_registry_url(registry)
@@ -1331,7 +466,6 @@ def package_update_plan(name: str | None = None, registry: str | None = None, *,
         })
     return {"ok": True, "registry": reg, "items": items, "count": len(items), "updates": [i for i in items if i.get("needs_update")], "update_count": sum(1 for i in items if i.get("needs_update"))}
 
-
 def update_packages(name: str | None = None, registry: str | None = None, *, project_dir: str | Path | None = None, with_deps: bool = True, check: bool = False, all_packages: bool = False) -> Dict[str, Any]:
     plan = package_update_plan(name, registry=registry, project_dir=project_dir, all_packages=all_packages)
     if not plan.get("ok") or check:
@@ -1347,10 +481,8 @@ def update_packages(name: str | None = None, registry: str | None = None, *, pro
         updated.extend(res.get("installed", [{"name": pkg_name, "version": res.get("version")}] ))
     return {"ok": True, "registry": plan["registry"], "plan": plan.get("items", []), "updated": updated, "count": len(updated), "lockfile": str(_lockfile_path(project_dir))}
 
-
 def update_remote(name: str | None = None, registry: str | None = None, *, project_dir: str | Path | None = None, with_deps: bool = True) -> Dict[str, Any]:
     return update_packages(name, registry=registry, project_dir=project_dir, with_deps=with_deps)
-
 
 def resolve_project_runtime(project_dir: str | Path, registry: str | None = None, *, install_missing: bool = True, strict: bool = False) -> Dict[str, Any]:
     base = Path(project_dir)
@@ -1386,7 +518,6 @@ def resolve_project_runtime(project_dir: str | Path, registry: str | None = None
     if strict and missing:
         return {"ok": False, "error": f"missing imports: {', '.join(missing)}", "runtime_map": str(path), "missing": missing, "suggestions": sync.get("suggestions", {})}
     return {"ok": True, "runtime_map": str(path), "missing": missing, "imports": imports, "installed": sync.get("installed", []), "lockfile": sync.get("lockfile"), "auto_added": sync.get("auto_added", {}), "suggestions": sync.get("suggestions", {})}
-
 
 def auto_fetch_for_run(target: str | Path, registry: str | None = None, *, strict: bool = False) -> Dict[str, Any]:
     path = Path(target)
@@ -1428,7 +559,6 @@ def seed_core_packages(target_dir: str | Path, publish_local: bool = False) -> D
         created.append(row)
     return {"ok": True, "root": str(td), "items": created, "published_local": publish_local}
 
-
 def list_installed() -> List[Dict[str, Any]]:
     ensure_dirs()
     out: List[Dict[str, Any]] = []
@@ -1442,7 +572,6 @@ def list_installed() -> List[Dict[str, Any]]:
         except Exception:
             continue
     return out
-
 
 def _iter_package_files(package_dir: Path):
     ignore_names = {
@@ -1461,7 +590,6 @@ def _iter_package_files(package_dir: Path):
         if sub.is_file() and sub.name != ".DS_Store":
             yield sub
 
-
 def build_package_archive(package_dir: str | Path, out_path: str | Path | None = None) -> Dict[str, Any]:
     pd = Path(package_dir)
     manifest = read_manifest(pd)
@@ -1473,7 +601,6 @@ def build_package_archive(package_dir: str | Path, out_path: str | Path | None =
                 zf.write(sub, arcname=str(sub.relative_to(pd)))
     sha256 = hashlib.sha256(out.read_bytes()).hexdigest()
     return {"name": manifest["name"], "version": manifest["version"], "archive": str(out), "sha256": sha256}
-
 
 def publish_from_dir(package_dir: str | Path) -> Dict[str, Any]:
     ensure_dirs()
@@ -1492,7 +619,6 @@ def publish_from_dir(package_dir: str | Path) -> Dict[str, Any]:
         "authors": package_authors(manifest),
         "creator": package_creator(manifest),
     }
-
 
 def install_package(name: str, version: str | None = None) -> Dict[str, Any]:
     ensure_dirs()
@@ -1523,7 +649,6 @@ def install_package(name: str, version: str | None = None) -> Dict[str, Any]:
         "authors": package_authors(manifest),
         "creator": package_creator(manifest),
     }
-
 
 def _request_json(method: str, url: str, payload: Dict[str, Any] | None = None, token: str | None = None, extra_headers: Dict[str, str] | None = None) -> Dict[str, Any]:
     headers = {
@@ -1559,9 +684,6 @@ def _request_json(method: str, url: str, payload: Dict[str, Any] | None = None, 
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-
-
-
 def _normalize_auth_probe(payload: Dict[str, Any], registry: str) -> Dict[str, Any]:
     res = dict(payload or {})
     if 'ok' not in res:
@@ -1571,7 +693,6 @@ def _normalize_auth_probe(payload: Dict[str, Any], registry: str) -> Dict[str, A
             res['ok'] = False
     res.setdefault('registry', registry)
     return res
-
 
 def _download_bytes(url: str, token: str | None = None) -> bytes:
     headers = {
@@ -1594,7 +715,6 @@ def login_remote(username: str, password: str, registry: str | None = None) -> D
         res["saved_to"] = str(config_file_path())
     return res
 
-
 def login_with_token(token: str, registry: str | None = None) -> Dict[str, Any]:
     reg = get_registry_url(registry)
     probe = _normalize_auth_probe(_request_json("GET", reg + "/api/v1/auth/whoami", token=token), reg)
@@ -1606,37 +726,12 @@ def login_with_token(token: str, registry: str | None = None) -> Dict[str, Any]:
     probe["token_saved"] = True
     return probe
 
-
 def whoami_remote(registry: str | None = None) -> Dict[str, Any]:
     reg = get_registry_url(registry)
     token = get_auth_token(reg)
     if not token:
         return {"ok": False, "error": f"not logged in for registry {reg}"}
     return _normalize_auth_probe(_request_json("GET", reg + "/api/v1/auth/whoami", token=token), reg)
-
-
-def trusted_authors() -> List[str]:
-    cfg = load_config()
-    values = cfg.get("trusted_authors", [])
-    if not isinstance(values, list):
-        return []
-    return [str(v).strip() for v in values if str(v).strip()]
-
-
-def trust_author(author: str, *, remove: bool = False) -> Dict[str, Any]:
-    name = str(author or "").strip()
-    if not name:
-        return {"ok": False, "error": "author name is required"}
-    cfg = load_config()
-    authors = trusted_authors()
-    if remove:
-        authors = [a for a in authors if a.lower() != name.lower()]
-    elif not any(a.lower() == name.lower() for a in authors):
-        authors.append(name)
-    cfg["trusted_authors"] = authors
-    save_config(cfg)
-    return {"ok": True, "author": name, "trusted_authors": authors, "saved_to": str(config_file_path())}
-
 
 def check_trust_policy(signature: Dict[str, Any], *, strict: bool = False) -> Dict[str, Any]:
     creator = package_creator(signature)
@@ -1651,7 +746,6 @@ def check_trust_policy(signature: Dict[str, Any], *, strict: bool = False) -> Di
     if strict and not creator_trusted:
         return {"ok": False, "error": f"strict trust failed: creator is not trusted: {creator}", "creator": creator, "trusted_authors": trusted}
     return {"ok": True, "creator": creator, "trusted": creator_trusted, "trusted_authors": trusted}
-
 
 def search_remote(query: str, registry: str | None = None) -> Dict[str, Any]:
     reg = get_registry_url(registry)
@@ -1672,7 +766,6 @@ def search_remote(query: str, registry: str | None = None) -> Dict[str, Any]:
         res["items"] = items
         res["count"] = len(items)
     return res
-
 
 def package_info_remote(name: str, registry: str | None = None) -> Dict[str, Any]:
     reg = get_registry_url(registry)
@@ -1726,7 +819,6 @@ def package_info_remote(name: str, registry: str | None = None) -> Dict[str, Any
         "registry": reg,
     }
 
-
 def author_profile_remote(author: str, registry: str | None = None) -> Dict[str, Any]:
     reg = get_registry_url(registry)
     token = get_auth_token(reg)
@@ -1754,7 +846,6 @@ def author_profile_remote(author: str, registry: str | None = None) -> Dict[str,
         if needle and any(needle == h.lower() or needle in h.lower() for h in haystack):
             items.append(raw)
     return {"ok": True, "author": author, "count": len(items), "items": items, "registry": reg}
-
 
 def publish_remote(package_dir: str | Path, registry: str | None = None, token: str | None = None) -> Dict[str, Any]:
     reg = get_registry_url(registry)
@@ -1797,7 +888,6 @@ def publish_remote(package_dir: str | Path, registry: str | None = None, token: 
         res.setdefault("creator", package_creator(manifest))
     return res
 
-
 def _extract_archive_to_install(name: str, version: str, raw: bytes) -> Dict[str, Any]:
     ensure_dirs()
     target = INSTALLED_ROOT / normalize_name(name) / "current"
@@ -1829,7 +919,6 @@ def _extract_archive_to_install(name: str, version: str, raw: bytes) -> Dict[str
         "authors": package_authors(manifest),
         "creator": package_creator(manifest),
     }
-
 
 def install_remote(name: str, version: str | None = None, registry: str | None = None, *, with_deps: bool = True, project_dir: str | Path | None = None, _visited: set[str] | None = None) -> Dict[str, Any]:
     reg = get_registry_url(registry)
@@ -1906,7 +995,6 @@ def install_remote(name: str, version: str | None = None, registry: str | None =
     install_res["published_at"] = version_meta.get("published_at")
     return install_res
 
-
 def sync_imports(project_dir: str | Path, registry: str | None = None, *, install_missing: bool = True) -> Dict[str, Any]:
     base = Path(project_dir)
     imports = _scan_imports(base)
@@ -1964,7 +1052,6 @@ def sync_imports(project_dir: str | Path, registry: str | None = None, *, instal
     lock_path = _save_lockfile(lock, base)
     diagnostics = diagnose_imports(base, registry=reg)
     return {"ok": True, "project_dir": str(base), "imports": imports, "import_map": str(import_map), "lockfile": str(lock_path), "installed": installed_now, "auto_added": auto_added, "suggestions": suggestions, "manifest": str(manifest_path) if manifest_path else None, "diagnostics": diagnostics.get('rows', [])}
-
 
 def resolve_package_url(name: str, version: str | None = None, registry: str | None = None) -> Dict[str, Any]:
     reg = get_registry_url(registry)

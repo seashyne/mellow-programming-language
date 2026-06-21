@@ -151,6 +151,15 @@ typedef struct {
 } MRunResult;
 
 typedef struct {
+    const char *architecture;
+    const char *backend;
+    uint32_t pointer_bits;
+    int little_endian;
+    int arm_neon_available;
+    int optimized_kernels;
+} MRuntimePlatform;
+
+typedef struct {
     uint32_t pc;
     const MInstruction *insn;
     const MSourceSpan *span;
@@ -207,6 +216,7 @@ int mvm_reserve_stack(MVM *vm, size_t cap);
 int mvm_reserve_frames(MVM *vm, size_t cap);
 int mvm_reserve_locals(MVM *vm, size_t cap);
 int mvm_run(MVM *vm, const MProgram *program, MRunResult *out);
+MRuntimePlatform mellow_runtime_platform(void);
 
 MValue mval_none(void);
 MValue mval_bool(int v);

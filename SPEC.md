@@ -51,10 +51,10 @@ Mellow may have multiple runtimes, but the language contract is shared:
 
 ## Release Gate
 
-Stable **2.9.3** patch releases must pass:
+Stable **2.9.4** patch releases must pass:
 
 ```powershell
-.\scripts\test-v293-stability.ps1
+.\scripts\test-v294-stability.ps1
 ```
 
 The v3 track baseline remains:
@@ -69,9 +69,9 @@ Native-core releases must also pass:
 py -3.11 -m pytest -q tests/native -p no:cacheprovider
 ```
 
-## Patch Release 2.9.3
+## Patch Release 2.9.4
 
-- Manifest: `spec/mellow-2.9.3-stability.json`
+- Manifest: `spec/mellow-2.9.4-stability.json`
 - Canonical runtime modules: `compiler/bytecode.py`, `host/runtime.py`, and
   `vm/python_vm.py`
 - Experimental docs index: `docs/experimental/README.md`

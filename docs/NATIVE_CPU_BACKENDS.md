@@ -5,11 +5,11 @@ paths for hot loops.
 
 ## Backend Contract
 
-Every native build must keep `generic-c` available. Architecture backends are
-selected as preferred paths only when the CPU family is known:
+Every native build uses `generic-c`. Architecture detection reports available
+CPU features, but does not claim an optimized backend until tuned kernels exist:
 
-- `x86_64` / `AMD64` -> `x86_64-simd`
-- `arm64` / `aarch64` -> `arm64-neon`
+- `x86_64` / `AMD64` -> `generic-c`, SSE2 capability reported
+- `arm64` / `aarch64` -> `generic-c`, NEON capability reported
 - unknown targets -> `generic-c`
 
 The CLI exposes this through:
@@ -21,8 +21,10 @@ mellow native status --json
 
 ## ARM64 Goal
 
-ARM64 is a first-class target. The runtime reports `arm64-neon` as the preferred
-backend on ARM64 machines and always keeps `generic-c` as the fallback path.
+ARM64 is a first-class portable target. The standalone runtime cross-builds for
+ARM64 and is executed under QEMU in CI. It reports `generic-c` as the backend,
+with `arm_neon_available=true` on ARM64. This is intentionally not called
+`arm64-neon` because no VM kernel currently uses NEON intrinsics.
 
 Future hot host APIs should use this model:
 
@@ -37,9 +39,17 @@ Future hot host APIs should use this model:
 `setup.py` defines architecture macros for native extensions:
 
 - `MELLOW_BACKEND_GENERIC_C`
-- `MELLOW_ARCH_X86_64` and `MELLOW_BACKEND_X86_64_SIMD`
-- `MELLOW_ARCH_ARM64` and `MELLOW_BACKEND_ARM64_NEON`
+- `MELLOW_ARCH_X86_64`
+- `MELLOW_ARCH_ARM64`
 - `MELLOW_ARCH_ARM32` or `MELLOW_ARCH_UNKNOWN`
 
-These macros are capability markers. Code must still fall back to `generic-c`
-unless a tuned kernel is present and tested.
+Backend macros must only be added with a tuned kernel, ARM hardware benchmarks,
+and a release gate that compares it with `generic-c`.
+
+## ARM64 Verification
+
+The `native-arm64` GitHub Actions job cross-compiles with
+`aarch64-linux-gnu-gcc`, runs the ARM64 executable through QEMU, checks runtime
+metadata, and executes the frozen native core fixture. This proves ARM64 build
+and functional portability. Performance still requires benchmark results from
+real ARM hardware such as Apple Silicon, Raspberry Pi 5, or AWS Graviton.

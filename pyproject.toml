@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mellowlang"
-version = "2.9.3"
+version = "2.9.4"
 description = "Mellow Programming Language - a sandbox scripting language for games, tools, and AI behavior"
 readme = "README.md"
 requires-python = ">=3.10"
