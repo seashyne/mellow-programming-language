@@ -86,6 +86,8 @@ jobs:
       - name: Verify native extension
         run: |
           python -c "import mellowlang._mellowvm"
+      - name: Probe native arithmetic state
+        run: python scripts/ci_native_probe.py
       - name: Verify native C default engine
         run: python -m pytest -q tests/native/test_native_core_parity.py -k default_engine -p no:cacheprovider
       - name: Verify native arithmetic parity
