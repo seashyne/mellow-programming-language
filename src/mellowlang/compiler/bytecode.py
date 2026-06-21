@@ -1048,6 +1048,7 @@ class Compiler:
                 "int": "std.type.to_int",
                 "float": "std.type.to_float",
                 "str": "std.type.to_str",
+                "type": "std.type.of",
                 "bool": "std.type.to_bool",
                 "list": "std.type.to_list",
                 # string

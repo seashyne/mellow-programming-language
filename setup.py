@@ -66,6 +66,11 @@ ext_modules = [
     Extension(
         "mellowlang._mellowvm",
         sources=["native/mellowvm/src/mellowvm_module.c"],
+        depends=[
+            "native/mellowvm/include/mellowvm.h",
+            "native/mellowvm/src/mellowvm_exec.inc",
+            "native/mellowvm/src/mellowvm_syscalls.inc",
+        ],
         include_dirs=["native/mellowvm/include", *_python_include_dirs()],
         define_macros=_native_arch_macros(),
         extra_compile_args=[],

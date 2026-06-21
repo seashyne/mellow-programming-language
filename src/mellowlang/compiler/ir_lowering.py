@@ -49,6 +49,14 @@ from ..host.runtime import MODULE_ALLOWLIST
 
 STDLIB_CALLS = {
     "len": "std.len",
+    "str": "std.type.to_str",
+    "type": "std.type.of",
+    "abs": "std.math.abs",
+    "floor": "std.math.floor",
+    "ceil": "std.math.ceil",
+    "sqrt": "std.math.sqrt",
+    "min": "std.math.min",
+    "max": "std.math.max",
     "money": "std.money.of",
     "money.of": "std.money.of",
     "money_of": "std.money.of",

@@ -615,11 +615,15 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
             idxv = self.stack.pop(); target = self.stack.pop()
             if isinstance(target, (list, str)):
                 i2 = int(idxv)
-                self.stack.append(target[i2] if -len(target) <= i2 < len(target) else None)
+                if not -len(target) <= i2 < len(target):
+                    raise IndexError("index out of range")
+                self.stack.append(target[i2])
             elif isinstance(target, dict):
-                self.stack.append(target.get(idxv, None))
+                if idxv not in target:
+                    raise KeyError("missing map key")
+                self.stack.append(target[idxv])
             else:
-                self.stack.append(None)
+                raise TypeError("value is not indexable")
         elif op == _Op.BUILD_LIST:
             n = int(instr[1]); items = [self.stack.pop() for _ in range(n)]; items.reverse()
             self.stack.append(items)
@@ -917,34 +921,24 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
                 elif op == Op.GETITEM:
                     idxv = self.stack.pop()
                     target = self.stack.pop()
-                    try:
-                        if isinstance(target, list):
-                            i2 = int(idxv)
-                            if i2 < 0: i2 = len(target) + i2
-                            self.stack.append(target[i2] if 0 <= i2 < len(target) else None)
-                        elif isinstance(target, dict):
-                            self.stack.append(target.get(idxv, None))
-                        elif isinstance(target, str):
-                            i2 = int(idxv)
-                            if i2 < 0: i2 = len(target) + i2
-                            self.stack.append(target[i2] if 0 <= i2 < len(target) else '')
-                        elif isinstance(target, MellowLangRange):
-                            i2 = int(idxv)
-                            if i2 < 0: i2 = len(target) + i2
-                            self.stack.append(target[i2] if 0 <= i2 < len(target) else None)
-                        elif hasattr(target, "__getitem__"):
-                            i2 = int(idxv) if isinstance(idxv, (int, float, bool)) or (isinstance(idxv, str) and idxv.lstrip('-').isdigit()) else idxv
-                            if isinstance(i2, int) and i2 < 0:
-                                try: i2 = len(target) + i2
-                                except: pass
-                            try:
-                                self.stack.append(target[i2])
-                            except Exception:
-                                self.stack.append(None)
-                        else:
-                            self.stack.append(None)
-                    except Exception:
-                        self.stack.append(None)
+                    if isinstance(target, (list, str, MellowLangRange)):
+                        i2 = int(idxv)
+                        if i2 < 0:
+                            i2 = len(target) + i2
+                        if not 0 <= i2 < len(target):
+                            raise IndexError("index out of range")
+                        self.stack.append(target[i2])
+                    elif isinstance(target, dict):
+                        if idxv not in target:
+                            raise KeyError("missing map key")
+                        self.stack.append(target[idxv])
+                    elif hasattr(target, "__getitem__"):
+                        i2 = int(idxv) if isinstance(idxv, (int, float, bool)) or (isinstance(idxv, str) and idxv.lstrip('-').isdigit()) else idxv
+                        if isinstance(i2, int) and i2 < 0:
+                            i2 = len(target) + i2
+                        self.stack.append(target[i2])
+                    else:
+                        raise TypeError("value is not indexable")
 
                 elif op == Op.BUILD_LIST:
                     n = int(instr[1])

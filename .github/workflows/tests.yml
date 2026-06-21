@@ -93,18 +93,8 @@ jobs:
           python -c "import mellowlang._mellowvm"
       - name: Probe native arithmetic state
         run: python scripts/ci_native_probe.py
-      - name: Verify native C default engine
-        run: python -m pytest -q tests/native/test_native_core_parity.py -k default_engine -p no:cacheprovider
-      - name: Verify native arithmetic parity
-        run: python -m pytest -q tests/native/test_native_core_parity.py -k print_arithmetic_and_variables -p no:cacheprovider
-      - name: Verify native function parity
-        run: python -m pytest -q tests/native/test_native_core_parity.py -k function_call -p no:cacheprovider
-      - name: Verify native while parity
-        run: python -m pytest -q tests/native/test_native_core_parity.py -k while_loop -p no:cacheprovider
-      - name: Verify native range parity
-        run: python -m pytest -q tests/native/test_native_core_parity.py -k range_loop -p no:cacheprovider
-      - name: Verify native collection parity
-        run: python -m pytest -q tests/native/test_native_core_parity.py -k list_and_map_indexing -p no:cacheprovider
+      - name: Run complete native Core Profile parity
+        run: python -m pytest -q tests/native/test_native_core_parity.py -p no:cacheprovider
       - name: Run native stdlib parity
         run: python -m pytest -q tests/native/test_native_stdlib_parity.py -p no:cacheprovider
       - name: Run standalone C CLI tests

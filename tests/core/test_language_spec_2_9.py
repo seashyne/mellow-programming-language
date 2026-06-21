@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -23,6 +24,18 @@ def test_language_spec_manifest_is_frozen_and_versioned() -> None:
     assert spec["status"] == "frozen"
     assert __version__.startswith(f'{spec["version"]}.')
     assert spec["normative_document"] == "docs/LANGUAGE_SPEC_2_9.md"
+
+
+def test_frozen_spec_and_conformance_fixtures_match_locked_digests() -> None:
+    spec = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    locked_files = (
+        (spec["normative_document"], spec["normative_document_sha256"]),
+        (spec["conformance_fixture"], spec["conformance_fixture_sha256"]),
+        (spec["conformance_output_fixture"], spec["conformance_output_sha256"]),
+    )
+    for relative_path, expected_digest in locked_files:
+        payload = (ROOT / relative_path).read_bytes()
+        assert hashlib.sha256(payload).hexdigest() == expected_digest, relative_path
 
 
 def test_normative_spec_contains_required_contract_sections() -> None:

@@ -2,6 +2,10 @@
 
 Status: draft
 
+Native C has complete parity for the frozen Mellow 2.9 Core Profile. This does
+not promote host or tooling surfaces to Core and does not imply debugger,
+record/replay, or event parity.
+
 Legend:
 
 - `pass`: expected to work in the runtime.
@@ -19,7 +23,8 @@ Legend:
 | `for ... in range(...)` | pass | pass | core | Stable core behavior. |
 | Lists and maps | pass | pass | core | Literal/indexing parity required. |
 | Strings | pass | pass | core | UTF-8 source is required. |
-| Undefined-name diagnostics | pass | partial | core | Python VM raises a runtime error; native parity must match. |
+| Undefined-name diagnostics | pass | pass | core | Both runtimes raise a runtime error. |
+| Invalid indexing diagnostics | pass | pass | core | Missing keys, invalid targets, and out-of-range indexes raise. |
 | Money core | pass | pass | core-host | Decimal semantics are host-backed. |
 | Data processing | pass | pass | core-host | Bounded data helpers are stable when enabled. |
 | Ledger core | pass | pass | core-host | Hash-chain behavior must remain deterministic. |
@@ -43,3 +48,7 @@ py -3.11 -m pytest -q tests/native -p no:cacheprovider
 ```
 
 passes in CI or the release notes clearly mark native parity as partial.
+
+This claim covers the language Core Profile only. Debugger, record/replay,
+events, package imports, and host-specific surfaces retain their explicit
+`partial`, `fallback`, or `unsupported` status above.

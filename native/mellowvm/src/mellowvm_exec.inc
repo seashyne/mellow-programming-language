@@ -62,7 +62,11 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
         case OP_LOAD: {
             PyObject *nm=_A1, *val=scope_get(vm->scopes,vm->ns,nm);
             if(!val) val=PyDict_GetItem(vm->func_table,nm)?make_func_ref(nm):NULL;
-            if(!val) { PyObject *z=PyLong_FromLong(0); _PUSH(z); Py_DECREF(z); }
+            if(!val) {
+                PyErr_Format(PyExc_RuntimeError, "RUNTIME: undefined name: %s",
+                             PyUnicode_Check(nm)?PyUnicode_AsUTF8(nm):"<unknown>");
+                goto exec_runtime_err;
+            }
             else if(val==(PyObject*)1) { goto exec_err; } /* make_func_ref error */
             else { _PUSH(val); if(PyErr_Occurred()) goto exec_err; }
             break;
@@ -257,24 +261,30 @@ static PyObject *cvm_exec(CVM *vm, int start_pc)
         }
 
         case OP_GETITEM: {
-            PyObject *idx=_POP(), *tgt=_POP(), *r=Py_None;
+            PyObject *idx=_POP(), *tgt=_POP(), *r=NULL;
             if(PyList_Check(tgt)){
                 Py_ssize_t i=PyLong_AsSsize_t(idx),sz=PyList_GET_SIZE(tgt);
+                if(PyErr_Occurred()){Py_DECREF(idx);Py_DECREF(tgt);goto exec_runtime_err;}
                 if(i<0)i+=sz;
-                r=(i>=0&&i<sz)?PyList_GET_ITEM(tgt,i):Py_None;
-                Py_INCREF(r);
+                if(i<0||i>=sz){PyErr_SetString(PyExc_IndexError,"index out of range");}
+                else {r=PyList_GET_ITEM(tgt,i);Py_INCREF(r);}
             } else if(PyUnicode_Check(tgt)){
                 Py_ssize_t i=PyLong_AsSsize_t(idx),sz=PyUnicode_GET_LENGTH(tgt);
+                if(PyErr_Occurred()){Py_DECREF(idx);Py_DECREF(tgt);goto exec_runtime_err;}
                 if(i<0)i+=sz;
-                r=(i>=0&&i<sz)?PyUnicode_FromOrdinal((int)PyUnicode_READ_CHAR(tgt,i)):PyUnicode_FromString("");
+                if(i<0||i>=sz){PyErr_SetString(PyExc_IndexError,"index out of range");}
+                else r=PyUnicode_FromOrdinal((int)PyUnicode_READ_CHAR(tgt,i));
             } else if(PyDict_Check(tgt)){
                 PyObject *k=mellow_format(idx);
                 PyObject *val=k?PyDict_GetItem(tgt,k):NULL;
                 Py_XDECREF(k);
-                r=val?val:Py_None; Py_INCREF(r);
-            } else { Py_INCREF(r); }
+                if(!val) PyErr_SetString(PyExc_KeyError,"missing map key");
+                else {r=val;Py_INCREF(r);}
+            } else {
+                PyErr_SetString(PyExc_TypeError,"value is not indexable");
+            }
             Py_DECREF(idx); Py_DECREF(tgt);
-            if(!r)goto exec_err;
+            if(!r)goto exec_runtime_err;
             _PUSH(r); Py_DECREF(r); break;
         }
 

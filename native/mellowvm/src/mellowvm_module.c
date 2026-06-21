@@ -578,8 +578,8 @@ mellowvm_capabilities(PyObject *self, PyObject *Py_UNUSED(args))
         "watch_expressions", Py_False,
         "typed_frame_snapshots", Py_False,
         "source_span_parity", Py_False,
-        "native_parity_level", "stable-core+money+data+ledger",
-        "notes", "Native C execution covers the stable language core plus money, data, and ledger stdlib services; debugger, event, and replay hooks still route through Python."
+        "native_parity_level", "core-complete+money+data+ledger",
+        "notes", "Native C execution has complete Mellow Core Profile parity plus money, data, and ledger stdlib services; debugger, event, and replay hooks still route through Python."
     );
 }
 

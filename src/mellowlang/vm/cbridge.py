@@ -308,7 +308,7 @@ def c_vm_capabilities() -> Dict[str, Any]:
         "native_stdlib_parity": bool(ext is not None),
         "native_data_transforms": False,
         "native_ledger_bridge": bool(ext is not None),
-        "native_parity_level": "stable-core+money+data+ledger",
+        "native_parity_level": "core-complete+money+data+ledger",
     }
     if ext is None:
         return base
