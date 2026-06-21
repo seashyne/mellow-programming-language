@@ -21,12 +21,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .[dev]
+      - name: Run stable core gate
+        run: pytest -q tests/core -p no:cacheprovider
       - name: Run stable language gate
-        run: |
-          pytest -q tests/core -p no:cacheprovider
-          if [ -d tests/language ]; then
-            pytest -q tests/language -p no:cacheprovider
-          fi
+        run: pytest -q tests/language -p no:cacheprovider
       - name: Run package registry smoke
         run: |
           pytest -q \
