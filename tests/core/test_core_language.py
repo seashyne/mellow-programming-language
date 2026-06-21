@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib
 import io
 import textwrap
 from pathlib import Path
@@ -33,6 +34,16 @@ def test_print_arithmetic_and_variables():
         """
     )
     assert out.strip() == "5"
+
+
+def test_python_engine_does_not_probe_native_extension(monkeypatch):
+    vm_module = importlib.import_module("mellowlang.vm.vm")
+
+    def fail_native_probe():
+        raise AssertionError("Python reference engine probed the native extension")
+
+    monkeypatch.setattr(vm_module, "c_vm_capabilities", fail_native_probe)
+    assert run_source("print(2 + 3)\n").strip() == "5"
 
 
 def test_function_call_is_stable_core_syntax():

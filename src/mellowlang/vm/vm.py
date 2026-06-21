@@ -226,7 +226,13 @@ class MellowVM:
             bool(getattr(cfg, 'debug_break_when', None)),
             bool(getattr(cfg, 'debug_watch_exprs', None)),
         ])
-        native_caps = c_vm_capabilities()
+        # An explicitly selected Python engine must not import or probe the C
+        # extension. Besides avoiding startup side effects, this keeps the
+        # reference VM usable when a native binary is broken or ABI-incompatible.
+        native_caps = c_vm_capabilities() if engine in ("auto", "c") else {
+            "available": False,
+            "native_execution": False,
+        }
         self.last_debug_capabilities = dict(native_caps)
         if debug_requested and engine in ('auto', 'c') and not c_vm_debug_supported():
             if native_require or not native_allow_fallback:
