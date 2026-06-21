@@ -44,6 +44,8 @@ jobs:
             -p no:cacheprovider
       - name: Reference SDK
         run: python -m pytest -q tests/core/test_sdk_core.py -p no:cacheprovider
+      - name: Reference optional dependencies
+        run: python -m pytest -q tests/core/test_optional_dependencies.py -p no:cacheprovider
       - name: Run reference language gate
         run: python -m pytest -q tests/language -p no:cacheprovider
       - name: Run package registry smoke
