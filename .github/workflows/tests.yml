@@ -19,6 +19,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .[dev]
+      - name: Probe tooling package imports
+        run: |
+          python -c "import mellowlang; import mellowlang.compiler; import mellowlang.vm; print(mellowlang.__file__)"
       - name: Reference core language
         run: python -m pytest -q tests/core/test_core_language.py -p no:cacheprovider
       - name: Reference syntax and specification

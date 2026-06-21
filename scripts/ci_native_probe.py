@@ -3,10 +3,9 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
+import sys
 import traceback
-
-from mellowlang.compiler import Compiler
-from mellowlang.vm import MellowVM, RunConfig
 
 
 SOURCE = """\
@@ -22,9 +21,13 @@ def _annotation(message: str) -> None:
 
 
 def main() -> int:
-    vm = MellowVM()
     output = io.StringIO()
     try:
+        import mellowlang
+        from mellowlang.compiler import Compiler
+        from mellowlang.vm import MellowVM, RunConfig
+
+        vm = MellowVM()
         program = Compiler().compile(SOURCE, filename="<ci-native-probe>")
         with contextlib.redirect_stdout(output):
             vm.run(
@@ -36,6 +39,9 @@ def main() -> int:
                 ),
             )
         payload = {
+            "python": sys.executable,
+            "cwd": os.getcwd(),
+            "package": mellowlang.__file__,
             "output": output.getvalue(),
             "engine": vm.last_engine,
             "engine_detail": vm.last_engine_detail,
@@ -48,7 +54,15 @@ def main() -> int:
             return 1
         return 0
     except Exception:
-        details = traceback.format_exc()
+        details = json.dumps(
+            {
+                "python": sys.executable,
+                "cwd": os.getcwd(),
+                "sys_path": sys.path,
+                "traceback": traceback.format_exc(),
+            },
+            ensure_ascii=True,
+        )
         print(details)
         _annotation(details)
         return 1
