@@ -90,7 +90,7 @@ def test_cli_run_and_check_core_script():
     script = Path(__file__).resolve().parents[2] / "examples" / "hello.mellow"
     run_out = io.StringIO()
     with contextlib.redirect_stdout(run_out):
-        assert cli_main(["run", str(script)]) == 0
+        assert cli_main(["run", str(script), "--engine", "py"]) == 0
     assert "Hello from MellowLang!" in run_out.getvalue()
 
     check_out = io.StringIO()
