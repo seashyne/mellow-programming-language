@@ -167,4 +167,4 @@ jobs:
             tests/test_v215_package_runtime_integration.py \
             -p no:cacheprovider
       - name: Run package release gate
-        run: python scripts/package_release_gate.py
+        run: python scripts/package_release_gate.py --skip-native

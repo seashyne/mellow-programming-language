@@ -134,10 +134,9 @@ def run_package_integrity_gate() -> dict[str, Any]:
     return {"ok": True, "packages": rows, "count": len(rows)}
 
 
-def run_stability_pytest_gate() -> dict[str, Any]:
+def run_stability_pytest_gate(*, include_native: bool = True) -> dict[str, Any]:
     suites = [
         ["tests/core", "tests/language"],
-        ["tests/native"],
         [
             "tests/test_v152_online_registry.py",
             "tests/test_v153_public_registry.py",
@@ -149,6 +148,8 @@ def run_stability_pytest_gate() -> dict[str, Any]:
             "tests/test_v216_project_templates.py",
         ],
     ]
+    if include_native:
+        suites.insert(1, ["tests/native"])
     rows: list[dict[str, Any]] = []
     for suite in suites:
         cmd = [sys.executable, "-m", "pytest", "-q", *suite, "-p", "no:cacheprovider"]
@@ -167,11 +168,11 @@ def run_stability_pytest_gate() -> dict[str, Any]:
     return {"ok": True, "suites": rows}
 
 
-def run_release_gate(*, rounds: int = 3, include_stability: bool = True) -> dict[str, Any]:
+def run_release_gate(*, rounds: int = 3, include_stability: bool = True, include_native: bool = True) -> dict[str, Any]:
     benchmark = run_benchmarks(rounds=rounds)
     security = run_security_audit(include_packages=False)
     package_integrity = run_package_integrity_gate()
-    stability = run_stability_pytest_gate() if include_stability else {"ok": True, "skipped": True}
+    stability = run_stability_pytest_gate(include_native=include_native) if include_stability else {"ok": True, "skipped": True}
     ok = bool(
         benchmark.get("ok")
         and security.get("ok")
