@@ -21,8 +21,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .[dev]
-      - name: Core language
-        run: pytest -q tests/core/test_core_language.py -p no:cacheprovider
+      - name: Core release version
+        run: pytest -q tests/core/test_core_language.py::test_version_matches_core_release -p no:cacheprovider
+      - name: Core arithmetic
+        run: pytest -q tests/core/test_core_language.py::test_print_arithmetic_and_variables -p no:cacheprovider
+      - name: Core functions
+        run: pytest -q tests/core/test_core_language.py::test_function_call_is_stable_core_syntax -p no:cacheprovider
+      - name: Core while loop
+        run: pytest -q tests/core/test_core_language.py::test_while_loop_is_stable_core_syntax -p no:cacheprovider
+      - name: Core range loop
+        run: pytest -q tests/core/test_core_language.py::test_range_function_is_stable_core_syntax -p no:cacheprovider
+      - name: Core collection literals
+        run: pytest -q tests/core/test_core_language.py::test_list_and_map_literals_print_values -p no:cacheprovider
+      - name: Core CLI smoke
+        run: pytest -q tests/core/test_core_language.py::test_cli_run_and_check_core_script -p no:cacheprovider
       - name: Core syntax reference
         run: pytest -q tests/core/test_syntax_reference.py -p no:cacheprovider
       - name: Core language specification
