@@ -120,6 +120,32 @@ def test_full_native_reports_compile_error_location(native_binary: Path, tmp_pat
     assert f"{source}:1:1: syntax error:" in result.stderr
 
 
+def test_full_native_rejects_integer_literal_overflow(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "integer-overflow.mellow"
+    source.write_text("let value = 44444444444444444444444444444444444444444444444444444444444444444444444444\n", encoding="utf-8")
+    result = subprocess.run(
+        [str(native_binary), "check", str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "integer literal is outside the signed 64-bit range" in result.stderr
+
+
+def test_full_native_accepts_maximum_signed_integer(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "maximum-integer.mellow"
+    source.write_text("print(9223372036854775807)\n", encoding="utf-8")
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "9223372036854775807"
+
+
 def test_full_native_reports_runtime_error_location(native_binary: Path, tmp_path: Path) -> None:
     source = tmp_path / "bad-runtime.mellow"
     source.write_text("let values = [1]\nprint(values[4])\n", encoding="utf-8")

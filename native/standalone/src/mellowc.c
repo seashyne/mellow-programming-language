@@ -1,6 +1,7 @@
 #include "mellowrt.h"
 
 #include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -147,7 +148,9 @@ static void lex_next(Lexer *l) {
         l->token.kind = TK_NUM;
         l->token.start = start;
         l->token.len = (size_t)(end - start);
-        l->token.is_float = memchr(start, '.', l->token.len) != NULL;
+        l->token.is_float = memchr(start, '.', l->token.len) != NULL ||
+                            memchr(start, 'e', l->token.len) != NULL ||
+                            memchr(start, 'E', l->token.len) != NULL;
         l->cur = end;
         return;
     }
@@ -186,6 +189,19 @@ static void lex_next(Lexer *l) {
 static int token_is(Token *t, const char *text) {
     size_t n = strlen(text);
     return t->kind == TK_ID && t->len == n && memcmp(t->start, text, n) == 0;
+}
+
+static int parse_integer_literal(const Token *token, int64_t *result) {
+    uint64_t value = 0;
+    const uint64_t limit = (uint64_t)INT64_MAX;
+    size_t i;
+    for (i = 0; i < token->len; ++i) {
+        uint64_t digit = (uint64_t)(token->start[i] - '0');
+        if (value > (limit - digit) / 10u) return 0;
+        value = value * 10u + digit;
+    }
+    *result = (int64_t)value;
+    return 1;
 }
 
 static int scope_find(Scope *scope, const char *name, size_t len) {
@@ -241,7 +257,23 @@ static int parse_primary(Expr *e) {
     Token token = e->lexer.token;
     int slot;
     if (token.kind == TK_NUM) {
-        int ci = add_const(c, token.is_float ? mval_f64(token.number) : mval_i64((int64_t)token.number));
+        int ci;
+        MValue value;
+        if (token.is_float) {
+            if (!isfinite(token.number)) {
+                set_error(c, "numeric literal is not finite");
+                return 0;
+            }
+            value = mval_f64(token.number);
+        } else {
+            int64_t integer;
+            if (!parse_integer_literal(&token, &integer)) {
+                set_error(c, "integer literal is outside the signed 64-bit range");
+                return 0;
+            }
+            value = mval_i64(integer);
+        }
+        ci = add_const(c, value);
         lex_next(&e->lexer);
         return ci >= 0 && emit(c, MOP_PUSH_CONST, ci, 0, 0) >= 0;
     }
