@@ -17,11 +17,11 @@ $exactTargets = @(
     ".mellow_runtime.json"
 )
 
-$targets = foreach ($name in $exactTargets) {
+$targets = @(foreach ($name in $exactTargets) {
     Get-Item -LiteralPath (Join-Path $repoRoot $name) -Force -ErrorAction SilentlyContinue
-}
-$targets += Get-ChildItem -LiteralPath $repoRoot -Force -ErrorAction Stop |
-    Where-Object { $_.Name -like ".mellow-data-benchmark-*" -or $_.Name -like "mellow-*-check.exe" }
+})
+$targets += @(Get-ChildItem -LiteralPath $repoRoot -Force -ErrorAction Stop |
+    Where-Object { $_.Name -like ".mellow-data-benchmark-*" -or $_.Name -like "mellow-*-check.exe" })
 $targets = @($targets | Sort-Object FullName -Unique)
 
 if ($targets.Count -eq 0) {
