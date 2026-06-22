@@ -137,8 +137,12 @@ static int push(MVM *vm, MValue v) {
     vm->stack[vm->stack_len++] = v; return 1;
 }
 static MValue pop(MVM *vm) {
+    MValue value;
     if (!vm->stack_len) return mval_none();
-    return vm->stack[--vm->stack_len];
+    vm->stack_len--;
+    value=vm->stack[vm->stack_len];
+    vm->stack[vm->stack_len]=mval_none();
+    return value;
 }
 static MValue *local_ptr(MVM *vm, const MFrame *frame, int32_t slot) {
     size_t idx = frame ? frame->local_base + (size_t)slot : (size_t)slot;
@@ -186,14 +190,6 @@ static int generic_compare(MValue a, MValue b, MCompareOp op) {
     }
 }
 
-static MValue mvalue_move(MValue *src) {
-    /* Move ownership: zero out src so mvm_free won't double-free it. */
-    MValue dst = *src;
-    memset(src, 0, sizeof(*src));
-    src->tag = MVAL_NONE;
-    return dst;
-}
-
 static int build_list(MVM *vm, int32_t count) {
     if (count<0||(size_t)count>vm->stack_len) return 0;
     MValue v=mval_none(); v.tag=MVAL_LIST;
@@ -204,8 +200,6 @@ static int build_list(MVM *vm, int32_t count) {
     for (int32_t i=count-1;i>=0;--i) {
         MValue sv = pop(vm);
         v.as.list.items[(size_t)i] = sv;
-        /* pop() already decremented stack_len; zero the slot for safety */
-        memset(&vm->stack[vm->stack_len + (size_t)(count-1-i)], 0, sizeof(MValue));
     }
     return push(vm,v);
 }
@@ -253,6 +247,9 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
     while (pc<program->code_len) {
         const MInstruction *insn=&program->code[pc];
         const MSourceSpan  *span=(program->span_map&&pc<program->span_len)?&program->span_map[pc]:NULL;
+        out->error_pc=pc;
+        out->has_error_span=span!=NULL;
+        if(span) out->error_span=*span;
         MFrame *frame=vm->frame_len?&vm->frames[vm->frame_len-1]:NULL;
         MDebugSnapshot snap={pc,insn,span,frame,vm->frames,vm->frame_len,vm->stack,vm->stack_len,vm->locals,vm->locals_len};
         if (vm->debug.on_before_instruction&&!vm->debug.on_before_instruction(vm->debug.user,&snap)){
@@ -274,7 +271,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             if (!push(vm, cv)) { set_error(out,"push_const_failed"); return 0; }
             pc++; break;
         }
-        case MOP_POP: (void)pop(vm); pc++; break;
+        case MOP_POP: { MValue discarded=pop(vm); mvalue_free(&discarded); pc++; break; }
         case MOP_DUP:
             if (!vm->stack_len||!push(vm,vm->stack[vm->stack_len-1])){set_error(out,"dup_failed");return 0;}
             pc++; break;
@@ -309,20 +306,22 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             if (insn->opcode==MOP_ADD&&(a.tag==MVAL_STR||b.tag==MVAL_STR)){
                 char abuf[64],bbuf[64]; const char *ap=NULL,*bp=NULL; size_t alen=0,blen=0;
                 if (!coerce_str(a,abuf,sizeof(abuf),&ap,&alen)||!coerce_str(b,bbuf,sizeof(bbuf),&bp,&blen)){
-                    set_error(out,"string_concat_unsupported_type");return 0;
+                    mvalue_free(&a);mvalue_free(&b);set_error(out,"string_concat_unsupported_type");return 0;
                 }
                 MValue sv=mval_owned_str(NULL,alen+blen);
-                if (!sv.as.str.ptr){set_error(out,"string_concat_alloc_failed");return 0;}
+                if (!sv.as.str.ptr){mvalue_free(&a);mvalue_free(&b);set_error(out,"string_concat_alloc_failed");return 0;}
                 memcpy((char*)sv.as.str.ptr,ap,alen); memcpy((char*)sv.as.str.ptr+alen,bp,blen);
+                mvalue_free(&a);mvalue_free(&b);
                 if (!push(vm,sv)){mvalue_free(&sv);set_error(out,"string_concat_push_failed");return 0;}
                 pc++; break;
             }
-            if ((a.tag!=MVAL_I64&&a.tag!=MVAL_F64)||(b.tag!=MVAL_I64&&b.tag!=MVAL_F64)){set_error(out,"numeric_op_requires_numbers");return 0;}
+            if ((a.tag!=MVAL_I64&&a.tag!=MVAL_F64)||(b.tag!=MVAL_I64&&b.tag!=MVAL_F64)){mvalue_free(&a);mvalue_free(&b);set_error(out,"numeric_op_requires_numbers");return 0;}
             int use_f=(a.tag==MVAL_F64||b.tag==MVAL_F64||insn->opcode==MOP_DIV);
             double da=(a.tag==MVAL_F64)?a.as.f64:(double)a.as.i64;
             double db=(b.tag==MVAL_F64)?b.as.f64:(double)b.as.i64;
-            if (insn->opcode==MOP_DIV&&db==0.0){set_error(out,"division_by_zero");return 0;}
+            if (insn->opcode==MOP_DIV&&db==0.0){mvalue_free(&a);mvalue_free(&b);set_error(out,"division_by_zero");return 0;}
             double res=(insn->opcode==MOP_ADD)?da+db:(insn->opcode==MOP_SUB)?da-db:(insn->opcode==MOP_MUL)?da*db:da/db;
+            mvalue_free(&a);mvalue_free(&b);
             if (!push(vm,use_f?mval_f64(res):mval_i64((int64_t)res))){set_error(out,"numeric_push_failed");return 0;}
             pc++; break;
         }
@@ -331,16 +330,17 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         case MOP_MOD: {
             MValue b=pop(vm), a=pop(vm);
             if (a.tag==MVAL_I64&&b.tag==MVAL_I64){
-                if (b.as.i64==0){set_error(out,"modulo_by_zero");return 0;}
+                if (b.as.i64==0){mvalue_free(&a);mvalue_free(&b);set_error(out,"modulo_by_zero");return 0;}
                 int64_t r=a.as.i64%b.as.i64;
                 if (r!=0&&((r<0)!=(b.as.i64<0))) r+=b.as.i64; /* Python-style sign */
                 if (!push(vm,mval_i64(r))){set_error(out,"mod_push_failed");return 0;}
             } else {
                 double da=(a.tag==MVAL_F64)?a.as.f64:(double)a.as.i64;
                 double db=(b.tag==MVAL_F64)?b.as.f64:(double)b.as.i64;
-                if (db==0.0){set_error(out,"modulo_by_zero");return 0;}
+                if (db==0.0){mvalue_free(&a);mvalue_free(&b);set_error(out,"modulo_by_zero");return 0;}
                 if (!push(vm,mval_f64(fmod(da,db)))){set_error(out,"mod_push_failed");return 0;}
             }
+            mvalue_free(&a);mvalue_free(&b);
             pc++; break;
         }
 
@@ -356,18 +356,19 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 double exp_v=(b.tag==MVAL_F64)?b.as.f64:(double)b.as.i64;
                 if (!push(vm,mval_f64(pow(base,exp_v)))){set_error(out,"pow_push_failed");return 0;}
             }
+            mvalue_free(&a);mvalue_free(&b);
             pc++; break;
         }
 
         /* v2.3.4: boolean ops */
-        case MOP_BOOL_AND: { MValue b=pop(vm),a=pop(vm); if(!push(vm,mval_bool(truthy(a)&&truthy(b)))){set_error(out,"bool_and_failed");return 0;} pc++; break; }
-        case MOP_BOOL_OR:  { MValue b=pop(vm),a=pop(vm); if(!push(vm,mval_bool(truthy(a)||truthy(b)))){set_error(out,"bool_or_failed"); return 0;} pc++; break; }
-        case MOP_BOOL_NOT: { MValue a=pop(vm); if(!push(vm,mval_bool(!truthy(a)))){set_error(out,"bool_not_failed");return 0;} pc++; break; }
+        case MOP_BOOL_AND: { MValue b=pop(vm),a=pop(vm); int r=truthy(a)&&truthy(b); mvalue_free(&a);mvalue_free(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_and_failed");return 0;} pc++; break; }
+        case MOP_BOOL_OR:  { MValue b=pop(vm),a=pop(vm); int r=truthy(a)||truthy(b); mvalue_free(&a);mvalue_free(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_or_failed"); return 0;} pc++; break; }
+        case MOP_BOOL_NOT: { MValue a=pop(vm); int r=!truthy(a); mvalue_free(&a); if(!push(vm,mval_bool(r))){set_error(out,"bool_not_failed");return 0;} pc++; break; }
 
         /* compare + jumps */
-        case MOP_COMPARE: { MValue b=pop(vm),a=pop(vm); if(!push(vm,mval_bool(generic_compare(a,b,(MCompareOp)insn->a)))){set_error(out,"compare_failed");return 0;} pc++; break; }
+        case MOP_COMPARE: { MValue b=pop(vm),a=pop(vm); int r=generic_compare(a,b,(MCompareOp)insn->a); mvalue_free(&a);mvalue_free(&b); if(!push(vm,mval_bool(r))){set_error(out,"compare_failed");return 0;} pc++; break; }
         case MOP_JUMP: pc=(uint32_t)insn->a; break;
-        case MOP_JUMP_IF_FALSE: { MValue c=pop(vm); pc=truthy(c)?pc+1:(uint32_t)insn->a; break; }
+        case MOP_JUMP_IF_FALSE: { MValue c=pop(vm); int r=truthy(c); mvalue_free(&c); pc=r?pc+1:(uint32_t)insn->a; break; }
 
         /* functions */
         case MOP_CALL: {
@@ -415,6 +416,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             MValue ret=vm->stack_len?pop(vm):mval_none();
             if (vm->frame_len<=1){out->halted=1;out->result=ret;return 1;}
             MFrame ended=vm->frames[--vm->frame_len];
+            for(size_t i=ended.local_base;i<vm->locals_len;++i) mvalue_free(&vm->locals[i]);
             vm->locals_len=ended.local_base; vm->stack_len=ended.base;
             if (!push(vm,ret)){set_error(out,"return_push_failed");return 0;}
             pc=ended.return_pc; break;
@@ -431,23 +433,25 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         /* v2.3.4: GETITEM — list[i], map[key], str[i] */
         case MOP_GETITEM: {
             MValue idx=pop(vm), cont=pop(vm);
+            MValue selected=mval_none();
             if (cont.tag==MVAL_LIST){
                 int64_t i=(idx.tag==MVAL_I64)?idx.as.i64:(idx.tag==MVAL_F64)?(int64_t)idx.as.f64:-1;
                 if (i<0) i+=(int64_t)cont.as.list.len;
-                if (i<0||(size_t)i>=cont.as.list.len){set_error(out,"getitem_index_out_of_range");return 0;}
-                if (!push(vm,cont.as.list.items[(size_t)i])){set_error(out,"getitem_push_failed");return 0;}
+                if (i<0||(size_t)i>=cont.as.list.len){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_index_out_of_range");return 0;}
+                selected=mvalue_deep_copy(&cont.as.list.items[(size_t)i]);
             } else if (cont.tag==MVAL_MAP){
                 MValue val=mval_none();
-                if (!map_get(&cont.as.map,&idx,&val)){set_error(out,"getitem_key_not_found");return 0;}
-                if (!push(vm,val)){set_error(out,"getitem_push_failed");return 0;}
+                if (!map_get(&cont.as.map,&idx,&val)){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_key_not_found");return 0;}
+                selected=mvalue_deep_copy(&val);
             } else if (cont.tag==MVAL_STR){
                 int64_t i=(idx.tag==MVAL_I64)?idx.as.i64:(idx.tag==MVAL_F64)?(int64_t)idx.as.f64:-1;
                 if (i<0) i+=(int64_t)cont.as.str.len;
-                if (i<0||(size_t)i>=cont.as.str.len){set_error(out,"getitem_index_out_of_range");return 0;}
+                if (i<0||(size_t)i>=cont.as.str.len){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_index_out_of_range");return 0;}
                 char ch[1]; ch[0]=cont.as.str.ptr[(size_t)i];
-                MValue sv=mval_owned_str(ch,1);
-                if (!push(vm,sv)){mvalue_free(&sv);set_error(out,"getitem_push_failed");return 0;}
-            } else { set_error(out,"getitem_unsupported_type"); return 0; }
+                selected=mval_owned_str(ch,1);
+            } else { mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_unsupported_type"); return 0; }
+            mvalue_free(&idx);mvalue_free(&cont);
+            if (!push(vm,selected)){mvalue_free(&selected);set_error(out,"getitem_push_failed");return 0;}
             pc++; break;
         }
 
@@ -457,7 +461,8 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             if      (v.tag==MVAL_LIST) n=(int64_t)v.as.list.len;
             else if (v.tag==MVAL_STR)  n=(int64_t)v.as.str.len;
             else if (v.tag==MVAL_MAP)  n=(int64_t)v.as.map.len;
-            else {set_error(out,"len_unsupported_type");return 0;}
+            else {mvalue_free(&v);set_error(out,"len_unsupported_type");return 0;}
+            mvalue_free(&v);
             if (!push(vm,mval_i64(n))){set_error(out,"len_push_failed");return 0;}
             pc++; break;
         }
@@ -470,9 +475,14 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             size_t argc=(size_t)insn->b;
             if (argc>vm->stack_len){set_error(out,"syscall_stack_underflow");return 0;}
             MValue result=mval_none();
-            if (!vm->syscall.fn(vm->syscall.user,insn->a,vm->stack+(vm->stack_len-argc),argc,&result)){set_error(out,"syscall_failed");return 0;}
+            if (!vm->syscall.fn(vm->syscall.user,insn->a,vm->stack+(vm->stack_len-argc),argc,&result)){
+                for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
+                vm->stack_len-=argc;set_error(out,"syscall_failed");return 0;
+            }
+            for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
             vm->stack_len-=argc;
-            if (insn->c&&!push(vm,result)){set_error(out,"syscall_result_push_failed");return 0;}
+            if (insn->c&&!push(vm,result)){mvalue_free(&result);set_error(out,"syscall_result_push_failed");return 0;}
+            if (!insn->c) mvalue_free(&result);
             out->syscalls++; pc++; break;
         }
 

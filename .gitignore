@@ -17,6 +17,7 @@ pytest-cache-files-*/
 tmp/
 outputs/
 mellow_models/
+mellow_saves/
 node_modules/
 dist/
 build/

@@ -92,3 +92,42 @@ def test_full_native_compiles_checks_and_runs_source(native_binary: Path) -> Non
     )
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout.splitlines() == SPEC["conformance_output"]
+
+
+def test_full_native_runs_every_frozen_core_surface(native_binary: Path) -> None:
+    source = ROOT / "tests" / "fixtures" / "native_core_surface.mellow"
+    expected = (ROOT / "tests" / "fixtures" / "native_core_surface.expected").read_text(encoding="utf-8").splitlines()
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == expected
+
+
+def test_full_native_reports_compile_error_location(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "bad-syntax.mellow"
+    source.write_text("let values = [1, 2\n", encoding="utf-8")
+    result = subprocess.run(
+        [str(native_binary), "check", str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert f"{source}:1:1: syntax error:" in result.stderr
+
+
+def test_full_native_reports_runtime_error_location(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "bad-runtime.mellow"
+    source.write_text("let values = [1]\nprint(values[4])\n", encoding="utf-8")
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert f"{source}:2:1: runtime error: index out of range" in result.stderr

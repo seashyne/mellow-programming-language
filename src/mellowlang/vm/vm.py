@@ -287,7 +287,7 @@ class MellowVM:
                         pc_i = int(pc)
                         line0 = int(program.line_map[pc_i])
                         col = int(program.col_map[pc_i])
-                        line = line0 + 1
+                        line = line0 if line0 > 0 else 1
                         kind = str(getattr(e, "kind", "RUNTIME") or "RUNTIME")
                         msg = getattr(e, "msg", None) or str(e)
                         raise MellowLangRuntimeError(kind, str(msg), line, filename=program.filename, col=col, trace=[{

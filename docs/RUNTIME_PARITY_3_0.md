@@ -25,6 +25,7 @@ Legend:
 | Strings | pass | pass | core | UTF-8 source is required. |
 | Undefined-name diagnostics | pass | pass | core | Both runtimes raise a runtime error. |
 | Invalid indexing diagnostics | pass | pass | core | Missing keys, invalid targets, and out-of-range indexes raise. |
+| Source locations in runtime diagnostics | pass | pass | core | Native errors carry instruction spans and render `file:line:column`. |
 | Money core | pass | pass | core-host | Decimal semantics are host-backed. |
 | Data processing | pass | pass | core-host | Bounded data helpers are stable when enabled. |
 | Ledger core | pass | pass | core-host | Hash-chain behavior must remain deterministic. |
@@ -48,6 +49,10 @@ py -3.11 -m pytest -q tests/native -p no:cacheprovider
 ```
 
 passes in CI or the release notes clearly mark native parity as partial.
+
+Native C release candidates must also pass the `native-safety` CI job, which
+runs ASan, UBSan, LeakSanitizer, and a bounded libFuzzer corpus over the
+standalone compiler and runtime.
 
 This claim covers the language Core Profile only. Debugger, record/replay,
 events, package imports, and host-specific surfaces retain their explicit

@@ -149,6 +149,7 @@ class IRLowerer:
         self._label_id = 0
         self._temp_id = 0
         self._loop_stack: List[_LoopCtx] = []
+        self._current_position = (0, 1)
 
     def lower(self, program: Program) -> IRProgram:
         for stmt in program.body:
@@ -165,7 +166,9 @@ class IRLowerer:
         self.instructions.append(IRInstruction(op=op, args=tuple(args), line=int(line or 0), col=int(col or 1)))
 
     def pos(self, node: Any) -> tuple[int, int]:
-        return int(getattr(node, "_line", 0) or 0), int(getattr(node, "_col", 1) or 1)
+        line = int(getattr(node, "_line", 0) or 0)
+        col = int(getattr(node, "_col", 1) or 1)
+        return (line, col) if line > 0 else self._current_position
 
     def new_label(self, prefix: str) -> str:
         self._label_id += 1
@@ -177,6 +180,7 @@ class IRLowerer:
 
     def _stmt(self, stmt: Stmt):
         line, col = self.pos(stmt)
+        self._current_position = (line, col)
         if isinstance(stmt, KeepStmt):
             self._expr(stmt.expr)
             self.emit("STORE_KEEP", stmt.name, line=line, col=col)

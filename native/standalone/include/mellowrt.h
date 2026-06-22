@@ -148,6 +148,9 @@ typedef struct {
     int failed;
     MValue result;
     const char *error_message;
+    uint32_t error_pc;
+    MSourceSpan error_span;
+    int has_error_span;
 } MRunResult;
 
 typedef struct {

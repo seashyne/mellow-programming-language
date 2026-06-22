@@ -5,6 +5,17 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+option(MELLOW_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(MELLOW_BUILD_FUZZER "Build the libFuzzer compiler/runtime target" OFF)
+
+if(MELLOW_ENABLE_SANITIZERS)
+  if(MSVC)
+    message(FATAL_ERROR "MELLOW_ENABLE_SANITIZERS currently requires Clang or GCC")
+  endif()
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+endif()
+
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" MELLOW_SYSTEM_PROCESSOR)
 if(MELLOW_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
   set(MELLOW_TARGET_ARCH "arm64")
@@ -42,8 +53,23 @@ add_executable(mellow src/mellowrt_main.c)
 target_link_libraries(mellow PRIVATE mellowrt_core)
 target_include_directories(mellow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+if(MELLOW_BUILD_FUZZER)
+  if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "MELLOW_BUILD_FUZZER requires Clang/libFuzzer")
+  endif()
+  add_executable(mellow_fuzz fuzz/fuzz_mellow.c)
+  target_link_libraries(mellow_fuzz PRIVATE mellowrt_core)
+  target_include_directories(mellow_fuzz PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_options(mellow_fuzz PRIVATE -fsanitize=fuzzer)
+  target_link_options(mellow_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
   add_test(NAME mellow_runtime_info COMMAND mellow --runtime-info)
   add_test(NAME mellow_version COMMAND mellow --version)
+  add_test(
+    NAME mellow_core_conformance
+    COMMAND mellow ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/fixtures/full_native_core.mellow
+  )
 endif()

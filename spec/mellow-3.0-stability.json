@@ -24,7 +24,8 @@
     "tests/core",
     "tests/language",
     "package-registry-smoke",
-    "native-core-parity-or-documented-partial"
+    "native-core-parity-or-documented-partial",
+    "native-memory-safety-and-fuzzing"
   ],
   "stable_feature_rule": [
     "documented",

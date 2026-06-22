@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
+from pathlib import Path
+import re
 import textwrap
 
 import pytest
@@ -9,6 +12,12 @@ import pytest
 from mellowlang.compiler import Compiler
 from mellowlang.vm import MellowVM, RunConfig
 from mellowlang.vm.cbridge import c_vm_available, c_vm_capabilities
+
+
+ROOT = Path(__file__).resolve().parents[2]
+CORE_SPEC = json.loads((ROOT / "spec" / "mellow-2.9-core.json").read_text(encoding="utf-8"))
+
+CORE_SPEC_PROGRAM = (ROOT / "tests" / "fixtures" / "native_core_surface.mellow").read_text(encoding="utf-8")
 
 
 CORE_SNIPPETS = {
@@ -100,7 +109,28 @@ def test_native_c_is_the_default_engine() -> None:
 def test_native_capabilities_claim_complete_core_without_claiming_tooling_parity() -> None:
     capabilities = c_vm_capabilities()
     assert capabilities["native_parity_level"] == "core-complete+money+data+ledger"
-    assert capabilities["source_span_parity"] is False
+    assert capabilities["source_span_parity"] is True
+
+
+def test_core_spec_program_mentions_every_frozen_surface() -> None:
+    source = textwrap.dedent(CORE_SPEC_PROGRAM)
+    words = set(re.findall(r"[A-Za-z_]+", source))
+    for builtin in CORE_SPEC["builtins"]:
+        assert f"{builtin}(" in source
+    for keyword in CORE_SPEC["declarations"] + CORE_SPEC["control_flow"] + CORE_SPEC["functions"]:
+        assert keyword in words
+    for literal in CORE_SPEC["literals"]:
+        assert literal in source
+    for operator in CORE_SPEC["boolean_operators"] + CORE_SPEC["comparison_operators"] + CORE_SPEC["arithmetic_operators"]:
+        assert operator in source
+
+
+def test_native_c_matches_python_for_every_frozen_core_surface() -> None:
+    py_out, _ = _run_source(CORE_SPEC_PROGRAM, engine="py")
+    c_out, c_vm = _run_source(CORE_SPEC_PROGRAM, engine="c")
+    assert c_out == py_out
+    assert c_vm.last_engine == "c"
+    assert c_vm.last_native_result.get("used_fallback") is False
 
 
 @pytest.mark.parametrize("name,source", CORE_SNIPPETS.items())
@@ -134,3 +164,12 @@ def test_native_c_matches_python_vm_for_core_runtime_errors(name: str, source: s
     }[name]
     assert expected_fragment in errors[0]
     assert expected_fragment in errors[1]
+
+
+def test_native_runtime_error_includes_source_line_and_column() -> None:
+    source = "let values = [1]\nprint(values[4])\n"
+    with pytest.raises(Exception) as exc:
+        _run_source(source, engine="c")
+    message = str(exc.value)
+    assert "<native-core>:2:1" in message
+    assert "index out of range" in message.lower()

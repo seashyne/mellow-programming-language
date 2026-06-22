@@ -27,8 +27,9 @@ def test_native_architectures_are_primary_release_gates() -> None:
     workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
     assert "native-x64:" in workflow
     assert "native-arm64:" in workflow
+    assert "native-safety:" in workflow
     assert "tooling-reference:" in workflow
-    assert "needs: [native-x64, native-arm64, tooling-reference]" in workflow
+    assert "needs: [native-x64, native-arm64, native-safety, tooling-reference]" in workflow
     assert "full_native_core.expected" in workflow
     assert 'MELLOW_NO_EXT: "1"' in workflow
 

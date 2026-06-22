@@ -140,6 +140,35 @@ static PyObject *cvm_syscall_dispatch(const char *sn,
                                       PyObject **sa, long argc,
                                       CVM *parent_vm);
 
+static void cvm_attach_error_location(int pc)
+{
+    PyObject *type = NULL, *value = NULL, *traceback = NULL;
+    PyObject *pc_value = NULL, *kind_value = NULL, *message_value = NULL;
+    const char *message = NULL;
+
+    if (!PyErr_Occurred()) return;
+    PyErr_Fetch(&type, &value, &traceback);
+    PyErr_NormalizeException(&type, &value, &traceback);
+    if (!value) {
+        value = PyObject_CallNoArgs(type ? type : PyExc_RuntimeError);
+    }
+    if (value) {
+        pc_value = PyLong_FromLong(pc);
+        message_value = PyObject_Str(value);
+        message = message_value ? PyUnicode_AsUTF8(message_value) : NULL;
+        kind_value = PyUnicode_FromString(
+            message && strncmp(message, "SANDBOX:", 8) == 0 ? "SANDBOX" : "RUNTIME"
+        );
+        if (pc_value && PyObject_SetAttrString(value, "pc", pc_value) < 0) PyErr_Clear();
+        if (kind_value && PyObject_SetAttrString(value, "kind", kind_value) < 0) PyErr_Clear();
+        if (message_value && PyObject_SetAttrString(value, "msg", message_value) < 0) PyErr_Clear();
+    }
+    Py_XDECREF(pc_value);
+    Py_XDECREF(kind_value);
+    Py_XDECREF(message_value);
+    PyErr_Restore(type, value, traceback);
+}
+
 /* ── String interning for hot comparisons ──────────────────────── */
 /* We compare syscall names as C strings — fast enough */
 
@@ -577,9 +606,9 @@ mellowvm_capabilities(PyObject *self, PyObject *Py_UNUSED(args))
         "conditional_breakpoints", Py_False,
         "watch_expressions", Py_False,
         "typed_frame_snapshots", Py_False,
-        "source_span_parity", Py_False,
+        "source_span_parity", Py_True,
         "native_parity_level", "core-complete+money+data+ledger",
-        "notes", "Native C execution has complete Mellow Core Profile parity plus money, data, and ledger stdlib services; debugger, event, and replay hooks still route through Python."
+        "notes", "Native C execution has complete Mellow Core Profile and source-span parity plus money, data, and ledger stdlib services; debugger, event, and replay hooks still route through Python."
     );
 }
 

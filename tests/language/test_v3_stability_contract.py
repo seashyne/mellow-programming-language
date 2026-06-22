@@ -72,3 +72,8 @@ def test_runtime_parity_matrix_marks_native_gaps_honestly() -> None:
     assert "| Surface | Python VM | Native C VM | v3 Status | Notes |" in text
     assert "| Debugger | pass | partial | tooling |" in text
     assert "| Agents | pass | unsupported | experimental |" in text
+
+
+def test_v3_requires_native_memory_safety_gate() -> None:
+    manifest = json.loads(V3_MANIFEST.read_text(encoding="utf-8"))
+    assert "native-memory-safety-and-fuzzing" in manifest["required_gates"]

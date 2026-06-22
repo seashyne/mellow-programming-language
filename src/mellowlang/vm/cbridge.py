@@ -252,6 +252,8 @@ def run_bytecode_ex(
             else:
                 raise
         except Exception as e:
+            if getattr(e, "pc", None) is not None:
+                raise
             if require_native or not allow_fallback:
                 raise NativeExecutionRequiredError(f'native-c-execution-failed: {e}') from e
         finally:
@@ -302,8 +304,8 @@ def c_vm_capabilities() -> Dict[str, Any]:
         "conditional_breakpoints": False,
         "watch_expressions": False,
         "typed_frame_snapshots": False,
-        "source_span_parity": False,
-        "notes": "Native C execution covers the stable language core plus money, data, and ledger stdlib services; debugger, event, and replay hooks still route through Python.",
+        "source_span_parity": bool(ext is not None),
+        "notes": "Native C execution covers the stable language core and source spans plus money, data, and ledger stdlib services; debugger, event, and replay hooks still route through Python.",
         "requires_python_fallback_for_debugger": True,
         "native_stdlib_parity": bool(ext is not None),
         "native_data_transforms": False,

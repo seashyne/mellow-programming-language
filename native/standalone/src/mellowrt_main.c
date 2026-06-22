@@ -180,9 +180,16 @@ static int print_value(FILE *out, const MValue *v){
 static MValue mval_owned_copy(const char *src, size_t len){
     char *buf=(char*)calloc(len+1,1); MValue v=mval_none();
     if(!buf)return v;
-    if(src&&len)memcpy(buf,src,len); buf[len]='\0';
+    if(src&&len) memcpy(buf,src,len);
+    buf[len]='\0';
     v.tag=MVAL_STR; v.flags=1u; v.as.str.ptr=buf; v.as.str.len=len;
     return v;
+}
+
+static int numeric_value(const MValue *value, double *out){
+    if(value->tag==MVAL_I64){*out=(double)value->as.i64;return 1;}
+    if(value->tag==MVAL_F64&&isfinite(value->as.f64)){*out=value->as.f64;return 1;}
+    return 0;
 }
 
 static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t argc, MValue *out_result){
@@ -239,7 +246,7 @@ static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t ar
     /* 7 — abs(n) -> number */
     case 7:
         if(argc!=1)return 0;
-        if(args[0].tag==MVAL_I64){*out_result=mval_i64(args[0].as.i64<0?-args[0].as.i64:args[0].as.i64);return 1;}
+        if(args[0].tag==MVAL_I64){if(args[0].as.i64==INT64_MIN)return 0;*out_result=mval_i64(args[0].as.i64<0?-args[0].as.i64:args[0].as.i64);return 1;}
         if(args[0].tag==MVAL_F64){*out_result=mval_f64(fabs(args[0].as.f64));return 1;}
         return 0;
 
@@ -247,27 +254,26 @@ static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t ar
     case 8:
         if(argc!=1)return 0;
         if(args[0].tag==MVAL_I64){*out_result=args[0];return 1;}
-        if(args[0].tag==MVAL_F64){*out_result=mval_i64((int64_t)floor(args[0].as.f64));return 1;}
+        if(args[0].tag==MVAL_F64&&isfinite(args[0].as.f64)&&args[0].as.f64>=(double)INT64_MIN&&args[0].as.f64<(double)INT64_MAX){*out_result=mval_i64((int64_t)floor(args[0].as.f64));return 1;}
         return 0;
 
     /* 9 — ceil(n) -> i64 */
     case 9:
         if(argc!=1)return 0;
         if(args[0].tag==MVAL_I64){*out_result=args[0];return 1;}
-        if(args[0].tag==MVAL_F64){*out_result=mval_i64((int64_t)ceil(args[0].as.f64));return 1;}
+        if(args[0].tag==MVAL_F64&&isfinite(args[0].as.f64)&&args[0].as.f64>=(double)INT64_MIN&&args[0].as.f64<(double)INT64_MAX){*out_result=mval_i64((int64_t)ceil(args[0].as.f64));return 1;}
         return 0;
 
     /* 10 — sqrt(n) -> f64 */
     case 10:
         if(argc!=1)return 0;
-        {double v=(args[0].tag==MVAL_F64)?args[0].as.f64:(double)args[0].as.i64;
+        {double v;if(!numeric_value(&args[0],&v)||v<0.0)return 0;
          *out_result=mval_f64(sqrt(v));return 1;}
 
     /* 11 — min(a,b) */
     case 11:
         if(argc!=2)return 0;
-        {double a=(args[0].tag==MVAL_F64)?args[0].as.f64:(double)args[0].as.i64;
-         double b=(args[1].tag==MVAL_F64)?args[1].as.f64:(double)args[1].as.i64;
+        {double a,b;if(!numeric_value(&args[0],&a)||!numeric_value(&args[1],&b))return 0;
          if(args[0].tag==MVAL_I64&&args[1].tag==MVAL_I64)
              *out_result=mval_i64(args[0].as.i64<args[1].as.i64?args[0].as.i64:args[1].as.i64);
          else *out_result=mval_f64(a<b?a:b);
@@ -276,8 +282,7 @@ static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t ar
     /* 12 — max(a,b) */
     case 12:
         if(argc!=2)return 0;
-        {double a=(args[0].tag==MVAL_F64)?args[0].as.f64:(double)args[0].as.i64;
-         double b=(args[1].tag==MVAL_F64)?args[1].as.f64:(double)args[1].as.i64;
+        {double a,b;if(!numeric_value(&args[0],&a)||!numeric_value(&args[1],&b))return 0;
          if(args[0].tag==MVAL_I64&&args[1].tag==MVAL_I64)
              *out_result=mval_i64(args[0].as.i64>args[1].as.i64?args[0].as.i64:args[1].as.i64);
          else *out_result=mval_f64(a>b?a:b);
@@ -291,21 +296,56 @@ static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t ar
 
     /* 20 — range(start, stop) -> list of i64 */
     case 20: {
+        uint64_t count;
         if (argc != 2) return 0;
+        if ((args[0].tag != MVAL_I64 && args[0].tag != MVAL_F64) ||
+            (args[1].tag != MVAL_I64 && args[1].tag != MVAL_F64)) return 0;
+        if ((args[0].tag == MVAL_F64 && (!isfinite(args[0].as.f64) || args[0].as.f64 < (double)INT64_MIN || args[0].as.f64 >= (double)INT64_MAX)) ||
+            (args[1].tag == MVAL_F64 && (!isfinite(args[1].as.f64) || args[1].as.f64 < (double)INT64_MIN || args[1].as.f64 >= (double)INT64_MAX))) return 0;
         int64_t start = (args[0].tag == MVAL_I64) ? args[0].as.i64 : (int64_t)args[0].as.f64;
         int64_t stop  = (args[1].tag == MVAL_I64) ? args[1].as.i64 : (int64_t)args[1].as.f64;
-        int64_t len   = stop > start ? stop - start : 0;
+        count = stop > start ? (uint64_t)stop - (uint64_t)start : 0;
+        if (count > 1000000u) return 0;
         MValue v = mval_none();
         v.tag = MVAL_LIST;
-        v.as.list.len = v.as.list.cap = (size_t)len;
-        v.as.list.items = len ? (MValue *)calloc((size_t)len, sizeof(MValue)) : NULL;
-        if (len && !v.as.list.items) return 0;
-        for (int64_t i = 0; i < len; ++i) v.as.list.items[(size_t)i] = mval_i64(start + i);
+        v.as.list.len = v.as.list.cap = (size_t)count;
+        v.as.list.items = count ? (MValue *)calloc((size_t)count, sizeof(MValue)) : NULL;
+        if (count && !v.as.list.items) return 0;
+        for (uint64_t i = 0; i < count; ++i) v.as.list.items[(size_t)i] = mval_i64(start + (int64_t)i);
         *out_result = v;
         return 1;
     }
 
     default: return 0;
+    }
+}
+
+static const char *friendly_runtime_error(const char *code)
+{
+    if(!code) return "unknown runtime error";
+    if(!strcmp(code,"division_by_zero")) return "division by zero";
+    if(!strcmp(code,"modulo_by_zero")) return "modulo by zero";
+    if(!strcmp(code,"getitem_index_out_of_range")) return "index out of range";
+    if(!strcmp(code,"getitem_key_not_found")) return "missing map key";
+    if(!strcmp(code,"getitem_unsupported_type")) return "value is not indexable";
+    if(!strcmp(code,"numeric_op_requires_numbers")) return "arithmetic requires numbers";
+    if(!strcmp(code,"len_unsupported_type")) return "len() requires a string, list, or map";
+    if(!strcmp(code,"call_non_function")||!strcmp(code,"call_val_non_function")) return "value is not callable";
+    if(!strcmp(code,"syscall_failed")) return "built-in call failed (check argument count and types)";
+    if(!strcmp(code,"unsupported_opcode")) return "unsupported native opcode";
+    return code;
+}
+
+static void print_runtime_error(const char *source_name, const MRunResult *result)
+{
+    const char *name=source_name&&*source_name?source_name:"<memory>";
+    const char *message=friendly_runtime_error(result->error_message);
+    if(result->has_error_span){
+        fprintf(stderr,"%s:%u:%u: runtime error: %s\n",
+                name,result->error_span.start_line,result->error_span.start_col,message);
+    } else {
+        fprintf(stderr,"%s: runtime error at instruction %u: %s\n",
+                name,result->error_pc,message);
     }
 }
 
@@ -353,7 +393,7 @@ int main(int argc, char **argv){
             MRunResult rr;
             char error[512]={0};
             if(!mellow_compile_file(path,&native,error,sizeof(error))){
-                fprintf(stderr,"compile failed: %s\n",error[0]?error:"unknown error");
+                fprintf(stderr,"%s\n",error[0]?error:"<unknown>:1:1: compile error");
                 return 1;
             }
             if(check_only){
@@ -364,7 +404,7 @@ int main(int argc, char **argv){
             prog=(MProgram){native.code,native.code_len,native.consts,native.const_len,native.spans,native.span_len,native.source_name};
             mvm_init(&vm);vm.syscall.fn=runtime_syscall;vm.syscall.user=NULL;memset(&rr,0,sizeof(rr));
             if(!mvm_run(&vm,&prog,&rr)||rr.failed){
-                fprintf(stderr,"run failed: %s\n",rr.error_message?rr.error_message:"unknown");
+                print_runtime_error(prog.source_name,&rr);
                 mvm_free(&vm);mellow_native_program_free(&native);return 1;
             }
             mvm_free(&vm);mellow_native_program_free(&native);return 0;
@@ -381,7 +421,7 @@ int main(int argc, char **argv){
     MRunResult rr; memset(&rr,0,sizeof(rr));
     int ok=mvm_run(&vm,&prog,&rr);
     if(!ok||rr.failed){
-        fprintf(stderr,"run failed: %s\n",rr.error_message?rr.error_message:"unknown");
+        print_runtime_error(prog.source_name,&rr);
         mvm_free(&vm); free_loaded_program(&lp); return 1;
     }
     mvm_free(&vm); free_loaded_program(&lp);

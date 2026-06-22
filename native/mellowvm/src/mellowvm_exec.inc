@@ -677,6 +677,7 @@ exec_done:
     return exec_result;
 
 exec_err:
+    cvm_attach_error_location(pc);
     return NULL;
 }
 

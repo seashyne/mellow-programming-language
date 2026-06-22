@@ -11,6 +11,7 @@ $exactTargets = @(
     ".tmp_data_core_test",
     "build",
     "mellow_models",
+    "mellow_saves",
     ".mellow_aliases.json",
     ".mellow_imports.json",
     ".mellow_runtime.json"
