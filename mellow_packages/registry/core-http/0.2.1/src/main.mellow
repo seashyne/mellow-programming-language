@@ -1,0 +1,11 @@
+def request(method, url, body):
+    return {"method": method, "url": url, "body": body}
+
+def get(url):
+    return request("GET", url, none)
+
+def post(url, body):
+    return request("POST", url, body)
+
+def route(method, path):
+    return {"method": method, "path": path}

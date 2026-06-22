@@ -2,13 +2,22 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
+from pathlib import Path
+import re
 import textwrap
 
 import pytest
 
 from mellowlang.compiler import Compiler
 from mellowlang.vm import MellowVM, RunConfig
-from mellowlang.vm.cbridge import c_vm_available
+from mellowlang.vm.cbridge import c_vm_available, c_vm_capabilities
+
+
+ROOT = Path(__file__).resolve().parents[2]
+CORE_SPEC = json.loads((ROOT / "spec" / "mellow-2.9-core.json").read_text(encoding="utf-8"))
+
+CORE_SPEC_PROGRAM = (ROOT / "tests" / "fixtures" / "native_core_surface.mellow").read_text(encoding="utf-8")
 
 
 CORE_SNIPPETS = {
@@ -44,6 +53,34 @@ CORE_SNIPPETS = {
         print(xs[1])
         print(data["score"])
     """,
+    "keep_if_else_and_boolean_logic": """
+        keep enabled = true
+        let disabled = false
+        if enabled and not disabled:
+            print("stable")
+        else:
+            print("broken")
+    """,
+    "negative_index_and_core_builtins": """
+        let values = [9, -4, 16]
+        print(values[-1])
+        print(len(values))
+        print(str(abs(values[1])))
+        print(type(values))
+        print(floor(2.8))
+        print(ceil(2.1))
+        print(sqrt(16))
+        print(min(3, 7))
+        print(max(3, 7))
+    """,
+}
+
+CORE_ERROR_SNIPPETS = {
+    "undefined_name": "print(missing_name)\n",
+    "list_index_out_of_range": "let xs = [1]\nprint(xs[2])\n",
+    "string_index_out_of_range": 'let value = "mellow"\nprint(value[20])\n',
+    "missing_map_key": 'let item = {"name": "mellow"}\nprint(item["version"])\n',
+    "non_indexable_value": "let value = 42\nprint(value[0])\n",
 }
 
 
@@ -69,6 +106,33 @@ def test_native_c_is_the_default_engine() -> None:
     assert vm.last_native_result.get("used_fallback") is False
 
 
+def test_native_capabilities_claim_complete_core_without_claiming_tooling_parity() -> None:
+    capabilities = c_vm_capabilities()
+    assert capabilities["native_parity_level"] == "core-complete+money+data+ledger"
+    assert capabilities["source_span_parity"] is True
+
+
+def test_core_spec_program_mentions_every_frozen_surface() -> None:
+    source = textwrap.dedent(CORE_SPEC_PROGRAM)
+    words = set(re.findall(r"[A-Za-z_]+", source))
+    for builtin in CORE_SPEC["builtins"]:
+        assert f"{builtin}(" in source
+    for keyword in CORE_SPEC["declarations"] + CORE_SPEC["control_flow"] + CORE_SPEC["functions"]:
+        assert keyword in words
+    for literal in CORE_SPEC["literals"]:
+        assert literal in source
+    for operator in CORE_SPEC["boolean_operators"] + CORE_SPEC["comparison_operators"] + CORE_SPEC["arithmetic_operators"]:
+        assert operator in source
+
+
+def test_native_c_matches_python_for_every_frozen_core_surface() -> None:
+    py_out, _ = _run_source(CORE_SPEC_PROGRAM, engine="py")
+    c_out, c_vm = _run_source(CORE_SPEC_PROGRAM, engine="c")
+    assert c_out == py_out
+    assert c_vm.last_engine == "c"
+    assert c_vm.last_native_result.get("used_fallback") is False
+
+
 @pytest.mark.parametrize("name,source", CORE_SNIPPETS.items())
 def test_native_c_matches_python_vm_for_stable_core(name: str, source: str) -> None:
     assert c_vm_available(), "native C extension is required for v2.4.0 core parity"
@@ -79,3 +143,33 @@ def test_native_c_matches_python_vm_for_stable_core(name: str, source: str) -> N
     assert c_vm.last_engine == "c", name
     assert c_vm.last_native_result.get("used_fallback") is False, name
     assert c_out == py_out
+
+
+@pytest.mark.parametrize("name,source", CORE_ERROR_SNIPPETS.items())
+def test_native_c_matches_python_vm_for_core_runtime_errors(name: str, source: str) -> None:
+    assert c_vm_available(), "native C extension is required for core error parity"
+
+    errors = []
+    for engine in ("py", "c"):
+        with pytest.raises(Exception) as exc:
+            _run_source(source, engine=engine)
+        errors.append(str(exc.value).lower())
+
+    expected_fragment = {
+        "undefined_name": "undefined name",
+        "list_index_out_of_range": "index out of range",
+        "string_index_out_of_range": "index out of range",
+        "missing_map_key": "missing map key",
+        "non_indexable_value": "not indexable",
+    }[name]
+    assert expected_fragment in errors[0]
+    assert expected_fragment in errors[1]
+
+
+def test_native_runtime_error_includes_source_line_and_column() -> None:
+    source = "let values = [1]\nprint(values[4])\n"
+    with pytest.raises(Exception) as exc:
+        _run_source(source, engine="c")
+    message = str(exc.value)
+    assert "<native-core>:2:1" in message
+    assert "index out of range" in message.lower()

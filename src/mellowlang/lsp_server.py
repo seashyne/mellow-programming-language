@@ -189,7 +189,7 @@ from mellowlang.lint import lint_source
 KEYWORDS: dict[str, str] = {
     'if': 'Conditional branch.',
     'else': 'Fallback branch for an `if`.',
-    'end': 'Closes block-style syntax in legacy code.',
+    'end': 'Closes block-style syntax.',
     'loop': 'Loop keyword used in several loop forms.',
     'while': 'Loop while condition stays true.',
     'repeat': 'Repeat a block until a condition becomes true.',
@@ -214,7 +214,7 @@ KEYWORDS: dict[str, str] = {
     'vec4': 'Create a 4D vector.',
     'true': 'Boolean true.',
     'false': 'Boolean false.',
-    'nil': 'Legacy empty/null-like value.',
+    'nil': 'Empty/null-like value.',
 }
 
 BUILTINS: dict[str, str] = {

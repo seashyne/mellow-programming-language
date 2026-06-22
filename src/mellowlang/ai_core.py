@@ -1222,7 +1222,7 @@ def ai_llm_load(args: List[Any]) -> Any:
 
 def register_ai_functions(registry: Any) -> None:
     """Register all AI host functions into a HostRegistry."""
-    from .host.legacy import HostFunction
+    from .host.runtime import HostFunction
 
     funcs = [
         HostFunction("std.ai.model_create",  ai_model_create,  cost=5,  min_args=1, max_args=3),

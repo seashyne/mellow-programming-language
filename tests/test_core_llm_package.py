@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src")))
 
 from mellowlang.compiler import Compiler
-from mellowlang.host.legacy import default_host
+from mellowlang.host.runtime import default_host
 from mellowlang.vm.vm import MellowVM, RunConfig
 
 

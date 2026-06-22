@@ -1,0 +1,14 @@
+def create(currency):
+    return ledger.create(currency)
+
+def post(book, debit, credit, amount, reference):
+    return ledger.post(book, debit, credit, amount, reference)
+
+def verify(book):
+    return ledger.verify(book)
+
+def balance(book, account):
+    return ledger.balance(book, account)
+
+def entries(book):
+    return ledger.entries(book)

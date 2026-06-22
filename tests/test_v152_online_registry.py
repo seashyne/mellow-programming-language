@@ -33,19 +33,22 @@ def test_online_registry_publish_search_install():
         server = subprocess.Popen([sys.executable, "-m", "mellowlang.registry.server", "--host", "127.0.0.1", "--port", str(port), "--data-dir", str(td / "registry")], cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
             time.sleep(1.2)
-            assert _run("pkg", "registry", f"http://127.0.0.1:{port}", env=env).returncode == 0
-            login = _run("pkg", "login", "--username", "admin", "--password", "admin", env=env)
+            assert _run("pkg", "registry", f"http://127.0.0.1:{port}", cwd=td, env=env).returncode == 0
+            login = _run("pkg", "login", "--username", "admin", "--password", "admin", cwd=td, env=env)
             assert login.returncode == 0, login.stderr + login.stdout
             pkgdir = td / "physics2d"
-            assert _run("pkg", "init", str(pkgdir), "--name", "physics2d", env=env).returncode == 0
-            publish = _run("pkg", "publish", str(pkgdir), "--online", env=env)
+            assert _run("pkg", "init", str(pkgdir), "--name", "physics2d", "--author", "Physics Team", cwd=td, env=env).returncode == 0
+            publish = _run("pkg", "publish", str(pkgdir), "--online", cwd=td, env=env)
             assert publish.returncode == 0, publish.stderr + publish.stdout
-            search = _run("pkg", "search", "physics", env=env)
+            assert "creator : Physics Team" in publish.stdout
+            search = _run("pkg", "search", "physics", cwd=td, env=env)
             assert search.returncode == 0
             assert "physics2d" in search.stdout
-            install = _run("pkg", "install", "physics2d", "--online", env=env)
+            assert "creator=Physics Team" in search.stdout
+            install = _run("pkg", "install", "physics2d", "--online", cwd=td, env=env)
             assert install.returncode == 0, install.stderr + install.stdout
-            man = json.loads((ROOT / "mellow_packages" / "installed" / "physics2d" / "current" / "manifest.json").read_text(encoding="utf-8"))
+            assert "creator : Physics Team" in install.stdout
+            man = json.loads((td / "mellow_packages" / "installed" / "physics2d" / "current" / "manifest.json").read_text(encoding="utf-8"))
             assert man["name"] == "physics2d"
         finally:
             server.terminate()
@@ -53,5 +56,3 @@ def test_online_registry_publish_search_install():
                 server.wait(timeout=5)
             except Exception:
                 server.kill()
-            import shutil
-            shutil.rmtree(ROOT / "mellow_packages", ignore_errors=True)

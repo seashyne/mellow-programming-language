@@ -1,0 +1,13 @@
+name = "core-ledger"
+version = "0.1.1"
+description = "Double-entry ledger helpers for auditable financial workflows."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "ledger", "finance", "accounting", "audit"]
+badges = ["official"]
+official = true
+[dependencies]
+ledger = "host"

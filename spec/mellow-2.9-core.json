@@ -29,6 +29,10 @@
     "range"
   ],
   "conformance_fixture": "tests/fixtures/full_native_core.mellow",
+  "conformance_fixture_sha256": "dcbd06a32968e3a1cb4ad8bd6114e14307988f4eae4b43935374389b89797a58",
+  "conformance_output_fixture": "tests/fixtures/full_native_core.expected",
+  "conformance_output_sha256": "aa84f9189174a7961933f41286ea3de6f33b6a630b66bbc388ddadec667d53f2",
   "conformance_output": ["30", "mellow", "3"],
-  "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
+  "normative_document": "docs/LANGUAGE_SPEC_2_9.md",
+  "normative_document_sha256": "07a9b24306ad15d931f905feb779bbac62bbf6d5480985ff25c2a1384a694fae"
 }

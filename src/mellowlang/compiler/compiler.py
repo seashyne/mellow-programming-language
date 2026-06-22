@@ -8,11 +8,10 @@ from typing import Any, List, Optional
 from ..error_core import MellowLangRuntimeError
 from ..ir import IRProgram
 from ..parser import parse_program
-from ..ast import Call, GetModuleExpr, GetModuleStmt, IfGroup, Index, LoopCount, LoopForEach, LoopForMap, LoopForRange, LoopWhile, RepeatUntil, TryStmt
+from ..ast import Call, GetModuleExpr, GetModuleStmt, IfGroup, ImportStmt, Index, LoopCount, LoopForEach, LoopForMap, LoopForRange, LoopWhile, OnDef, RepeatUntil, SkillDef, SkillDefV2, TryStmt
 from .bytecode_backend import BytecodeBackend
 from .ir_lowering import IRLowerer, UnsupportedLoweringError
 from .optimizer import ControlFlowGraph, DefUseInfo, DominatorTree, IROptimizer, OptimizationSummary, SSAProgram
-from .legacy import Compiler as _LegacyCompiler
 
 
 _COMPILE_CACHE_MAX = 128
@@ -53,13 +52,10 @@ class CompiledProgram:
     optimized_def_use: DefUseInfo | None = None
     ssa_program: SSAProgram | None = None
     optimized_ssa_program: SSAProgram | None = None
-    pipeline: str = "legacy"
+    pipeline: str = "v3-ir-bytecode"
 
 
 class Compiler:
-    def __init__(self) -> None:
-        self._legacy = _LegacyCompiler()
-
     def compile(self, source: str, *, filename: str | None = None, optimize: bool = True) -> CompiledProgram:
         global _COMPILE_CACHE_HITS, _COMPILE_CACHE_MISSES
         cache_key = (source, filename, bool(optimize))
@@ -163,51 +159,19 @@ class Compiler:
                 optimized_def_use=optimized_def_use,
                 ssa_program=ssa_program,
                 optimized_ssa_program=optimized_ssa_program,
-                pipeline="ast-ir-opt-bytecode" if use_optimizer else "ast-ir-bytecode",
+                pipeline="v3-ir-opt-bytecode" if use_optimizer else "v3-ir-bytecode",
             )
-        except UnsupportedLoweringError:
-            # Fall through to the battle-tested compiler so existing language
-            # features keep working while the new IR pipeline expands.
-            pass
-        except MellowLangRuntimeError:
-            raise
-        except Exception:
-            # The IR/backend path is still expanding. If it cannot lower or
-            # emit a valid program yet, preserve stable language behavior by
-            # falling back to the legacy bytecode compiler below.
-            pass
-
-        try:
-            bytecode = self._legacy.compile(lines, filename=filename)
+        except UnsupportedLoweringError as e:
+            raise MellowLangRuntimeError(
+                "COMPILER",
+                f"Compiler v3 does not support this extended feature: {e}",
+                None,
+                filename=filename,
+            ) from e
         except MellowLangRuntimeError:
             raise
         except Exception as e:
             raise MellowLangRuntimeError('COMPILER', str(e), None, filename=filename)
-        return CompiledProgram(
-            bytecode=bytecode,
-            func_table=getattr(self._legacy, "functions", None),
-            event_table=getattr(self._legacy, "events", None),
-            filename=filename,
-            source_lines=lines,
-            line_map=getattr(self._legacy, 'line_map', None),
-            col_map=getattr(self._legacy, 'col_map', None),
-            end_line_map=getattr(self._legacy, 'line_map', None),
-            end_col_map=getattr(self._legacy, 'col_map', None),
-            span_map=None,
-            ast=ast,
-            ir=ir,
-            optimized_ir=optimized_ir,
-            cfg=cfg,
-            optimized_cfg=optimized_cfg,
-            optimization=optimization,
-            dominator_tree=dominator_tree,
-            optimized_dominator_tree=optimized_dominator_tree,
-            def_use=def_use,
-            optimized_def_use=optimized_def_use,
-            ssa_program=ssa_program,
-            optimized_ssa_program=optimized_ssa_program,
-            pipeline="legacy",
-        )
 
 
 def _ast_contains(node: Any, node_type: type) -> bool:
@@ -238,7 +202,20 @@ def _ast_contains_stateful_stdlib_call(node: Any) -> bool:
 
 
 def _ast_contains_control_flow(node: Any) -> bool:
-    control_nodes = (IfGroup, LoopWhile, LoopForEach, LoopForMap, LoopForRange, LoopCount, RepeatUntil, TryStmt)
+    control_nodes = (
+        IfGroup,
+        LoopWhile,
+        LoopForEach,
+        LoopForMap,
+        LoopForRange,
+        LoopCount,
+        RepeatUntil,
+        TryStmt,
+        SkillDef,
+        SkillDefV2,
+        OnDef,
+        ImportStmt,
+    )
     if isinstance(node, control_nodes):
         return True
     if is_dataclass(node):

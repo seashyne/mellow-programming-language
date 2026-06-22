@@ -5,31 +5,52 @@ on:
   pull_request:
 
 jobs:
-  stable:
+  tooling-reference:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+    env:
+      MELLOW_NO_EXT: "1"
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
       - name: Install
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .[dev]
-      - name: Run stable language gate
+      - name: Probe tooling package imports
         run: |
-          pytest -q tests/core -p no:cacheprovider
-          if [ -d tests/language ]; then
-            pytest -q tests/language -p no:cacheprovider
-          fi
+          python -c "import mellowlang; import mellowlang.compiler; import mellowlang.vm; print(mellowlang.__file__)"
+      - name: Reference core language
+        run: python -m pytest -q tests/core/test_core_language.py -p no:cacheprovider
+      - name: Reference syntax and specification
+        run: |
+          python -m pytest -q \
+            tests/core/test_language_spec_2_9.py \
+            tests/language/test_compiler_v3.py \
+            -p no:cacheprovider
+      - name: Reference data and interop
+        run: |
+          python -m pytest -q \
+            tests/core/test_data_processing_core.py \
+            tests/core/test_interop_core.py \
+            -p no:cacheprovider
+      - name: Reference money and ledger
+        run: |
+          python -m pytest -q \
+            tests/core/test_money_and_finance_sandbox.py \
+            tests/core/test_ledger_core.py \
+            -p no:cacheprovider
+      - name: Reference SDK
+        run: python -m pytest -q tests/core/test_sdk_core.py -p no:cacheprovider
+      - name: Reference optional dependencies
+        run: python -m pytest -q tests/core/test_optional_dependencies.py -p no:cacheprovider
+      - name: Run reference language gate
+        run: python -m pytest -q tests/language -p no:cacheprovider
       - name: Run package registry smoke
         run: |
-          pytest -q \
+          python -m pytest -q \
             tests/test_v152_online_registry.py \
             tests/test_v153_public_registry.py \
             tests/test_v154_cli_registry.py \
@@ -40,11 +61,25 @@ jobs:
             tests/test_v216_project_templates.py \
             -p no:cacheprovider
 
-  native:
+  native-x64:
     runs-on: ubuntu-latest
-    needs: stable
     steps:
       - uses: actions/checkout@v6
+      - name: Build native x64 runtime
+        run: |
+          cmake -S native/standalone -B build/standalone-x64 \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/standalone-x64 --parallel 2
+      - name: Run native x64 C tests
+        run: ctest --test-dir build/standalone-x64 --output-on-failure
+      - name: Verify native x64 platform and language core
+        run: |
+          build/standalone-x64/mellow --runtime-info | tee x64-runtime.json
+          grep -q '"architecture":"x86_64"' x64-runtime.json
+          grep -q '"backend":"generic-c"' x64-runtime.json
+          build/standalone-x64/mellow tests/fixtures/full_native_core.mellow \
+            | tee x64-core.out
+          diff -u tests/fixtures/full_native_core.expected x64-core.out
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -56,13 +91,115 @@ jobs:
       - name: Verify native extension
         run: |
           python -c "import mellowlang._mellowvm"
-      - name: Run native parity tests
+      - name: Probe native arithmetic state
+        run: python scripts/ci_native_probe.py
+      - name: Run complete native Core Profile parity
+        run: python -m pytest -q tests/native/test_native_core_parity.py -p no:cacheprovider
+      - name: Run native stdlib parity
+        run: python -m pytest -q tests/native/test_native_stdlib_parity.py -p no:cacheprovider
+      - name: Run standalone C CLI tests
+        run: python -m pytest -q tests/native/test_full_native_c_cli.py -p no:cacheprovider
+      - name: Run native architecture contracts
+        run: python -m pytest -q tests/native/test_arm_runtime_contract.py -p no:cacheprovider
+      - name: Run Mellow UI framework tests
+        run: python -m pytest -q frameworks/mellow_ui/tests -p no:cacheprovider
+      - name: Benchmark native x64 runtime
         run: |
-          pytest -q tests/native frameworks/mellow_ui/tests -p no:cacheprovider
+          python benchmarks/standalone_runtime_benchmark.py \
+            --binary build/standalone-x64/mellow \
+            --source tests/fixtures/native_benchmark.mellow \
+            --architecture x86_64 \
+            --mode native \
+            --repeats 7 \
+            --output x64-benchmark.json
+      - name: Upload native x64 benchmark
+        uses: actions/upload-artifact@v6
+        with:
+          name: mellow-native-x64-benchmark
+          path: x64-benchmark.json
+
+  native-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install ARM64 toolchain and emulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu qemu-user
+      - name: Cross-build standalone ARM64 runtime
+        run: |
+          cmake -S native/standalone -B build/standalone-arm64 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
+          cmake --build build/standalone-arm64 --parallel 2
+      - name: Verify native ARM64 platform and language core
+        run: |
+          qemu-aarch64 -L /usr/aarch64-linux-gnu \
+            build/standalone-arm64/mellow --runtime-info | tee arm64-runtime.json
+          grep -q '"architecture":"arm64"' arm64-runtime.json
+          grep -q '"backend":"generic-c"' arm64-runtime.json
+          qemu-aarch64 -L /usr/aarch64-linux-gnu \
+            build/standalone-arm64/mellow tests/fixtures/full_native_core.mellow \
+            | tee arm64-core.out
+          diff -u tests/fixtures/full_native_core.expected arm64-core.out
+      - name: Benchmark ARM64 runtime under QEMU
+        run: |
+          python3 benchmarks/standalone_runtime_benchmark.py \
+            --binary build/standalone-arm64/mellow \
+            --source tests/fixtures/native_benchmark.mellow \
+            --command-prefix "qemu-aarch64 -L /usr/aarch64-linux-gnu" \
+            --architecture arm64 \
+            --mode qemu-emulated \
+            --repeats 7 \
+            --output arm64-qemu-benchmark.json
+      - name: Upload ARM64 benchmark
+        uses: actions/upload-artifact@v6
+        with:
+          name: mellow-arm64-qemu-benchmark
+          path: arm64-qemu-benchmark.json
+
+  native-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Configure ASan, UBSan, LeakSanitizer, and libFuzzer
+        env:
+          CC: clang
+        run: |
+          cmake -S native/standalone -B build/standalone-safety \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DMELLOW_ENABLE_SANITIZERS=ON \
+            -DMELLOW_BUILD_FUZZER=ON
+          cmake --build build/standalone-safety --parallel 2
+      - name: Run native memory-safety tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:strict_string_checks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build/standalone-safety --output-on-failure
+      - name: Fuzz compiler and runtime ownership paths
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          set +e
+          build/standalone-safety/mellow_fuzz \
+            native/standalone/fuzz/corpus \
+            -runs=5000 \
+            -timeout=5 \
+            -max_len=65536 2>&1 | tee native-fuzz.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            tail -n 80 native-fuzz.log >> "$GITHUB_STEP_SUMMARY"
+            detail=$(tail -n 30 native-fuzz.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error file=native/standalone/fuzz/fuzz_mellow.c::$detail"
+          fi
+          exit "$status"
 
   package-release-gate:
     runs-on: ubuntu-latest
-    needs: stable
+    needs: [native-x64, native-arm64, native-safety, tooling-reference]
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python
@@ -70,12 +207,14 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install release dependencies
+        env:
+          MELLOW_NO_EXT: "1"
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .[dev,security]
       - name: Run package tests
         run: |
-          pytest -q \
+          python -m pytest -q \
             tests/test_v152_online_registry.py \
             tests/test_v153_public_registry.py \
             tests/test_v154_cli_registry.py \
@@ -84,4 +223,4 @@ jobs:
             tests/test_v215_package_runtime_integration.py \
             -p no:cacheprovider
       - name: Run package release gate
-        run: python scripts/package_release_gate.py
+        run: python scripts/package_release_gate.py --skip-native

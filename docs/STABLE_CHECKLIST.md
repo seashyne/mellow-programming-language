@@ -1,10 +1,15 @@
-# Stable Checklist (Game + AI Ready)
+# Stable Checklist (Language Platform Ready)
 
-This checklist describes the bar for **Stable** (target: v1.1+ / v2.0 depending on scope).
+This checklist describes the bar for **Stable**. For the v3 language stability
+track, `SPEC.md`, `docs/V3_STABILITY_PLAN.md`, and `tests/language` define the
+release contract.
 
 ## Language core
 - [x] Grammar and block rules documented (indentation rules are explicit)
 - [x] Syntax reference complete for v1.3.x core + runnable examples
+- [x] Top-level `SPEC.md` entry point
+- [x] Machine-readable spec manifests under `spec/`
+- [x] v3 stability plan and tests/language gate
 - [x] No crashes on invalid input (all errors are `MellowLangRuntimeError`)
 - [x] Deterministic mode documented (seed + replay)
 
@@ -38,6 +43,8 @@ This checklist describes the bar for **Stable** (target: v1.1+ / v2.0 depending 
 
 ## Quality gates (required)
 - [x] Tests: parser + runtime + error formatting (>= 30 cases recommended)
+- [x] `tests/core` release gate
+- [x] `tests/language` spec-contract gate
 - [ ] CI: tests run on push/PR (GitHub Actions)
 - [ ] Releases: portable ZIP + VSIX (optional installer)
 

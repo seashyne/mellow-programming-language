@@ -1,0 +1,4 @@
+# core-mmg package helpers (Mellow Magic Graphics)
+keep version = "0.2.0"
+keep host = "mellow-magic-graphics"
+keep supports = ["app", "scene", "camera", "texture", "sprite", "frame", "on", "clear", "rect", "circle", "line", "text", "run"]

@@ -16,6 +16,7 @@ from ..ast import (
     GetModuleExpr,
     GetModuleStmt,
     IfGroup,
+    ImportStmt,
     Index,
     KeepMultiStmt,
     KeepStmt,
@@ -44,11 +45,19 @@ from ..ast import (
     WaitStmt,
 )
 from ..ir import IRFunction, IRInstruction, IRProgram
-from ..host.legacy import MODULE_ALLOWLIST
+from ..host.runtime import MODULE_ALLOWLIST
 
 
 STDLIB_CALLS = {
     "len": "std.len",
+    "str": "std.type.to_str",
+    "type": "std.type.of",
+    "abs": "std.math.abs",
+    "floor": "std.math.floor",
+    "ceil": "std.math.ceil",
+    "sqrt": "std.math.sqrt",
+    "min": "std.math.min",
+    "max": "std.math.max",
     "money": "std.money.of",
     "money.of": "std.money.of",
     "money_of": "std.money.of",
@@ -140,6 +149,7 @@ class IRLowerer:
         self._label_id = 0
         self._temp_id = 0
         self._loop_stack: List[_LoopCtx] = []
+        self._current_position = (0, 1)
 
     def lower(self, program: Program) -> IRProgram:
         for stmt in program.body:
@@ -156,7 +166,9 @@ class IRLowerer:
         self.instructions.append(IRInstruction(op=op, args=tuple(args), line=int(line or 0), col=int(col or 1)))
 
     def pos(self, node: Any) -> tuple[int, int]:
-        return int(getattr(node, "_line", 0) or 0), int(getattr(node, "_col", 1) or 1)
+        line = int(getattr(node, "_line", 0) or 0)
+        col = int(getattr(node, "_col", 1) or 1)
+        return (line, col) if line > 0 else self._current_position
 
     def new_label(self, prefix: str) -> str:
         self._label_id += 1
@@ -168,6 +180,7 @@ class IRLowerer:
 
     def _stmt(self, stmt: Stmt):
         line, col = self.pos(stmt)
+        self._current_position = (line, col)
         if isinstance(stmt, KeepStmt):
             self._expr(stmt.expr)
             self.emit("STORE_KEEP", stmt.name, line=line, col=col)
@@ -375,6 +388,8 @@ class IRLowerer:
                 self.emit("STORE_AUTO", stmt.var_name, line=line, col=col)
             else:
                 self.emit("POP", line=line, col=col)
+        elif isinstance(stmt, ImportStmt):
+            self.emit("IMPORT", stmt.path, stmt.alias, line=line, col=col)
         else:
             raise UnsupportedLoweringError(f"AST node not supported by IR pipeline: {type(stmt).__name__}")
 

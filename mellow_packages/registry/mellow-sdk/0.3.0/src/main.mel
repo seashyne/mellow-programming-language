@@ -1,0 +1,9 @@
+def OpenAI(config):
+    if config == none:
+        return sdk.openai_client({})
+    return sdk.openai_client(config)
+
+def ChatCompletions_create(client, model, messages, options):
+    if options == none:
+        return sdk.chat_completions_create(client, model, messages, {})
+    return sdk.chat_completions_create(client, model, messages, options)

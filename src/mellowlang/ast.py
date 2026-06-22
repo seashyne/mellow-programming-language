@@ -211,7 +211,7 @@ class Call(Expr):
     args: List[Expr]
     # v1.2.2+: named arguments are supported in call syntax, e.g.
     #   file_write("a.txt", "hi", mode="w")
-    # To avoid breaking the legacy VM/bytecode format in v1.x, kwargs are
+    # To avoid breaking the bytecode format, kwargs are
     # compiled as a trailing map argument.
     kwargs: List[Tuple[str, Expr]] = field(default_factory=list)
 

@@ -4,7 +4,10 @@ description = "Time helpers for timestamps and lightweight elapsed measurements.
 entry = "src/main.mel"
 license = "MIT"
 visibility = "public"
-keywords = ["core", "time", "clock", "starter"]
 
+authors = ["Mellow Code Team"]
+keywords = ["core", "time", "clock", "timestamp", "starter"]
+badges = ["official"]
+official = true
 [dependencies]
 time = "host"

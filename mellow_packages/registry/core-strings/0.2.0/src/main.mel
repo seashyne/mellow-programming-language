@@ -1,0 +1,32 @@
+def lower(text):
+    return string.lower(text)
+
+def upper(text):
+    return string.upper(text)
+
+def trim(text):
+    return string.trim(text)
+
+def size(text):
+    return string.len(text)
+
+def contains(text, needle):
+    return string.contains(text, needle)
+
+def starts_with(text, prefix):
+    return string.starts_with(text, prefix)
+
+def ends_with(text, suffix):
+    return string.ends_with(text, suffix)
+
+def surround(text, left, right):
+    return left + text + right
+
+def replace(text, needle, value):
+    return string.replace(text, needle, value)
+
+def split(text, separator):
+    return string.split(text, separator)
+
+def join(items, separator):
+    return string.join(items, separator)

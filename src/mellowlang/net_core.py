@@ -17,6 +17,7 @@ Notes:
 
 import asyncio
 import base64
+import importlib
 import json
 import threading
 import time
@@ -24,7 +25,15 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-import websockets
+
+def _load_websockets() -> Any:
+    try:
+        return importlib.import_module("websockets")
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "NET_WS_DEPENDENCY_MISSING: install WebSocket support with "
+            "`pip install mellowlang[net]`"
+        ) from exc
 
 
 def http_post_json(url: str, payload: Dict[str, Any], *, timeout_s: float = 10.0, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
@@ -106,6 +115,7 @@ class WebSocketManager:
 
     async def _ws_task(self, hid: int, url: str, *, headers: Optional[Dict[str, str]] = None) -> None:
         try:
+            websockets = _load_websockets()
             async with websockets.connect(url, extra_headers=headers) as ws:
                 with self._lock:
                     st = self._states.get(hid)

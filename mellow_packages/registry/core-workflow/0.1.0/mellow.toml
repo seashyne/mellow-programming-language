@@ -4,8 +4,11 @@ description = "Starter helpers for event payloads, retries, and simple jobs."
 entry = "src/main.mel"
 license = "MIT"
 visibility = "public"
-keywords = ["workflow", "jobs", "starter", "automation"]
 
+authors = ["Mellow Code Team"]
+keywords = ["core", "workflow", "jobs", "automation", "starter"]
+badges = ["official"]
+official = true
 [dependencies]
 time = "host"
 json = "host"

@@ -4,13 +4,20 @@ __pycache__/
 *.pyd
 *.egg-info/
 .mellow/
+.ci-logs/
+.ci-tmp/
 .mellow-release-gate-work/
 .pytest_cache/
+tests/.pytest-work/
 pytest-cache-files-*/
 .tmp_money_finance_test/
 .tmp_data_core_test/
+.tmp/
 .mellow-data-benchmark-*/
 tmp/
+outputs/
+mellow_models/
+mellow_saves/
 node_modules/
 dist/
 build/
@@ -21,9 +28,16 @@ build/
 replay*.jsonl
 .mellow_imports.json
 .mellow_runtime.json
+.mellow_aliases.json
+$null
+
+# Local package installs/cache. Keep curated registry fixtures tracked explicitly.
+mellow_packages/installed/
+examples/mellow_packages/installed/
 
 .wrangler/
 deploy/cloudflare-public-registry/.wrangler/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+mellow-*-check.exe

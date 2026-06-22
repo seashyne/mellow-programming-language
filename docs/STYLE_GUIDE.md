@@ -35,7 +35,7 @@ Recommended:
 - `mellow check file.mellow`
 - `mellow fmt -w .`
 
-Legacy is supported but should be reserved for older projects.
+Use the documented canonical syntax and explicit CLI subcommands.
 
 
 ### Modern keywords

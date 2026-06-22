@@ -23,6 +23,10 @@ LOCKFILE_NAME = 'agent.lock'
 REPRO_ZIP_TIMESTAMP = (2024, 1, 1, 0, 0, 0)
 
 
+def _agent_cache_root() -> Path:
+    return Path(pm.CONFIG_HOME) / 'cache' / 'agent_packages'
+
+
 def _canonical_json(data: Dict[str, Any]) -> bytes:
     return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
 
@@ -152,7 +156,7 @@ def agent_dependency_graph(name_or_dir: str) -> Dict[str, Any]:
 def ensure_agent_dirs() -> None:
     AGENT_REGISTRY_ROOT.mkdir(parents=True, exist_ok=True)
     AGENT_INSTALLED_ROOT.mkdir(parents=True, exist_ok=True)
-    AGENT_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    _agent_cache_root().mkdir(parents=True, exist_ok=True)
     pm.CONFIG_HOME.mkdir(parents=True, exist_ok=True)
 
 
@@ -517,7 +521,7 @@ def install_agent_remote(name: str, version: str | None = None, registry: str | 
         return version_meta
     remote_sha256 = str(version_meta.get('sha256') or '').strip().lower()
     effective_sha256 = (expected_sha256 or remote_sha256 or '').lower() or None
-    cache_path = AGENT_CACHE_ROOT / base_name.replace('/', '_') / f'{chosen}{ARCHIVE_EXT}'
+    cache_path = _agent_cache_root() / base_name.replace('/', '_') / f'{chosen}{ARCHIVE_EXT}'
     raw = b''
     if cache_path.exists():
         raw = cache_path.read_bytes()

@@ -3,17 +3,24 @@
   "version": "0.1.0",
   "entry": "src/main.mel",
   "description": "JSON encode/decode wrappers for app and API scripts.",
-  "authors": [],
-  "license": "MIT",
   "dependencies": {
     "json": "host"
   },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
   "keywords": [
     "core",
     "json",
     "data",
+    "decode",
     "starter"
   ],
-  "visibility": "public",
-  "namespace": ""
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

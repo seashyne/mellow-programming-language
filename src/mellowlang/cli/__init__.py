@@ -8,7 +8,10 @@ __all__ = ["main", "_cmd_check", "_print_pretty_error", "_doctor_report"]
 
 
 def __getattr__(name):
-    if name in {"_cmd_check", "_print_pretty_error"}:
+    if name == "_print_pretty_error":
+        _common_module = import_module(".common", __name__)
+        return getattr(_common_module, name)
+    if name == "_cmd_check":
         _main_module = import_module(".main", __name__)
         return getattr(_main_module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

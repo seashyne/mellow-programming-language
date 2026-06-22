@@ -3,14 +3,22 @@
   "version": "0.1.0",
   "entry": "src/main.mellow",
   "description": "HTTP request wrappers for web/API integration.",
-  "authors": [],
-  "license": "MIT",
   "dependencies": {
     "http": "host"
   },
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
   "keywords": [
     "core",
     "http",
-    "api"
-  ]
+    "api",
+    "route",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

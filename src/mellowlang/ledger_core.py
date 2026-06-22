@@ -157,7 +157,7 @@ def entries(ledger: Any) -> list[dict[str, Any]]:
 
 
 def register_ledger_functions(host: Any) -> None:
-    from .host.legacy import HostFunction
+    from .host.runtime import HostFunction
 
     def wrap(handler):
         def call(args):

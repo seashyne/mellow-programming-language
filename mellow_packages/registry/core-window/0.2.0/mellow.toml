@@ -1,0 +1,12 @@
+name = "core-window"
+version = "0.2.0"
+description = "Declarative desktop window package for Mellow app projects."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "desktop", "window", "ui", "starter"]
+badges = ["official"]
+official = true
+[dependencies]

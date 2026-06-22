@@ -1,0 +1,13 @@
+name = "core-money"
+version = "0.1.1"
+description = "Decimal-backed money helpers with currency safety."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "money", "finance", "decimal", "currency"]
+badges = ["official"]
+official = true
+[dependencies]
+money = "host"

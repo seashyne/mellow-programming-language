@@ -1,0 +1,3 @@
+use mellow-sdk as ai
+
+print(ai.txt(ai.ask("Hello", none)))

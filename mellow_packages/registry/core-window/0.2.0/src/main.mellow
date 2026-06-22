@@ -1,0 +1,4 @@
+# core-window package helpers (declarative host surface)
+keep version = "0.2.0"
+keep host = "desktop-window"
+keep supports = ["window", "label", "button", "input", "textarea", "checkbox", "select", "menu", "menu_item", "vstack", "hstack", "grid", "run"]

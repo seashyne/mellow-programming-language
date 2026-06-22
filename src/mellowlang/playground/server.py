@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 from ..compiler import Compiler
 from ..vm import MellowVM, RunConfig
 from ..vm.cbridge import c_vm_capabilities
-from ..vm.legacy import MellowLangVM
+from ..vm.python_vm import MellowLangVM
 
 
 ASSET_DIR = Path(__file__).resolve().parent / 'assets'
@@ -359,7 +359,7 @@ def _summarize_debugger_vm(vm: MellowLangVM, *, session_id: str, program: Any, s
         'paused': bool(getattr(vm, '_dbg_paused', False)),
         'finished': bool(getattr(vm, '_halted', False) or vm.pc >= len(vm.bytecode)),
         'result': repr(getattr(vm, '_last_result', None)),
-        'pipeline': getattr(program, 'pipeline', 'legacy'),
+        'pipeline': getattr(program, 'pipeline', 'bytecode'),
         'bytecode_count': len(getattr(program, 'bytecode', []) or []),
         'stop': stop,
         'history_tail': _to_plain(getattr(vm, '_dbg_history', [])[-24:]),
@@ -552,7 +552,7 @@ def run_playground_session(
     debug_stop = _to_plain(getattr(vm, 'last_debug_stop', None))
     payload: dict[str, Any] = {
         'ok': True,
-        'pipeline': getattr(program, 'pipeline', 'legacy'),
+        'pipeline': getattr(program, 'pipeline', 'bytecode'),
         'stdout': clean_stdout,
         'raw_stdout': raw_stdout,
         'result': repr(result),

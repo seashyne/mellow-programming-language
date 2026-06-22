@@ -14,5 +14,4 @@ bucket_name = "mellow-registry-packages"
 preview_bucket_name = "mellow-registry-packages-preview"
 
 [vars]
-REGISTRY_BASE_URL = "https://registry.mellowlang.org"
-TOKEN_HASH_SALT = "replace-with-random-64-hex-salt"
+REGISTRY_BASE_URL = "https://mellow-public-registry.jirayut-wh.workers.dev"

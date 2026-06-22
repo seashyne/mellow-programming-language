@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "language": "Mellow Programming Language",
+  "version": "2.9.3",
+  "profile": "core",
+  "status": "released",
+  "goal": "Patch stability release: gates, canonical runtime modules, experimental doc split",
+  "baseline": {
+    "version": "2.9",
+    "manifest": "spec/mellow-2.9-core.json",
+    "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
+  },
+  "entrypoint": "SPEC.md",
+  "stable_core": "docs/STABLE_CORE.md",
+  "experimental_index": "docs/experimental/README.md",
+  "v3_track": "spec/mellow-3.0-stability.json",
+  "required_gates": [
+    "tests/core",
+    "tests/language",
+    "package-registry-smoke",
+    "release-gate"
+  ],
+  "release_commands": [
+    "powershell -File scripts/test-v293-stability.ps1"
+  ],
+  "stable_feature_rule": [
+    "documented_in_core_docs",
+    "tested_in_tests_core_or_language",
+    "not_listed_in_experimental_index"
+  ],
+  "new_in_2_9_3": [
+    "mellow-sdk OpenAI-compatible provider package",
+    "docs/MELLOW_SDK.md",
+    "docs/experimental/ doc split",
+    "old runtime aliases and direct-run compatibility removed",
+    "release gate includes tests/core and tests/language"
+  ]
+}

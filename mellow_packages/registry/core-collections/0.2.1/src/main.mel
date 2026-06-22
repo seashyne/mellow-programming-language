@@ -1,0 +1,26 @@
+def push(items, value):
+    return list.push(items, value)
+
+def pop(items):
+    return list.pop(items)
+
+def size(items):
+    return list.len(items)
+
+def contains(items, value):
+    return list.has(items, value)
+
+def dict_get(data, key, fallback):
+    return map.get(data, key, fallback)
+
+def dict_has(data, key):
+    return map.has(data, key)
+
+def dict_set(data, key, value):
+    return map.set(data, key, value)
+
+def keys(data):
+    return map.keys(data)
+
+def values(data):
+    return map.values(data)

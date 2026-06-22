@@ -1,0 +1,6 @@
+def save_text(key, value):
+    save value into key
+
+def load_text(key):
+    load key into value
+    return value

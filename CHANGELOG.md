@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## 2.9.4 - 2026-06-21
+
+### Runtime Structure
+- Split CLI commands, package services, and Python VM debugger/storage into
+  focused modules with architecture guard tests.
+
+### ARM64 Portability
+- Add standalone C runtime platform metadata and `--runtime-info`.
+- Add ARM64 CMake detection and a cross-build/QEMU CI gate.
+- Report `generic-c` until optimized architecture kernels exist.
+
+## 2.9.3 - 2026-06-18
+
+### Stability and Documentation
+- Add `spec/mellow-2.9.3-stability.json` and `scripts/test-v293-stability.ps1`.
+- Extend `mellow release-gate` to run `tests/core`, `tests/language`, and registry smoke tests.
+- Add `docs/CORE_DOCS.md`, `docs/LEGACY_BOUNDARIES.md`, and `docs/experimental/README.md`.
+- Move agents, MMG, playground, desktop, and hosted-ecosystem docs under `docs/experimental/`.
+- Add `tests/language/test_v293_release_contract.py`.
+
+### mellow-sdk
+- Add `mellow-sdk` starter package with Python OpenAI SDK-shaped API.
+- Add `src/mellowlang/sdk_core.py` host bridge and optional `sdk` Python extra.
+- Add `docs/MELLOW_SDK.md`.
+
 ## 2.9.2 - 2026-06-16
 
 ### Security and Performance Gates

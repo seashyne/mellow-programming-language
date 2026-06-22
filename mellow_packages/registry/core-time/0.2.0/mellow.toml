@@ -1,0 +1,13 @@
+name = "core-time"
+version = "0.2.0"
+description = "Time helpers for timestamps and lightweight elapsed measurements."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "time", "clock", "timestamp", "starter"]
+badges = ["official"]
+official = true
+[dependencies]
+time = "host"

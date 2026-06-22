@@ -1,0 +1,7 @@
+def add(a, b):
+    return a + b
+
+let total = 0
+for i in range(0, 8):
+    total = add(total, i)
+print(total)

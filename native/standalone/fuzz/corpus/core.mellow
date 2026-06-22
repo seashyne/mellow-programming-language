@@ -1,0 +1,4 @@
+let values = [1, 2, 3]
+let item = {"name": "mellow", "ok": true}
+if item["ok"] and len(values) == 3:
+    print(item["name"])

@@ -1,0 +1,26 @@
+{
+  "name": "core-strings",
+  "version": "0.2.0",
+  "entry": "src/main.mel",
+  "description": "String helpers built on top of the host string module.",
+  "dependencies": {
+    "string": "host"
+  },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "strings",
+    "text",
+    "formatting",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
+}

@@ -1,0 +1,13 @@
+def clamp(value, low, high):
+    return math.clamp(value, low, high)
+
+def clamp01(value):
+    return math.clamp(value, 0, 1)
+
+def lerp(a, b, t):
+    return math.lerp(a, b, t)
+
+def distance2(ax, ay, bx, by):
+    let dx = bx - ax
+    let dy = by - ay
+    return math.sqrt(dx * dx + dy * dy)

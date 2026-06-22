@@ -25,7 +25,7 @@ class MellowLangRuntimeError(Exception):
 
 
 class MellowLangError:
-    """Friendly error reporter (legacy interpreter)."""
+    """Friendly error reporter (Python interpreter)."""
     def __init__(self, engine):
         self.engine = engine
 

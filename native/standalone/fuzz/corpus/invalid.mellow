@@ -1,0 +1,3 @@
+let broken = [1, 2
+if broken:
+  print("bad indent")

@@ -1,0 +1,14 @@
+import "pkg:core-window" as win
+
+keep count = 0
+keep name = "Mellow"
+
+keep app = win.window(title: "Desktop Demo", width: 800, height: 520, layout: "vstack")
+win.menu(app, "File", ["About"])
+win.menu_item(app, "File", "Quit", "close")
+win.label(app, "Hello {{state.name}}")
+win.input(app, "Type something", bind: name)
+win.button(app, "Count +1", "inc:count")
+win.label(app, "Count = {{state.count}}")
+win.button(app, "Close", "close")
+win.run(app)

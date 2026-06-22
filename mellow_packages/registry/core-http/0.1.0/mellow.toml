@@ -3,7 +3,10 @@ version = "0.1.0"
 description = "HTTP request wrappers for web/API integration."
 entry = "src/main.mellow"
 license = "MIT"
-keywords = ["core", "http", "api"]
 
+authors = ["Mellow Code Team"]
+keywords = ["core", "http", "api", "route", "starter"]
+badges = ["official"]
+official = true
 [dependencies]
 http = "host"

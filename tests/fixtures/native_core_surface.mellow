@@ -1,0 +1,51 @@
+keep enabled = true
+let disabled = false
+let nothing = none
+let score = 0
+
+def add(a, b):
+    return a + b
+
+if enabled and not disabled:
+    score = add(score, 1)
+else:
+    score = -100
+if disabled or enabled:
+    score = score + 1
+if nothing:
+    score = -100
+else:
+    score = score + 1
+
+let i = 0
+while i < 2:
+    score = score + 1
+    i = i + 1
+for n in range(0, 2):
+    score = score + n
+
+if 1 == 1:
+    score = score + 1
+if 1 != 2:
+    score = score + 1
+if 1 <= 1:
+    score = score + 1
+if 2 > 1:
+    score = score + 1
+if 2 >= 2:
+    score = score + 1
+
+let arithmetic = (8 + 4 - 2) * 3 / 2 % 8
+let values = [9, -4, 16]
+let item = {"name": "mellow", "score": score}
+print(score)
+print(arithmetic)
+print(item["name"])
+print(len(values))
+print(str(abs(values[1])))
+print(type(values))
+print(floor(2.8))
+print(ceil(2.1))
+print(sqrt(16))
+print(min(3, 7))
+print(max(3, 7))

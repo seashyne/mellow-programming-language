@@ -1,0 +1,6 @@
+# Mellow v3 demo: package-style imports
+use core-json as jsonx
+need core-print as out
+
+let payload = {"language": "Mellow", "track": "v3"}
+print(payload["language"])

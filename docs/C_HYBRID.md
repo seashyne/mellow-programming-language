@@ -7,7 +7,7 @@ and host modules in Python.
 
 - Faster instruction dispatch for simple scripts (hot loop in C)
 - Full compatibility with existing Python host skills (via `SYSCALL`)
-- Safe fallback to the legacy Python VM when:
+- Safe fallback to the Python VM when:
   - the C extension is not built
   - the script uses unsupported opcodes (functions/events in this minimal release)
 
@@ -39,7 +39,15 @@ Engine modes:
 
 - `--engine=c` (default): use C first and fall back to Python for unsupported runtime features
 - `--engine=auto`: compatibility alias for native-first execution
-- `--engine=py`: force legacy Python VM
+- `--engine=py`: force the Python VM
+- `--native-required`: fail instead of falling back when `--engine=c` cannot run natively
+
+Native release gates should use:
+
+```powershell
+mellow run path/to/test.mellow --engine=c --native-required
+mellow test tests/language/fixtures --engine=c --native-required
+```
 
 ## Notes / Limitations (current)
 

@@ -1,0 +1,24 @@
+{
+  "name": "core-print",
+  "version": "0.2.0",
+  "entry": "src/main.mel",
+  "description": "Console output helpers and lightweight formatting for Mellow.",
+  "dependencies": {},
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "console",
+    "output",
+    "formatting",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib
 import io
 import textwrap
 from pathlib import Path
@@ -16,12 +17,12 @@ def run_source(source: str) -> str:
     vm = MellowVM()
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
-        vm.run(program, config=RunConfig())
+        vm.run(program, config=RunConfig(engine="py"))
     return out.getvalue()
 
 
 def test_version_matches_core_release():
-    assert __version__ == "2.9.2"
+    assert __version__ == "2.9.4"
 
 
 def test_print_arithmetic_and_variables():
@@ -33,6 +34,16 @@ def test_print_arithmetic_and_variables():
         """
     )
     assert out.strip() == "5"
+
+
+def test_python_engine_does_not_probe_native_extension(monkeypatch):
+    vm_module = importlib.import_module("mellowlang.vm.vm")
+
+    def fail_native_probe():
+        raise AssertionError("Python reference engine probed the native extension")
+
+    monkeypatch.setattr(vm_module, "c_vm_capabilities", fail_native_probe)
+    assert run_source("print(2 + 3)\n").strip() == "5"
 
 
 def test_function_call_is_stable_core_syntax():
@@ -90,7 +101,7 @@ def test_cli_run_and_check_core_script():
     script = Path(__file__).resolve().parents[2] / "examples" / "hello.mellow"
     run_out = io.StringIO()
     with contextlib.redirect_stdout(run_out):
-        assert cli_main(["run", str(script)]) == 0
+        assert cli_main(["run", str(script), "--engine", "py"]) == 0
     assert "Hello from MellowLang!" in run_out.getvalue()
 
     check_out = io.StringIO()

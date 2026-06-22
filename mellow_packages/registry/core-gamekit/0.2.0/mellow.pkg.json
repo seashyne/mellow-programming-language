@@ -1,0 +1,28 @@
+{
+  "name": "core-gamekit",
+  "version": "0.2.0",
+  "entry": "src/main.mel",
+  "description": "Scene, movement, easing, and path helpers for simple games.",
+  "dependencies": {
+    "game": "host",
+    "math": "host",
+    "json": "host"
+  },
+  "visibility": "public",
+  "namespace": "",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "game",
+    "2d",
+    "movement",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
+}

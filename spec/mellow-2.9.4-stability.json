@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "language": "Mellow Programming Language",
+  "version": "2.9.4",
+  "profile": "core",
+  "status": "released",
+  "goal": "Runtime structure, truthful CPU capabilities, and ARM64 portability gate",
+  "baseline": {
+    "version": "2.9",
+    "manifest": "spec/mellow-2.9-core.json",
+    "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
+  },
+  "entrypoint": "SPEC.md",
+  "stable_core": "docs/STABLE_CORE.md",
+  "experimental_index": "docs/experimental/README.md",
+  "v3_track": "spec/mellow-3.0-stability.json",
+  "required_gates": [
+    "tests/core",
+    "tests/language",
+    "tests/native",
+    "package-registry-smoke",
+    "native-arm64-ci",
+    "release-gate"
+  ],
+  "release_commands": [
+    "powershell -File scripts/test-v294-stability.ps1"
+  ],
+  "new_in_2_9_4": [
+    "modular CLI command ownership",
+    "focused package subsystem modules",
+    "Python VM debugger and storage services",
+    "standalone C runtime platform metadata",
+    "ARM64 cross-build and QEMU execution gate",
+    "truthful generic-c backend reporting"
+  ]
+}

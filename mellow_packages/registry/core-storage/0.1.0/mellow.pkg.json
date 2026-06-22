@@ -3,14 +3,22 @@
   "version": "0.1.0",
   "entry": "src/main.mellow",
   "description": "Save/load helpers for local app and game data.",
-  "authors": [],
-  "license": "MIT",
   "dependencies": {
     "storage": "host"
   },
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
   "keywords": [
     "core",
     "storage",
-    "save"
-  ]
+    "persistence",
+    "save",
+    "starter"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

@@ -1,0 +1,6 @@
+# Mellow v3 demo: deterministic game logic
+let x = 0
+let vx = 2
+for tick in range(0, 4):
+    x = x + vx
+    print("tick", tick, "x", x)

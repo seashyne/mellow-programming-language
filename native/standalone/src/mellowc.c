@@ -67,6 +67,7 @@ typedef struct {
     Scope globals;
     Scope *scope;
     int current_line;
+    const char *source_name;
     char *error;
     size_t error_cap;
 } Compiler;
@@ -78,7 +79,8 @@ typedef struct {
 
 static void set_error(Compiler *c, const char *message) {
     if (c->error && c->error_cap && !c->error[0])
-        snprintf(c->error, c->error_cap, "%s at line %d", message, c->current_line);
+        snprintf(c->error, c->error_cap, "%s:%d:1: syntax error: %s",
+                 c->source_name ? c->source_name : "<memory>", c->current_line, message);
 }
 
 static char *copy_text(const char *s, size_t n) {
@@ -537,7 +539,10 @@ static int scan_functions(Compiler *c) {
                 char *comma=strchr(cursor,',');char *stop=comma&&comma<rp?comma:rp;
                 while(cursor<stop&&isspace((unsigned char)*cursor))cursor++;
                 while(stop>cursor&&isspace((unsigned char)stop[-1]))stop--;
-                if(stop>cursor)snprintf(fn->params[fn->arity++],64,"%.*s",(int)(stop-cursor),cursor);
+                if(stop>cursor){
+                    if(fn->arity>=16){c->current_line=c->lines[i].number;set_error(c,"function has more than 16 parameters");return 0;}
+                    snprintf(fn->params[fn->arity++],64,"%.*s",(int)(stop-cursor),cursor);
+                }
                 cursor=comma&&comma<rp?comma+1:rp;
             }
             while(j<c->line_count&&(c->lines[j].indent>0||!*trim(c->lines[j].text)))j++;
@@ -551,7 +556,7 @@ static int scan_functions(Compiler *c) {
 int mellow_compile_source(const char *source,const char *source_name,MNativeProgram *out,char *error,size_t error_cap){
     Compiler c;int i,pos,jump_main;
     memset(&c,0,sizeof(c));memset(out,0,sizeof(*out));
-    c.error=error;c.error_cap=error_cap;c.scope=&c.globals;c.current_line=1;
+    c.error=error;c.error_cap=error_cap;c.scope=&c.globals;c.current_line=1;c.source_name=source_name;
     if(error&&error_cap)error[0]='\0';
     if(!split_lines(&c,source)||!scan_functions(&c))goto fail;
     jump_main=emit(&c,MOP_JUMP,0,0,0);

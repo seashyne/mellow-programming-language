@@ -2,5 +2,20 @@
   "name": "core-sm",
   "version": "0.1.0",
   "entry": "src/main.mel",
-  "kind": "starter-package"
+  "kind": "starter-package",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "media",
+    "sprite",
+    "codec",
+    "sm"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true
 }

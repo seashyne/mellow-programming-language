@@ -1,0 +1,56 @@
+def ds(config):
+    if config == none:
+        return sdk.deepseek_client({})
+    return sdk.deepseek_client(config)
+
+def oa(config):
+    if config == none:
+        return sdk.openai_preset_client({})
+    return sdk.openai_preset_client(config)
+
+def mk(config):
+    if config == none:
+        return sdk.openai_client({})
+    return sdk.openai_client(config)
+
+def chat(client, model, messages, options):
+    if options == none:
+        return sdk.chat_completions_create(client, model, messages, {})
+    return sdk.chat_completions_create(client, model, messages, options)
+
+def txt(response):
+    return response["content"]
+
+def ask(prompt, options):
+    let messages = [{"role": "user", "content": prompt}]
+    if options == none:
+        return chat(ds(none), "deepseek-chat", messages, none)
+    return chat(ds(none), "deepseek-chat", messages, options)
+
+# Python-compat names (longer).
+def OpenAI(config):
+    return mk(config)
+
+def DeepSeek(config):
+    return ds(config)
+
+def chat_completions_create(client, model, messages, options):
+    return chat(client, model, messages, options)
+
+def response_content(response):
+    return txt(response)
+
+def response_message_content(response):
+    return response["choices"][0]["message"]["content"]
+
+def client(config):
+    return mk(config)
+
+def deepseek(config):
+    return ds(config)
+
+def openai(config):
+    return oa(config)
+
+def text(result):
+    return txt(result)

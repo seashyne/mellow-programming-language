@@ -16,7 +16,7 @@ The language version uses `MAJOR.MINOR`.
 - New syntax requires Mellow 2.10 or later.
 - Removing or changing Core Profile syntax requires a major version.
 - Implementations may provide extensions, but must identify them as
-  `extended`, `experimental`, or `legacy`.
+  `extended` or `experimental`.
 - A Core Profile program must run through both the Python implementation and
   the Full Native C implementation.
 

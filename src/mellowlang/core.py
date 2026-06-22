@@ -120,7 +120,7 @@ class MellowLangEngine:
         if low == "false": return False
         if low == "none":  return False
 
-        # Special: list has item (legacy syntax)
+        # Special: list has item (compatibility syntax)
         if " has " in src:
             parts = src.split(" has ", 1)
             var_val = self.evaluator.evaluate(parts[0].strip())
@@ -133,7 +133,7 @@ class MellowLangEngine:
             tree = parser.parse()
             return self._truthy(self._eval_ast(tree))
         except (ParseError, Exception):
-            # Fallback: delegate to legacy evaluator
+            # Fallback: delegate to bytecode evaluator
             result = self.evaluator.evaluate(src)
             return self._truthy(result)
 

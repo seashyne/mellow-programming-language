@@ -3,7 +3,10 @@ version = "0.1.0"
 description = "Save/load helpers for local app and game data."
 entry = "src/main.mellow"
 license = "MIT"
-keywords = ["core", "storage", "save"]
 
+authors = ["Mellow Code Team"]
+keywords = ["core", "storage", "persistence", "save", "starter"]
+badges = ["official"]
+official = true
 [dependencies]
 storage = "host"

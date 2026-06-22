@@ -40,9 +40,36 @@ cmake --build native/standalone/build
 ./native/standalone/build/mellowrt
 ```
 
+Memory safety and fuzzing on Linux with Clang:
+
+```bash
+CC=clang cmake -S native/standalone -B build/standalone-safety \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DMELLOW_ENABLE_SANITIZERS=ON \
+  -DMELLOW_BUILD_FUZZER=ON
+cmake --build build/standalone-safety --parallel 2
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  ctest --test-dir build/standalone-safety --output-on-failure
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  build/standalone-safety/mellow_fuzz native/standalone/fuzz/corpus -runs=5000
+```
+
+This gate runs AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer, and
+libFuzzer over both source compilation and runtime value ownership paths.
+
 Run source directly:
 
 ```bash
 ./native/standalone/build/mellow examples/hello.mellow
 ./native/standalone/build/mellow check examples/hello.mellow
 ```
+
+Inspect the binary's actual target and backend:
+
+```bash
+./native/standalone/build/mellow --runtime-info
+```
+
+ARM64 is release-gated through an `aarch64-linux-gnu-gcc` cross-build and QEMU
+execution in CI. The current ARM64 backend is portable `generic-c`; NEON is
+reported as a CPU capability but no optimized NEON kernel is claimed yet.
