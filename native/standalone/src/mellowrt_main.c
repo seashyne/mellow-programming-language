@@ -3,13 +3,12 @@
    No Python dependency. Build: cmake -S . -B build && cmake --build build
 */
 #include "mellowrt.h"
+#include "mellowrt_syscalls.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <time.h>
-#include <math.h>
 
 #define MLVI_MAGIC     "MLVI0200"
 #define MLVI_MAGIC_LEN 8
@@ -151,175 +150,6 @@ fail:
     fclose(f); free_loaded_program(out); return 0;
 }
 
-/* ── syscall table (v2.3.4) ─────────────────────────────────────────────── */
-static int print_value(FILE *out, const MValue *v){
-    switch(v->tag){
-    case MVAL_NONE: return fprintf(out,"none")>=0;
-    case MVAL_BOOL: return fprintf(out,"%s",v->as.boolean?"true":"false")>=0;
-    case MVAL_I64:  return fprintf(out,"%lld",(long long)v->as.i64)>=0;
-    case MVAL_F64:  return fprintf(out,"%g",v->as.f64)>=0;
-    case MVAL_STR:  return fprintf(out,"%.*s",(int)v->as.str.len,v->as.str.ptr?v->as.str.ptr:"")>=0;
-    case MVAL_FUNC: return fprintf(out,"<func@%u>",v->as.func.address)>=0;
-    case MVAL_LIST:{
-        size_t i; if(fprintf(out,"[")<0)return 0;
-        for(i=0;i<v->as.list.len;++i){if(i&&fprintf(out,", ")<0)return 0; if(!print_value(out,&v->as.list.items[i]))return 0;}
-        return fprintf(out,"]")>=0;}
-    case MVAL_MAP:{
-        size_t i; if(fprintf(out,"{")<0)return 0;
-        for(i=0;i<v->as.map.len;++i){
-            if(i&&fprintf(out,", ")<0)return 0;
-            if(!print_value(out,&v->as.map.keys[i]))return 0;
-            if(fprintf(out,": ")<0)return 0;
-            if(!print_value(out,&v->as.map.values[i]))return 0;
-        }
-        return fprintf(out,"}")>=0;}
-    default: return fprintf(out,"<%s>",mvalue_tag_name(v->tag))>=0;
-    }
-}
-
-static MValue mval_owned_copy(const char *src, size_t len){
-    char *buf=(char*)calloc(len+1,1); MValue v=mval_none();
-    if(!buf)return v;
-    if(src&&len) memcpy(buf,src,len);
-    buf[len]='\0';
-    v.tag=MVAL_STR; v.flags=1u; v.as.str.ptr=buf; v.as.str.len=len;
-    return v;
-}
-
-static int numeric_value(const MValue *value, double *out){
-    if(value->tag==MVAL_I64){*out=(double)value->as.i64;return 1;}
-    if(value->tag==MVAL_F64&&isfinite(value->as.f64)){*out=value->as.f64;return 1;}
-    return 0;
-}
-
-static int runtime_syscall(void *user, int32_t id, const MValue *args, size_t argc, MValue *out_result){
-    (void)user;
-    *out_result=mval_none();
-    switch(id){
-    /* 1 — print(args...) */
-    case 1:{
-        size_t i; for(i=0;i<argc;++i){if(i)fputc(' ',stdout);print_value(stdout,&args[i]);}
-        fputc('\n',stdout); return 1;
-    }
-    /* 2 — len(container) -> i64 */
-    case 2:
-        if(argc!=1)return 0;
-        if(args[0].tag==MVAL_STR)  {*out_result=mval_i64((int64_t)args[0].as.str.len);  return 1;}
-        if(args[0].tag==MVAL_LIST) {*out_result=mval_i64((int64_t)args[0].as.list.len); return 1;}
-        if(args[0].tag==MVAL_MAP)  {*out_result=mval_i64((int64_t)args[0].as.map.len);  return 1;}
-        return 0;
-    /* 3 — clock_ms() -> i64 */
-    case 3:{
-        long long ms=(long long)((double)clock()*1000.0/(double)CLOCKS_PER_SEC);
-        *out_result=mval_i64((int64_t)ms); return 1;
-    }
-    /* 4 — getenv(name) -> str | none */
-    case 4:{
-        if(argc!=1||args[0].tag!=MVAL_STR)return 0;
-        char *key=(char*)calloc(args[0].as.str.len+1,1); const char *v;
-        if(!key)return 0;
-        memcpy(key,args[0].as.str.ptr,args[0].as.str.len);
-        v=getenv(key); free(key);
-        if(!v)*out_result=mval_none();
-        else  *out_result=mval_owned_copy(v,strlen(v));
-        return 1;
-    }
-    /* 5 — str(val) -> str */
-    case 5:{
-        if(argc!=1)return 0;
-        char buf[64];
-        switch(args[0].tag){
-        case MVAL_NONE: *out_result=mval_owned_copy("none",4); break;
-        case MVAL_BOOL: *out_result=mval_owned_copy(args[0].as.boolean?"true":"false",args[0].as.boolean?4:5); break;
-        case MVAL_I64:{ int n=snprintf(buf,sizeof(buf),"%lld",(long long)args[0].as.i64); *out_result=mval_owned_copy(buf,(size_t)(n>0?n:0)); break;}
-        case MVAL_F64:{ int n=snprintf(buf,sizeof(buf),"%g",args[0].as.f64); *out_result=mval_owned_copy(buf,(size_t)(n>0?n:0)); break;}
-        case MVAL_STR: *out_result=mval_owned_copy(args[0].as.str.ptr,args[0].as.str.len); break;
-        default:{ const char *tn=mvalue_tag_name(args[0].tag); *out_result=mval_owned_copy(tn,strlen(tn)); break;}
-        }
-        return 1;
-    }
-    /* 6 — type(val) -> str */
-    case 6:
-        if(argc!=1)return 0;
-        {const char *tn=mvalue_tag_name(args[0].tag); *out_result=mval_owned_copy(tn,strlen(tn)); return 1;}
-
-    /* 7 — abs(n) -> number */
-    case 7:
-        if(argc!=1)return 0;
-        if(args[0].tag==MVAL_I64){if(args[0].as.i64==INT64_MIN)return 0;*out_result=mval_i64(args[0].as.i64<0?-args[0].as.i64:args[0].as.i64);return 1;}
-        if(args[0].tag==MVAL_F64){*out_result=mval_f64(fabs(args[0].as.f64));return 1;}
-        return 0;
-
-    /* 8 — floor(n) -> i64 */
-    case 8:
-        if(argc!=1)return 0;
-        if(args[0].tag==MVAL_I64){*out_result=args[0];return 1;}
-        if(args[0].tag==MVAL_F64&&isfinite(args[0].as.f64)&&args[0].as.f64>=(double)INT64_MIN&&args[0].as.f64<(double)INT64_MAX){*out_result=mval_i64((int64_t)floor(args[0].as.f64));return 1;}
-        return 0;
-
-    /* 9 — ceil(n) -> i64 */
-    case 9:
-        if(argc!=1)return 0;
-        if(args[0].tag==MVAL_I64){*out_result=args[0];return 1;}
-        if(args[0].tag==MVAL_F64&&isfinite(args[0].as.f64)&&args[0].as.f64>=(double)INT64_MIN&&args[0].as.f64<(double)INT64_MAX){*out_result=mval_i64((int64_t)ceil(args[0].as.f64));return 1;}
-        return 0;
-
-    /* 10 — sqrt(n) -> f64 */
-    case 10:
-        if(argc!=1)return 0;
-        {double v;if(!numeric_value(&args[0],&v)||v<0.0)return 0;
-         *out_result=mval_f64(sqrt(v));return 1;}
-
-    /* 11 — min(a,b) */
-    case 11:
-        if(argc!=2)return 0;
-        {double a,b;if(!numeric_value(&args[0],&a)||!numeric_value(&args[1],&b))return 0;
-         if(args[0].tag==MVAL_I64&&args[1].tag==MVAL_I64)
-             *out_result=mval_i64(args[0].as.i64<args[1].as.i64?args[0].as.i64:args[1].as.i64);
-         else *out_result=mval_f64(a<b?a:b);
-         return 1;}
-
-    /* 12 — max(a,b) */
-    case 12:
-        if(argc!=2)return 0;
-        {double a,b;if(!numeric_value(&args[0],&a)||!numeric_value(&args[1],&b))return 0;
-         if(args[0].tag==MVAL_I64&&args[1].tag==MVAL_I64)
-             *out_result=mval_i64(args[0].as.i64>args[1].as.i64?args[0].as.i64:args[1].as.i64);
-         else *out_result=mval_f64(a>b?a:b);
-         return 1;}
-
-    /* 13 — print_n(n_args, v0, v1, ...) — PRINTN syscall (argc == actual values) */
-    case 13:{
-        size_t i; for(i=0;i<argc;++i){if(i)fputc(' ',stdout);print_value(stdout,&args[i]);}
-        fputc('\n',stdout); return 1;
-    }
-
-    /* 20 — range(start, stop) -> list of i64 */
-    case 20: {
-        uint64_t count;
-        if (argc != 2) return 0;
-        if ((args[0].tag != MVAL_I64 && args[0].tag != MVAL_F64) ||
-            (args[1].tag != MVAL_I64 && args[1].tag != MVAL_F64)) return 0;
-        if ((args[0].tag == MVAL_F64 && (!isfinite(args[0].as.f64) || args[0].as.f64 < (double)INT64_MIN || args[0].as.f64 >= (double)INT64_MAX)) ||
-            (args[1].tag == MVAL_F64 && (!isfinite(args[1].as.f64) || args[1].as.f64 < (double)INT64_MIN || args[1].as.f64 >= (double)INT64_MAX))) return 0;
-        int64_t start = (args[0].tag == MVAL_I64) ? args[0].as.i64 : (int64_t)args[0].as.f64;
-        int64_t stop  = (args[1].tag == MVAL_I64) ? args[1].as.i64 : (int64_t)args[1].as.f64;
-        count = stop > start ? (uint64_t)stop - (uint64_t)start : 0;
-        if (count > 1000000u) return 0;
-        MValue v = mval_none();
-        v.tag = MVAL_LIST;
-        v.as.list.len = v.as.list.cap = (size_t)count;
-        v.as.list.items = count ? (MValue *)calloc((size_t)count, sizeof(MValue)) : NULL;
-        if (count && !v.as.list.items) return 0;
-        for (uint64_t i = 0; i < count; ++i) v.as.list.items[(size_t)i] = mval_i64(start + (int64_t)i);
-        *out_result = v;
-        return 1;
-    }
-
-    default: return 0;
-    }
-}
-
 static const char *friendly_runtime_error(const char *code)
 {
     if(!code) return "unknown runtime error";
@@ -352,7 +182,7 @@ static void print_runtime_error(const char *source_name, const MRunResult *resul
 /* ── entry point ─────────────────────────────────────────────────────────── */
 static void usage(const char *argv0){
     fprintf(stderr,
-        "Mellow Programming Language 2.9.4 (Full Native C)\n"
+        "Mellow Programming Language 2.9.6 (Full Native C)\n"
         "Usage: %s <program.mellow|program.mvi>\n"
         "       %s check <program.mellow>\n"
         "       %s --runtime-info\n"
@@ -361,9 +191,14 @@ static void usage(const char *argv0){
 
 int main(int argc, char **argv){
     int check_only=0;
+    MellowRuntimeContext ctx;
+    memset(&ctx,0,sizeof(ctx));
+    ctx.argc=argc;
+    ctx.argv=argv;
+    ctx.script_arg_start=2;
     if(argc<2){usage(argv[0]);return 1;}
     if(!strcmp(argv[1],"--version")||!strcmp(argv[1],"-V")){
-        puts("Mellow Programming Language 2.9.4 (Full Native C)");
+        puts("Mellow Programming Language 2.9.6 (Full Native C)");
         return 0;
     }
     if(!strcmp(argv[1],"--runtime-info")){
@@ -384,6 +219,7 @@ int main(int argc, char **argv){
     }
     {
         const char *path=argv[check_only?2:1];
+        ctx.script_arg_start=check_only?3:2;
         size_t path_len=strlen(path);
         int is_image=path_len>=4&&!strcmp(path+path_len-4,".mvi");
         if(!is_image){
@@ -402,12 +238,12 @@ int main(int argc, char **argv){
                 return 0;
             }
             prog=(MProgram){native.code,native.code_len,native.consts,native.const_len,native.spans,native.span_len,native.source_name};
-            mvm_init(&vm);vm.syscall.fn=runtime_syscall;vm.syscall.user=NULL;memset(&rr,0,sizeof(rr));
+            mvm_init(&vm);ctx.vm=&vm;vm.syscall.fn=mellowrt_default_syscall;vm.syscall.user=&ctx;memset(&rr,0,sizeof(rr));
             if(!mvm_run(&vm,&prog,&rr)||rr.failed){
                 print_runtime_error(prog.source_name,&rr);
-                mvm_free(&vm);mellow_native_program_free(&native);return 1;
+                mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx);mellow_native_program_free(&native);return 1;
             }
-            mvm_free(&vm);mellow_native_program_free(&native);return 0;
+            mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx);mellow_native_program_free(&native);return 0;
         }
     }
     MLoadedProgram lp;
@@ -417,13 +253,14 @@ int main(int argc, char **argv){
     }
     MProgram prog={lp.code,lp.code_len,lp.consts,lp.const_len,lp.spans,lp.span_len,lp.source_name};
     MVM vm; mvm_init(&vm);
-    vm.syscall.fn=runtime_syscall; vm.syscall.user=NULL;
+    ctx.vm=&vm;
+    vm.syscall.fn=mellowrt_default_syscall; vm.syscall.user=&ctx;
     MRunResult rr; memset(&rr,0,sizeof(rr));
     int ok=mvm_run(&vm,&prog,&rr);
     if(!ok||rr.failed){
         print_runtime_error(prog.source_name,&rr);
-        mvm_free(&vm); free_loaded_program(&lp); return 1;
+        mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx); free_loaded_program(&lp); return 1;
     }
-    mvm_free(&vm); free_loaded_program(&lp);
+    mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx); free_loaded_program(&lp);
     return 0;
 }

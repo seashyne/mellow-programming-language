@@ -33,6 +33,7 @@ def native_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
         str(NATIVE / "src" / "mellowrt_core.c"),
         str(NATIVE / "src" / "mellowrt_debug.c"),
         str(NATIVE / "src" / "mellowrt_platform.c"),
+        str(NATIVE / "src" / "mellowrt_syscalls.c"),
         str(NATIVE / "src" / "mellowc.c"),
         str(NATIVE / "src" / "mellowrt_main.c"),
         "-o",
@@ -52,7 +53,7 @@ def test_full_native_version_has_no_python_runtime(native_binary: Path) -> None:
         check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == "Mellow Programming Language 2.9.4 (Full Native C)"
+    assert result.stdout.strip() == "Mellow Programming Language 2.9.6 (Full Native C)"
 
 
 def test_full_native_reports_runtime_platform(native_binary: Path) -> None:
@@ -144,6 +145,337 @@ def test_full_native_accepts_maximum_signed_integer(native_binary: Path, tmp_pat
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "9223372036854775807"
+
+
+def test_full_native_io_builtins_read_stdin_and_write_stdout(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "io-builtins.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                'let name = input("Name: ")',
+                'write("Hello,")',
+                'write(" ")',
+                "println(name)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        input="Ada\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "Name: Hello, Ada\n"
+
+
+def test_full_native_readline_alias_returns_string(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "readline-alias.mellow"
+    source.write_text(
+        'let city = readline()\nprint(city)\nprint(type(city))\n',
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        input="Bangkok\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["Bangkok", "str"]
+
+
+def test_full_native_system_builtins_expose_cli_args_and_cwd(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "system-builtins.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "let argv = args()",
+                "print(len(argv))",
+                "print(argv[0])",
+                "print(argv[1])",
+                "print(type(cwd()))",
+                "sleep_ms(0)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source), "alpha", "beta"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["2", "alpha", "beta", "str"]
+
+
+def test_full_native_get_style_builtin_modules(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "get-style-modules.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "let root = get math.sqrt(81)",
+                "print(root)",
+                "io.println(type(sys.cwd()))",
+                "let argv = get sys.args()",
+                "print(len(argv))",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source), "one"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["9", "str", "1"]
+
+
+def test_full_native_imports_builtin_module_aliases(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "builtin-module-imports.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                'import "math" as m',
+                "use sys as system",
+                "need io as out",
+                "out.println(m.sqrt(25))",
+                "out.println(type(system.cwd()))",
+                "let argv = system.args()",
+                "out.println(argv[0])",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source), "native-import"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["5", "str", "native-import"]
+
+
+def test_full_native_gc_stats_foundation(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "gc-foundation.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "print(gc_collect())",
+                "let stats = gc_stats()",
+                'print(stats["collections"])',
+                'print(stats["mode"])',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["0", "1", "mark-sweep-native-handles"]
+
+
+def test_full_native_gc_sweeps_unreachable_native_channels(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "gc-sweep.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "let ch = channel()",
+                'send(ch, "queued")',
+                "ch = none",
+                "gc_collect()",
+                "let stats = gc_stats()",
+                'print(stats["native_allocated"])',
+                'print(stats["native_freed"])',
+                'print(stats["native_live"])',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["1", "1", "0"]
+
+
+def test_full_native_gc_sweeps_unreachable_str_list_map_heap(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "gc-value-heap.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                'let text = "hello"',
+                'let values = [text, "world"]',
+                'let data = {"values": values}',
+                "text = none",
+                "values = none",
+                "data = none",
+                "gc_collect()",
+                "let stats = gc_stats()",
+                'print(stats["heap_last_gc_freed"] > 0)',
+                'print(stats["heap_live"])',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["true", "0"]
+
+
+def test_full_native_green_thread_foundation_and_yield(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "thread-foundation.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "def worker():",
+                "    return 1",
+                "let id = spawn(worker)",
+                "yield()",
+                "let stats = gc_stats()",
+                "print(id)",
+                'print(stats["spawned"])',
+                'print(stats["yielded"])',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["1", "1", "1"]
+
+
+def test_full_native_channels_send_recv_and_module_alias(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "channel-foundation.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "use chan as c",
+                "let ch = c.channel()",
+                'print(c.send(ch, "hello"))',
+                "print(c.recv(ch))",
+                "print(c.recv(ch))",
+                "let stats = gc_stats()",
+                'print(stats["channels"])',
+                'print(stats["yielded"])',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["true", "hello", "none", "1", "1"]
+
+
+def test_full_native_syntax_parity_for_elif_show_stop_and_inline_comments(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "syntax-parity.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "let score = 7 // inline comment",
+                "if score < 3:",
+                '    print("low")',
+                "elif score < 10:",
+                '    show "mid" # old output spelling',
+                "else:",
+                '    print("high")',
+                "stop",
+                'print("after")',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["mid"]
+
+
+def test_full_native_syntax_parity_for_var_null_range_wait_break_continue(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "syntax-parity-more.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "var total = 0",
+                "let empty = null",
+                "for i in range(5):",
+                "    if i == 1:",
+                "        continue",
+                "    if i == 4:",
+                "        break",
+                "    total = total + i",
+                "wait 0",
+                "print(total)",
+                "print(empty)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["5", "none"]
+
+
+def test_full_native_exit_builtin_sets_process_status(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "exit-status.mellow"
+    source.write_text('write("before")\nexit(7)\nprintln("after")\n', encoding="utf-8")
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 7
+    assert result.stdout == "before"
 
 
 def test_full_native_reports_runtime_error_location(native_binary: Path, tmp_path: Path) -> None:

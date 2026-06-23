@@ -1,8 +1,11 @@
-# Mellow 2.9.1 Full Native C
+# Mellow Full Native C
 
 The native package now contains the source frontend and execution runtime in C.
 The `mellow` executable reads, compiles, and runs `.mellow` source without
 loading Python or CPython.
+
+This tree is the forward path for Mellow runtime work. New core runtime features
+should land here first and be verified in native-only mode.
 
 What moved into native standalone now:
 - lexer and expression parser
@@ -15,7 +18,19 @@ What moved into native standalone now:
 - jump/jump_if_false
 - list/map builders
 - syscall bridge: host callback contract in pure C
+- native terminal I/O built-ins: `print`, `println`, `write`, `input`, `readline`, `read_line`, `ask`
+- native system built-ins: `args`, `argv`, `cwd`, `sleep_ms`, `exit`
+- native GC/concurrency foundation built-ins: `gc_collect`, `gc_stats`, `spawn`, `yield`, `channel`, `send`, `recv`
 - debugger snapshots now include stack, frames, and locals
+
+Native source layout:
+
+- `src/mellowc.c` — source lexer/compiler for `.mellow`
+- `src/mellowrt_core.c` — bytecode VM and value ownership
+- `src/mellowrt_syscalls.c` — built-in syscall table for I/O, math, env, args, cwd, sleep, exit, GC/concurrency foundation, and channels
+- `src/mellowrt_main.c` — CLI entry point, source/image loading, and runtime wiring
+- `src/mellowrt_platform.c` — target architecture/runtime-info probing
+- `src/mellowrt_debug.c` — debug snapshot helpers
 
 Native source syntax in v2.9.0:
 - `let` / `keep` declarations and assignment
@@ -24,7 +39,11 @@ Native source syntax in v2.9.0:
 - `if` / `else`, `while`, and `for ... in range(...)`
 - functions and return values
 - lists, maps, and indexing
-- `print`, `len`, `str`, `type`, `abs`, `floor`, `ceil`, `sqrt`, `min`, `max`
+- `print`, `println`, `write`, `input`, `readline`, `read_line`, `ask`
+- `args`, `argv`, `cwd`, `sleep_ms`, `exit`
+- `gc_collect`, `gc_stats`, `spawn`, `yield`, `channel`, `send`, `recv`
+- `len`, `str`, `type`, `abs`, `floor`, `ceil`, `sqrt`, `min`, `max`
+- builtin module aliases: `import "math" as m`, `use sys as sys`, `need io as io`, `use chan as c`
 
 Extended systems that remain outside the native runtime:
 - import/module loader parity
@@ -63,6 +82,67 @@ Run source directly:
 ./native/standalone/build/mellow examples/hello.mellow
 ./native/standalone/build/mellow check examples/hello.mellow
 ```
+
+Native terminal I/O example:
+
+```mellow
+let name = input("Name: ")
+write("Hello, ")
+println(name)
+```
+
+When run by the native executable, the prompt is written to stdout, one line is
+read from stdin, the trailing newline is stripped, and the result is returned as
+a string.
+
+Native system example:
+
+```mellow
+let argv = args()
+print("argc:", len(argv))
+print("cwd:", cwd())
+sleep_ms(10)
+exit(0)
+```
+
+Native builtin module alias example:
+
+```mellow
+import "math" as m
+use sys as system
+need io as out
+
+out.println(m.sqrt(25))
+out.println(system.cwd())
+```
+
+These imports are compile-time aliases for allowlisted native built-ins. They do
+not load local files or packages yet.
+
+Native GC/concurrency foundation example:
+
+```mellow
+gc_collect()
+let stats = gc_stats()
+print(stats["mode"])
+
+def worker():
+    return 1
+
+let task = spawn(worker)
+yield()
+
+use chan as c
+let mailbox = c.channel()
+c.send(mailbox, "hello")
+print(c.recv(mailbox))
+```
+
+In v2.9.6 these APIs are native C built-ins. Channels are FIFO native handles,
+`spawn` returns cooperative task ids, and `yield` records explicit scheduling
+points. `gc_stats()["mode"]` reports `mark-sweep-native-handles`; the collector
+marks native handles from VM stack/locals and sweeps unreachable channel handles.
+Full stack-switching M:N scheduling is still future runtime-engine work.
 
 Inspect the binary's actual target and backend:
 

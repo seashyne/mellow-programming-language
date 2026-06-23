@@ -37,6 +37,7 @@ add_library(mellowrt_core STATIC
   src/mellowrt_core.c
   src/mellowrt_debug.c
   src/mellowrt_platform.c
+  src/mellowrt_syscalls.c
   src/mellowc.c
 )
 target_include_directories(mellowrt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

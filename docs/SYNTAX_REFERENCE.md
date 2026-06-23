@@ -1,4 +1,4 @@
-# คู่มือ Syntax Mellow Programming Language v2.9.0
+# คู่มือ Syntax Mellow Programming Language v2.9.6
 
 เอกสารนี้เป็นคู่มือรวม syntax ทั้ง Core, Extended และ Compatibility ที่ compiler
 รองรับ สำหรับข้อกำหนดแบบบังคับและ syntax ที่ล็อกแล้วของ v2.9 ให้ยึด
@@ -24,15 +24,13 @@ mellow run hello.mellow
 เลือก engine:
 
 ```powershell
-mellow run hello.mellow --engine=py
 mellow run hello.mellow --engine=c
 mellow run hello.mellow --engine=c --native-required
 ```
 
-`--engine=c` เป็นค่าเริ่มต้นและยอม fallback ไป Python หาก feature ยังไม่มี native
-parity เช่น debugger, events และ record/replay ส่วน `--engine=py` ใช้บังคับ Python
-VM และ `--engine=auto` ยังรองรับเพื่อ compatibility ถ้าต้องการให้ล้มทันทีเมื่อ C
-runtime ไม่รองรับ ให้ใช้ `--native-required`
+`--engine=c` เป็นค่าเริ่มต้นและเป็น path หลักของ release ใหม่. `mellow run`
+จะ fail fast ถ้า native execution ยังไม่รองรับ feature ที่ใช้ เพื่อบังคับให้
+runtime ใหม่ลงที่ C ก่อน
 
 ## 2. รูปแบบไฟล์และ block
 
@@ -70,7 +68,7 @@ indentation อย่างเดียว
 # comment แบบแนะนำ
 let hp = 100  # inline comment
 
-// compatibility comment
+// alternate comment
 print("https://example.com")  // comment ไม่ตัด // ใน string
 ```
 
@@ -255,10 +253,15 @@ comparison เช่น `0 < x < 10`
 
 ```mellow
 print("score:", score)
+println("done")
+write("Name: ")
 show "output:", score
 ```
 
-`show` เป็น compatibility alias ของ `print`
+`print` และ `println` พิมพ์ค่าแล้วขึ้นบรรทัดใหม่ ส่วน `write` พิมพ์โดยไม่เติม
+newline เหมาะกับ prompt/progress text ใน terminal
+
+`show` เป็น alias แบบเก่าของ `print`
 
 ### Precision
 
@@ -273,16 +276,86 @@ print(10 / 3)
 
 ```mellow
 let name = input("Name: ")
+let city = readline()
 print(f"Hello {name}")
 ```
 
-input ถูกปิดใน sandbox โดยค่าเริ่มต้นบางโหมด เปิดด้วย:
+ใน Full Native C runtime, `input(prompt)` และ `readline()` อ่าน stdin ได้โดยตรง
+และคืนค่าเป็น string เสมอ. ใน sandbox บางโหมด input ถูกปิดโดยค่าเริ่มต้น เปิดด้วย:
 
 ```powershell
 mellow run form.mellow --allow-ask
 ```
 
-`ask(...)` เป็นชื่อเดิมของ `input(...)`
+`ask(...)` และ `read_line()` เป็น alias ของ `input(...)`
+
+### Native system built-ins
+
+```mellow
+let argv = args()
+print(len(argv))
+print(cwd())
+sleep_ms(100)
+exit(0)
+```
+
+ใน Full Native C runtime, `args()` คืนค่า argument หลัง path ของสคริปต์,
+`cwd()` คืน working directory ของ process, `sleep_ms(ms)` หน่วงเวลาแบบ native,
+และ `exit(code)` จบ process ด้วย exit code ที่กำหนด
+
+### Native builtin module aliases
+
+```mellow
+import "math" as m
+use sys as system
+need io as out
+
+out.println(m.sqrt(25))
+out.println(system.cwd())
+```
+
+ใน Full Native C runtime รอบ v2.9.6, `import` / `use` / `need` รองรับเฉพาะ
+builtin modules แบบ allowlist (`io`, `sys`, `math`, `time`, `gc`, `thread`, `chan`) และทำหน้าที่เป็น
+alias ตอน compile เท่านั้น. Local file/package import ยังเป็นงานของ module
+loader รอบถัดไป
+
+### Native GC, green-thread foundation และ channels
+
+```mellow
+gc_collect()
+let stats = gc_stats()
+print(stats["collections"])
+
+def worker():
+    return 1
+
+let task_id = spawn(worker)
+yield()
+
+let ch = channel()
+send(ch, "hello")
+print(recv(ch))
+```
+
+หรือเขียนแบบ module:
+
+```mellow
+use gc as memory
+use thread as task
+use chan as c
+
+memory.collect()
+task.yield()
+
+let mailbox = c.channel()
+c.send(mailbox, "ping")
+print(c.recv(mailbox))
+```
+
+ใน v2.9.6 ส่วน GC เป็น native mark/sweep สำหรับ runtime-owned native handles:
+runtime จะ mark จาก VM stack/locals แล้ว sweep channel handles ที่ไม่ reachable.
+`gc_stats()["mode"]` จะเป็น `mark-sweep-native-handles`. ส่วน `spawn/yield`
+ยังเป็น cooperative task API ขั้นแรก และยังไม่ใช่ full M:N stack-switching scheduler
 
 ### Wait และ stop
 
@@ -394,7 +467,7 @@ loop 3 times:
 
 ภายใน block มี variable `count` เริ่มจาก `0`
 
-### compatibility loop
+### older loop forms
 
 ```mellow
 loop hp > 0:
@@ -522,7 +595,7 @@ put 3 into values
 print(values)
 ```
 
-`put value into list_name` เป็น statement compatibility สำหรับเพิ่มสมาชิก
+`put value into list_name` เป็น statement แบบเก่าสำหรับเพิ่มสมาชิก
 โค้ดใหม่สามารถใช้ `list_push(values, 3)` ได้
 
 ## 14. Error handling
@@ -807,7 +880,7 @@ event ถูกส่งจาก host/CLI เช่น:
 mellow game.mellow --emit spawn --emit-args '["p1", 100]'
 ```
 
-events ยัง route ผ่าน Python VM ใน v2.9.0 จึงไม่อยู่ใน Full Native C Core Profile
+events ยังไม่อยู่ใน Full Native C Core Profile ของ v2.9.x
 
 ## 22. Determinism และ sandbox
 
@@ -830,9 +903,9 @@ profile สำคัญ:
 mellow doctor
 ```
 
-## 23. Modern syntax และ compatibility syntax
+## 23. Modern syntax และ syntax แบบเก่า
 
-| แนะนำในโค้ดใหม่ | Compatibility |
+| แนะนำในโค้ดใหม่ | แบบเก่าที่ยังอ่านได้ |
 | --- | --- |
 | `let x = 1` | `var x = 1`, `keep x = 1` |
 | `print(x)` | `show x` |
@@ -848,10 +921,10 @@ mellow doctor
 ## 24. ขอบเขตของ v2.9.0
 
 - ไม่มี class, object declaration, decorator หรือ static type annotation
-- ไม่มี `raise`, `yield`, `async/await`, generator และ match expression
+- ไม่มี `raise`, `async/await`, generator และ match expression; `yield()` ใน v2.9.6 เป็น native builtin call ไม่ใช่ generator keyword
 - assignment target ต้องเป็นชื่อ variable ไม่รองรับ `items[0] = value`
 - slice step ถูก parse แต่ยังไม่ถูกใช้โดย compiler
-- events, debugger และ record/replay ยังใช้ Python VM
+- events, debugger และ record/replay ยังไม่อยู่ใน Full Native C Core Profile
 - framework, agents, MMG, desktop และ package platform เป็น extended surface ไม่ใช่
   grammar หลักของภาษา
 

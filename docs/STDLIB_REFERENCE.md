@@ -1,6 +1,7 @@
-# MellowLang Stdlib Reference (v2.8.0)
+# MellowLang Stdlib Reference (v2.9.6)
 
-This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
+This is a pragmatic reference for the stable 2.9 line plus the v2.9.6
+native C I/O, system, builtin-module, and GC/concurrency foundation additions.
 
 > Note: Host modules are **allowlisted**. Use `mellow modules` to see what is available.
 
@@ -8,11 +9,48 @@ This is a pragmatic reference for what ships in the **v1.3.3 CLI zip**.
 
 ## Core built-ins
 
-- `print(...)`
-- `input(prompt)` *(requires `--allow-ask`)*
+- `print(...)` / `println(...)` — print values separated by spaces and end with a newline
+- `write(...)` — print values separated by spaces without adding a trailing newline
+- `input(prompt="")` — write an optional prompt, read one line from stdin, and return a string
+- `readline()` / `read_line()` — aliases for `input()` with no prompt
+- `ask(prompt="")` — alias for `input(prompt)`
+- `args()` / `argv()` — return command-line arguments passed after the script path
+- `cwd()` — return the native process current working directory
+- `sleep_ms(ms)` — sleep for an integer number of milliseconds
+- `exit(code=0)` — terminate the native process with a status code
+- `gc_collect()` — run native mark/sweep collection for runtime-owned native handles and return `0`
+- `gc_stats()` — return a map with GC/concurrency and native-handle heap counters
+- `spawn(fn)` — register a cooperative native task handle for a function and return a task id
+- `yield()` — explicit cooperative yield point
+- `channel()` — create a native FIFO channel handle
+- `send(ch, value)` — enqueue a value into a channel and return `true`
+- `recv(ch)` — dequeue the next value or return `none` when the channel is empty
 - `range(a, b)`
 - `len(x)`
 - `call(fn, ...args)` *(dynamic function call)*
+
+Full Native C supports these built-ins directly in the standalone runtime and
+is the authoritative implementation for new v2.9.6 runtime work.
+
+The v2.9.6 GC API marks reachable native handles from the VM stack/locals and
+sweeps unreachable channel handles. `gc_stats()["mode"]` reports
+`mark-sweep-native-handles`. Channels work as native FIFO handles. `spawn` and
+`yield` expose the cooperative scheduling API shape, but full M:N
+stack-switching scheduler work remains a future runtime-engine milestone.
+
+Module forms are available for native built-ins:
+
+```mellow
+gc.collect()
+let stats = gc.stats()
+
+use chan as c
+let ch = c.channel()
+c.send(ch, "message")
+print(c.recv(ch))
+
+thread.yield()
+```
 
 ## Math / vectors
 

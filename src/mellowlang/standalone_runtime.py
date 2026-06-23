@@ -30,8 +30,8 @@ def standalone_runtime_status() -> dict[str, Any]:
     root = _standalone_root()
     build_dir = root / 'build'
     native_cli = build_dir / ('mellow.exe' if os.name == 'nt' else 'mellow')
-    compatibility_cli = build_dir / ('mellowrt.exe' if os.name == 'nt' else 'mellowrt')
-    binary = native_cli if native_cli.exists() else compatibility_cli
+    runtime_cli = build_dir / ('mellowrt.exe' if os.name == 'nt' else 'mellowrt')
+    binary = native_cli if native_cli.exists() else runtime_cli
     source_files = sorted(p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()) if root.exists() else []
     cc = shutil.which('cc') or shutil.which('clang') or shutil.which('gcc')
     cmake = shutil.which('cmake')
@@ -68,8 +68,10 @@ def standalone_runtime_status() -> dict[str, Any]:
         'core_module_existing': existing_core,
         'notes': [
             'Standalone runtime core no longer needs Python.h.',
-            'Mellow 2.9.4 includes a C lexer/compiler frontend that runs .mellow source directly without CPython.',
-            'The mellow executable accepts source files and MLVI binary images; mellowrt remains as a compatibility executable.',
+            'Mellow 2.9.6 includes a C lexer/compiler frontend that runs .mellow source directly without CPython.',
+            'Native C built-ins now include terminal I/O, system helpers, builtin-module aliases, and GC/concurrency foundation APIs.',
+            'The standalone C runtime is the release-authoritative path for new core runtime work.',
+            'The mellow executable accepts source files and MLVI binary images; mellowrt remains available as an image runner.',
             'Runtime metadata now includes function/event/module tables and optional core-module loading hints.',
             'The native syscall surface now includes print/len/type/str/clock_ms/getenv builtins.',
             'A stdlib core.mellow/core.mel file is recommended for language-level helpers, but it is not required for the C VM itself.',

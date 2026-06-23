@@ -17,10 +17,10 @@ class RunConfig:
     record_path: Optional[str] = None
     replay_path: Optional[str] = None
 
-    # Engine selection: c (native-first default with fallback), auto, py
+    # Engine selection: c is the default native runtime.
     engine: str = "c"
-    native_allow_fallback: bool = True
-    native_require: bool = False
+    native_allow_fallback: bool = False
+    native_require: bool = True
 
     # Permissions
     allow_ask: bool = False

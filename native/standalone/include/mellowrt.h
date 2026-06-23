@@ -201,6 +201,10 @@ typedef struct {
     size_t locals_cap;
     MDebugHooks debug;
     MSyscallBridge syscall;
+    uint64_t heap_allocated;
+    uint64_t heap_freed;
+    uint64_t heap_live;
+    uint64_t heap_last_gc_freed;
 } MVM;
 
 typedef struct {
@@ -229,6 +233,7 @@ MValue mval_str(const char *ptr, size_t len);
 MValue mval_func(uint32_t address, uint16_t arity, uint16_t local_count, uint16_t flags);
 const char *mvalue_tag_name(MValueTag tag);
 void mvalue_free(MValue *v);
+uint64_t mvm_gc_collect(MVM *vm);
 
 int mellow_compile_source(const char *source, const char *source_name, MNativeProgram *out, char *error, size_t error_cap);
 int mellow_compile_file(const char *path, MNativeProgram *out, char *error, size_t error_cap);

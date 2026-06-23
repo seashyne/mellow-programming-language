@@ -5,6 +5,116 @@
 #include <string.h>
 #include <stdio.h>
 
+typedef enum {
+    MHEAP_STR = 1,
+    MHEAP_LIST_ITEMS = 2,
+    MHEAP_MAP_KEYS = 3,
+    MHEAP_MAP_VALUES = 4
+} MHeapKind;
+
+typedef struct MHeapBlock {
+    void *ptr;
+    size_t bytes;
+    MHeapKind kind;
+    int marked;
+    MVM *owner;
+    struct MHeapBlock *next;
+} MHeapBlock;
+
+static MHeapBlock *g_heap_blocks = NULL;
+
+static MHeapBlock *heap_find(const void *ptr) {
+    MHeapBlock *block;
+    if (!ptr) return NULL;
+    for (block = g_heap_blocks; block; block = block->next)
+        if (block->ptr == ptr) return block;
+    return NULL;
+}
+
+static void *heap_alloc(MVM *vm, size_t count, size_t item_size, MHeapKind kind) {
+    size_t bytes = count * item_size;
+    void *ptr;
+    MHeapBlock *block;
+    if (!vm) return calloc(count ? count : 1, item_size ? item_size : 1);
+    ptr = calloc(count ? count : 1, item_size ? item_size : 1);
+    if (!ptr) return NULL;
+    block = (MHeapBlock *)calloc(1, sizeof(MHeapBlock));
+    if (!block) { free(ptr); return NULL; }
+    block->ptr = ptr;
+    block->bytes = bytes;
+    block->kind = kind;
+    block->owner = vm;
+    block->next = g_heap_blocks;
+    g_heap_blocks = block;
+    vm->heap_allocated++;
+    vm->heap_live++;
+    return ptr;
+}
+
+static void heap_mark_value(MVM *vm, const MValue *value);
+
+static void heap_mark_ptr(MVM *vm, const void *ptr) {
+    MHeapBlock *block = heap_find(ptr);
+    if (!block || block->owner != vm || block->marked) return;
+    block->marked = 1;
+}
+
+static void heap_mark_value(MVM *vm, const MValue *value) {
+    size_t i;
+    if (!vm || !value) return;
+    switch (value->tag) {
+    case MVAL_STR:
+        heap_mark_ptr(vm, value->as.str.ptr);
+        break;
+    case MVAL_LIST:
+        heap_mark_ptr(vm, value->as.list.items);
+        for (i = 0; i < value->as.list.len; ++i)
+            heap_mark_value(vm, &value->as.list.items[i]);
+        break;
+    case MVAL_MAP:
+        heap_mark_ptr(vm, value->as.map.keys);
+        heap_mark_ptr(vm, value->as.map.values);
+        for (i = 0; i < value->as.map.len; ++i) {
+            heap_mark_value(vm, &value->as.map.keys[i]);
+            heap_mark_value(vm, &value->as.map.values[i]);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+uint64_t mvm_gc_collect(MVM *vm) {
+    MHeapBlock *block;
+    MHeapBlock *prev = NULL;
+    MHeapBlock *next;
+    uint64_t freed = 0;
+    size_t i;
+    if (!vm) return 0;
+    for (block = g_heap_blocks; block; block = block->next)
+        if (block->owner == vm) block->marked = 0;
+    for (i = 0; i < vm->stack_len; ++i) heap_mark_value(vm, &vm->stack[i]);
+    for (i = 0; i < vm->locals_len; ++i) heap_mark_value(vm, &vm->locals[i]);
+    block = g_heap_blocks;
+    while (block) {
+        next = block->next;
+        if (block->owner == vm && !block->marked) {
+            if (prev) prev->next = next;
+            else g_heap_blocks = next;
+            free(block->ptr);
+            free(block);
+            freed++;
+            vm->heap_freed++;
+            if (vm->heap_live > 0) vm->heap_live--;
+        } else {
+            prev = block;
+        }
+        block = next;
+    }
+    vm->heap_last_gc_freed = freed;
+    return freed;
+}
+
 static int ensure_stack(MVM *vm, size_t cap) {
     if (vm->stack_cap >= cap) return 1;
     size_t next = vm->stack_cap ? vm->stack_cap * 2 : 64;
@@ -34,11 +144,13 @@ void mvm_init(MVM *vm) { memset(vm, 0, sizeof(*vm)); }
 
 static void mlist_free(MList *list) {
     if (!list || !list->items) return;
+    if (heap_find(list->items)) { list->items = NULL; list->len = list->cap = 0; return; }
     for (size_t i = 0; i < list->len; ++i) mvalue_free(&list->items[i]);
     free(list->items); list->items = NULL; list->len = list->cap = 0;
 }
 static void mmap_free(MMap *map) {
     if (!map) return;
+    if (heap_find(map->keys) || heap_find(map->values)) { map->keys = map->values = NULL; map->len = map->cap = 0; return; }
     for (size_t i = 0; i < map->len; ++i) { mvalue_free(&map->keys[i]); mvalue_free(&map->values[i]); }
     free(map->keys); free(map->values); map->keys = map->values = NULL; map->len = map->cap = 0;
 }
@@ -46,13 +158,14 @@ void mvalue_free(MValue *v) {
     if (!v) return;
     if (v->tag == MVAL_LIST) mlist_free(&v->as.list);
     else if (v->tag == MVAL_MAP) mmap_free(&v->as.map);
-    else if (v->tag == MVAL_STR && (v->flags & 1u) && v->as.str.ptr) free((void *)v->as.str.ptr);
+    else if (v->tag == MVAL_STR && (v->flags & 1u) && v->as.str.ptr && !heap_find(v->as.str.ptr)) free((void *)v->as.str.ptr);
     *v = mval_none();
 }
 void mvm_free(MVM *vm) {
     if (!vm) return;
     for (size_t i = 0; i < vm->stack_len; ++i) mvalue_free(&vm->stack[i]);
     for (size_t i = 0; i < vm->locals_len; ++i) mvalue_free(&vm->locals[i]);
+    mvm_gc_collect(vm);
     free(vm->stack); free(vm->frames); free(vm->locals); memset(vm, 0, sizeof(*vm));
 }
 int mvm_reserve_stack(MVM *vm, size_t cap)  { return ensure_stack(vm, cap); }
@@ -79,8 +192,8 @@ const char *mvalue_tag_name(MValueTag tag) {
 }
 
 /* ── owned heap string ──────────────────────────────────────────────────── */
-static MValue mval_owned_str(const char *src, size_t len) {
-    char *buf = (char *)calloc(len + 1, 1);
+static MValue mval_owned_str(MVM *vm, const char *src, size_t len) {
+    char *buf = (char *)heap_alloc(vm, len + 1, 1, MHEAP_STR);
     MValue v = mval_none();
     if (!buf) return v;
     if (src && len) memcpy(buf, src, len);
@@ -90,33 +203,33 @@ static MValue mval_owned_str(const char *src, size_t len) {
 }
 
 /* Deep-copy a value so every allocation is independently owned. */
-static MValue mvalue_deep_copy(const MValue *src) {
+static MValue mvalue_deep_copy(MVM *vm, const MValue *src) {
     if (!src) return mval_none();
     switch (src->tag) {
     case MVAL_STR:
         if (src->as.str.ptr)
-            return mval_owned_str(src->as.str.ptr, src->as.str.len);
+            return mval_owned_str(vm, src->as.str.ptr, src->as.str.len);
         return mval_none();
     case MVAL_LIST: {
         MValue v = mval_none(); v.tag = MVAL_LIST;
         v.as.list.len = v.as.list.cap = src->as.list.len;
-        v.as.list.items = src->as.list.len ? (MValue*)calloc(src->as.list.len,sizeof(MValue)) : NULL;
+        v.as.list.items = src->as.list.len ? (MValue*)heap_alloc(vm, src->as.list.len, sizeof(MValue), MHEAP_LIST_ITEMS) : NULL;
         if (src->as.list.len && !v.as.list.items) return mval_none();
         for (size_t i=0;i<src->as.list.len;++i)
-            v.as.list.items[i] = mvalue_deep_copy(&src->as.list.items[i]);
+            v.as.list.items[i] = mvalue_deep_copy(vm, &src->as.list.items[i]);
         return v;
     }
     case MVAL_MAP: {
         MValue v = mval_none(); v.tag = MVAL_MAP;
         v.as.map.len = v.as.map.cap = src->as.map.len;
-        v.as.map.keys   = src->as.map.len ? (MValue*)calloc(src->as.map.len,sizeof(MValue)) : NULL;
-        v.as.map.values = src->as.map.len ? (MValue*)calloc(src->as.map.len,sizeof(MValue)) : NULL;
+        v.as.map.keys   = src->as.map.len ? (MValue*)heap_alloc(vm, src->as.map.len, sizeof(MValue), MHEAP_MAP_KEYS) : NULL;
+        v.as.map.values = src->as.map.len ? (MValue*)heap_alloc(vm, src->as.map.len, sizeof(MValue), MHEAP_MAP_VALUES) : NULL;
         if (src->as.map.len && (!v.as.map.keys||!v.as.map.values)) {
-            free(v.as.map.keys); free(v.as.map.values); return mval_none();
+            mvalue_free(&v); return mval_none();
         }
         for (size_t i=0;i<src->as.map.len;++i) {
-            v.as.map.keys[i]   = mvalue_deep_copy(&src->as.map.keys[i]);
-            v.as.map.values[i] = mvalue_deep_copy(&src->as.map.values[i]);
+            v.as.map.keys[i]   = mvalue_deep_copy(vm, &src->as.map.keys[i]);
+            v.as.map.values[i] = mvalue_deep_copy(vm, &src->as.map.values[i]);
         }
         return v;
     }
@@ -194,7 +307,7 @@ static int build_list(MVM *vm, int32_t count) {
     if (count<0||(size_t)count>vm->stack_len) return 0;
     MValue v=mval_none(); v.tag=MVAL_LIST;
     v.as.list.len=v.as.list.cap=(size_t)count;
-    v.as.list.items=count?(MValue*)calloc((size_t)count,sizeof(MValue)):NULL;
+    v.as.list.items=count?(MValue*)heap_alloc(vm,(size_t)count,sizeof(MValue),MHEAP_LIST_ITEMS):NULL;
     if (count&&!v.as.list.items) return 0;
     /* Move values off the stack (not copy) to avoid double-free of owned strings. */
     for (int32_t i=count-1;i>=0;--i) {
@@ -207,9 +320,9 @@ static int build_map(MVM *vm, int32_t pair_count) {
     if (pair_count<0||(size_t)(pair_count*2)>vm->stack_len) return 0;
     MValue v=mval_none(); v.tag=MVAL_MAP;
     v.as.map.len=v.as.map.cap=(size_t)pair_count;
-    v.as.map.keys  =pair_count?(MValue*)calloc((size_t)pair_count,sizeof(MValue)):NULL;
-    v.as.map.values=pair_count?(MValue*)calloc((size_t)pair_count,sizeof(MValue)):NULL;
-    if (pair_count&&(!v.as.map.keys||!v.as.map.values)){free(v.as.map.keys);free(v.as.map.values);return 0;}
+    v.as.map.keys  =pair_count?(MValue*)heap_alloc(vm,(size_t)pair_count,sizeof(MValue),MHEAP_MAP_KEYS):NULL;
+    v.as.map.values=pair_count?(MValue*)heap_alloc(vm,(size_t)pair_count,sizeof(MValue),MHEAP_MAP_VALUES):NULL;
+    if (pair_count&&(!v.as.map.keys||!v.as.map.values)){mvalue_free(&v);return 0;}
     /* Move values off the stack to avoid double-free of owned strings. */
     for (int32_t i=pair_count-1;i>=0;--i){
         v.as.map.values[(size_t)i]=pop(vm);
@@ -267,7 +380,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         /* stack */
         case MOP_PUSH_CONST: {
             if ((size_t)insn->a >= program->const_len) { set_error(out,"push_const_oob"); return 0; }
-            MValue cv = mvalue_deep_copy(&program->const_pool[insn->a]);
+            MValue cv = mvalue_deep_copy(vm, &program->const_pool[insn->a]);
             if (!push(vm, cv)) { set_error(out,"push_const_failed"); return 0; }
             pc++; break;
         }
@@ -282,7 +395,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             if (!slot){set_error(out,"load_local_failed");return 0;}
             /* Full deep-copy (strings, lists, maps) so mvm_free never
                double-frees a value that lives in both stack and locals. */
-            MValue cv = mvalue_deep_copy(slot);
+            MValue cv = mvalue_deep_copy(vm, slot);
             if (!push(vm, cv)){set_error(out,"load_local_failed");return 0;}
             pc++; break;
         }
@@ -308,7 +421,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 if (!coerce_str(a,abuf,sizeof(abuf),&ap,&alen)||!coerce_str(b,bbuf,sizeof(bbuf),&bp,&blen)){
                     mvalue_free(&a);mvalue_free(&b);set_error(out,"string_concat_unsupported_type");return 0;
                 }
-                MValue sv=mval_owned_str(NULL,alen+blen);
+                MValue sv=mval_owned_str(vm,NULL,alen+blen);
                 if (!sv.as.str.ptr){mvalue_free(&a);mvalue_free(&b);set_error(out,"string_concat_alloc_failed");return 0;}
                 memcpy((char*)sv.as.str.ptr,ap,alen); memcpy((char*)sv.as.str.ptr+alen,bp,blen);
                 mvalue_free(&a);mvalue_free(&b);
@@ -438,17 +551,17 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 int64_t i=(idx.tag==MVAL_I64)?idx.as.i64:(idx.tag==MVAL_F64)?(int64_t)idx.as.f64:-1;
                 if (i<0) i+=(int64_t)cont.as.list.len;
                 if (i<0||(size_t)i>=cont.as.list.len){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_index_out_of_range");return 0;}
-                selected=mvalue_deep_copy(&cont.as.list.items[(size_t)i]);
+                selected=mvalue_deep_copy(vm, &cont.as.list.items[(size_t)i]);
             } else if (cont.tag==MVAL_MAP){
                 MValue val=mval_none();
                 if (!map_get(&cont.as.map,&idx,&val)){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_key_not_found");return 0;}
-                selected=mvalue_deep_copy(&val);
+                selected=mvalue_deep_copy(vm, &val);
             } else if (cont.tag==MVAL_STR){
                 int64_t i=(idx.tag==MVAL_I64)?idx.as.i64:(idx.tag==MVAL_F64)?(int64_t)idx.as.f64:-1;
                 if (i<0) i+=(int64_t)cont.as.str.len;
                 if (i<0||(size_t)i>=cont.as.str.len){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_index_out_of_range");return 0;}
                 char ch[1]; ch[0]=cont.as.str.ptr[(size_t)i];
-                selected=mval_owned_str(ch,1);
+                selected=mval_owned_str(vm,ch,1);
             } else { mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_unsupported_type"); return 0; }
             mvalue_free(&idx);mvalue_free(&cont);
             if (!push(vm,selected)){mvalue_free(&selected);set_error(out,"getitem_push_failed");return 0;}

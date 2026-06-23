@@ -22,7 +22,7 @@ def run_source(source: str) -> str:
 
 
 def test_version_matches_core_release():
-    assert __version__ == "2.9.4"
+    assert __version__ == "2.9.6"
 
 
 def test_print_arithmetic_and_variables():
@@ -107,4 +107,4 @@ def test_cli_run_and_check_core_script():
     check_out = io.StringIO()
     with contextlib.redirect_stdout(check_out):
         assert cli_main(["check", str(script)]) == 0
-    assert "OK ok" in check_out.getvalue()
+    assert "native-c" in check_out.getvalue()

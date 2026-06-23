@@ -43,6 +43,11 @@ typedef struct {
 } Scope;
 
 typedef struct {
+    char alias[64];
+    char module[32];
+} ModuleAlias;
+
+typedef struct {
     char name[64];
     char params[16][64];
     int arity;
@@ -65,6 +70,13 @@ typedef struct {
     int line_count;
     Function funcs[128];
     int func_count;
+    ModuleAlias module_aliases[32];
+    int module_alias_count;
+    int loop_depth;
+    int loop_breaks[32][64];
+    int loop_break_count[32];
+    int loop_continues[32][64];
+    int loop_continue_count[32];
     Scope globals;
     Scope *scope;
     int current_line;
@@ -232,12 +244,72 @@ static Function *find_function(Compiler *c, const char *name, size_t len) {
 
 static int builtin_id(const char *name, size_t len) {
     static const struct { const char *name; int id; } builtins[] = {
-        {"print",1},{"len",2},{"clock_ms",3},{"getenv",4},{"str",5},{"type",6},
-        {"abs",7},{"floor",8},{"ceil",9},{"sqrt",10},{"min",11},{"max",12},{"range",20}
+        {"print",1},{"println",1},{"io.print",1},{"io.println",1},
+        {"len",2},{"clock_ms",3},{"time.clock_ms",3},{"getenv",4},{"sys.getenv",4},
+        {"str",5},{"type",6},
+        {"abs",7},{"math.abs",7},{"floor",8},{"math.floor",8},{"ceil",9},{"math.ceil",9},
+        {"sqrt",10},{"math.sqrt",10},{"min",11},{"math.min",11},{"max",12},{"math.max",12},
+        {"write",14},{"io.write",14},{"input",15},{"io.input",15},{"readline",15},{"io.readline",15},
+        {"read_line",15},{"io.read_line",15},{"ask",15},{"io.ask",15},
+        {"args",16},{"argv",16},{"sys.args",16},{"sys.argv",16},{"cwd",17},{"sys.cwd",17},
+        {"sleep_ms",18},{"sys.sleep_ms",18},{"exit",19},{"sys.exit",19},{"range",20},
+        {"gc_collect",21},{"gc.collect",21},{"gc_stats",22},{"gc.stats",22},
+        {"spawn",23},{"thread.spawn",23},{"yield",24},{"thread.yield",24},
+        {"channel",25},{"chan.channel",25},{"send",26},{"chan.send",26},
+        {"recv",27},{"chan.recv",27}
     };
     size_t i;
     for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)
         if (strlen(builtins[i].name)==len && memcmp(name,builtins[i].name,len)==0) return builtins[i].id;
+    return 0;
+}
+
+static int module_is_builtin(const char *module) {
+    return strcmp(module, "io") == 0 || strcmp(module, "sys") == 0 ||
+           strcmp(module, "math") == 0 || strcmp(module, "time") == 0 ||
+           strcmp(module, "gc") == 0 || strcmp(module, "thread") == 0 ||
+           strcmp(module, "chan") == 0;
+}
+
+static int add_module_alias(Compiler *c, const char *module, const char *alias) {
+    int i;
+    if (!module_is_builtin(module)) {
+        set_error(c, "unknown native module");
+        return 0;
+    }
+    if (!alias || !*alias) alias = module;
+    for (i = 0; i < c->module_alias_count; ++i) {
+        if (strcmp(c->module_aliases[i].alias, alias) == 0) {
+            snprintf(c->module_aliases[i].module, sizeof(c->module_aliases[i].module), "%s", module);
+            return 1;
+        }
+    }
+    if (c->module_alias_count >= 32) {
+        set_error(c, "too many module imports");
+        return 0;
+    }
+    snprintf(c->module_aliases[c->module_alias_count].alias,
+             sizeof(c->module_aliases[c->module_alias_count].alias), "%s", alias);
+    snprintf(c->module_aliases[c->module_alias_count].module,
+             sizeof(c->module_aliases[c->module_alias_count].module), "%s", module);
+    c->module_alias_count++;
+    return 1;
+}
+
+static int resolve_builtin_id(Compiler *c, const char *name, size_t len) {
+    char rewritten[128];
+    const char *dot = memchr(name, '.', len);
+    int direct = builtin_id(name, len);
+    int i;
+    if (direct || !dot) return direct;
+    for (i = 0; i < c->module_alias_count; ++i) {
+        size_t alias_len = strlen(c->module_aliases[i].alias);
+        if ((size_t)(dot - name) == alias_len && memcmp(name, c->module_aliases[i].alias, alias_len) == 0) {
+            snprintf(rewritten, sizeof(rewritten), "%s.%.*s",
+                     c->module_aliases[i].module, (int)(len - alias_len - 1), dot + 1);
+            return builtin_id(rewritten, strlen(rewritten));
+        }
+    }
     return 0;
 }
 
@@ -282,8 +354,8 @@ static int parse_primary(Expr *e) {
         lex_next(&e->lexer);
         return ci >= 0 && emit(c, MOP_PUSH_CONST, ci, 0, 0) >= 0;
     }
-    if (token_is(&token, "true") || token_is(&token, "false") || token_is(&token, "none")) {
-        MValue v = token_is(&token, "none") ? mval_none() : mval_bool(token_is(&token, "true"));
+    if (token_is(&token, "true") || token_is(&token, "false") || token_is(&token, "none") || token_is(&token, "null")) {
+        MValue v = (token_is(&token, "none") || token_is(&token, "null")) ? mval_none() : mval_bool(token_is(&token, "true"));
         int ci = add_const(c, v);
         lex_next(&e->lexer);
         return ci >= 0 && emit(c, MOP_PUSH_CONST, ci, 0, 0) >= 0;
@@ -330,8 +402,33 @@ static int parse_primary(Expr *e) {
     }
     if (token.kind == TK_ID) {
         lex_next(&e->lexer);
+        if (token_is(&token, "get") || token_is(&token, "call")) {
+            Token target = e->lexer.token;
+            int argc = 0, id;
+            if (target.kind != TK_ID || !memchr(target.start, '.', target.len)) {
+                set_error(c, "expected module.function after get");
+                return 0;
+            }
+            id = resolve_builtin_id(c, target.start, target.len);
+            if (!id) {
+                set_error(c, "unknown native module function");
+                return 0;
+            }
+            lex_next(&e->lexer);
+            if (e->lexer.token.kind == TK_LP) {
+                lex_next(&e->lexer);
+                while (e->lexer.token.kind != TK_RP && e->lexer.token.kind != TK_EOF) {
+                    if (!parse_expression(e, 0)) return 0;
+                    argc++;
+                    if (e->lexer.token.kind != TK_COMMA) break;
+                    lex_next(&e->lexer);
+                }
+                if (!expect(e, TK_RP, "expected ')' after arguments")) return 0;
+            }
+            return emit(c, MOP_SYSCALL, id, argc, 1) >= 0;
+        }
         if (e->lexer.token.kind == TK_LP) {
-            int argc = 0, id = builtin_id(token.start, token.len);
+            int argc = 0, id = resolve_builtin_id(c, token.start, token.len);
             Function *fn = find_function(c, token.start, token.len);
             lex_next(&e->lexer);
             while (e->lexer.token.kind != TK_RP && e->lexer.token.kind != TK_EOF) {
@@ -348,6 +445,10 @@ static int parse_primary(Expr *e) {
         }
         slot = scope_find(c->scope, token.start, token.len);
         if (slot < 0 && c->scope != &c->globals) slot = scope_find(&c->globals, token.start, token.len);
+        if (slot < 0) {
+            Function *fn = find_function(c, token.start, token.len);
+            if (fn) return emit(c, MOP_PUSH_CONST, fn->const_slot, 0, 0) >= 0;
+        }
         if (slot < 0) { set_error(c, "unknown variable"); return 0; }
         if (emit(c, MOP_LOAD_LOCAL, slot, 0, 0) < 0) return 0;
         while (e->lexer.token.kind == TK_LB) {
@@ -408,6 +509,28 @@ static const char *trim(char *text) {
     return text;
 }
 
+static void strip_inline_comment(char *text) {
+    int quote = 0;
+    int escaped = 0;
+    int depth = 0;
+    size_t i;
+    for (i = 0; text[i]; ++i) {
+        char ch = text[i];
+        if (escaped) { escaped = 0; continue; }
+        if (quote) {
+            if (ch == '\\') escaped = 1;
+            else if (ch == quote) quote = 0;
+            continue;
+        }
+        if (ch == '"' || ch == '\'') { quote = ch; continue; }
+        if (ch == '(' || ch == '[' || ch == '{') depth++;
+        else if ((ch == ')' || ch == ']' || ch == '}') && depth > 0) depth--;
+        else if (depth == 0 && ch == '#') { text[i] = '\0'; break; }
+        else if (depth == 0 && ch == '/' && text[i + 1] == '/') { text[i] = '\0'; break; }
+    }
+    while (i > 0 && isspace((unsigned char)text[i - 1])) text[--i] = '\0';
+}
+
 static int starts(const char *text, const char *prefix) {
     size_t n = strlen(prefix);
     return strncmp(text, prefix, n) == 0;
@@ -427,6 +550,37 @@ static int find_assignment(const char *text) {
     return -1;
 }
 
+static int parse_import_statement(Compiler *c, const char *text) {
+    char module[64] = {0};
+    char alias[64] = {0};
+    const char *rest = NULL;
+    const char *as_pos = NULL;
+    size_t module_len;
+    if (starts(text, "import ")) rest = trim((char *)text + 7);
+    else if (starts(text, "use ")) rest = trim((char *)text + 4);
+    else if (starts(text, "need ")) rest = trim((char *)text + 5);
+    else return 0;
+
+    as_pos = strstr(rest, " as ");
+    if (!as_pos) {
+        set_error(c, "module import requires 'as'");
+        return -1;
+    }
+    module_len = (size_t)(as_pos - rest);
+    while (module_len && isspace((unsigned char)rest[module_len - 1])) module_len--;
+    if (module_len >= sizeof(module)) module_len = sizeof(module) - 1;
+    snprintf(module, sizeof(module), "%.*s", (int)module_len, rest);
+    snprintf(alias, sizeof(alias), "%s", trim((char *)as_pos + 4));
+
+    if ((module[0] == '"' || module[0] == '\'') && module[strlen(module) - 1] == module[0]) {
+        size_t n = strlen(module);
+        memmove(module, module + 1, n - 2);
+        module[n - 2] = '\0';
+    }
+    if (strncmp(module, "pkg:", 4) == 0) memmove(module, module + 4, strlen(module + 4) + 1);
+    return add_module_alias(c, module, alias) ? 1 : -1;
+}
+
 static int compile_block(Compiler *c, int *position, int end, int indent);
 
 static int compile_statement(Compiler *c, int *position, int end, int indent) {
@@ -434,7 +588,14 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
     char *text=(char*)trim(line->text);
     int assign;
     c->current_line=line->number;
+    strip_inline_comment(text);
+    text=(char*)trim(text);
     if (!*text || starts(text,"//") || *text=='#') { (*position)++; return 1; }
+    {
+        int import_result = parse_import_statement(c, text);
+        if (import_result < 0) return 0;
+        if (import_result > 0) { (*position)++; return 1; }
+    }
     if (starts(text,"def ")) {
         Function *fn=NULL; int i;
         for(i=0;i<c->func_count;++i)if(c->funcs[i].line_start==*position){fn=&c->funcs[i];break;}
@@ -442,37 +603,79 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         return 1;
     }
     if (starts(text,"if ") && text[strlen(text)-1]==':') {
-        int jump_false, jump_end=-1;
+        int jump_false;
+        int end_jumps[32];
+        int end_count=0;
         text[strlen(text)-1]='\0';
         if(!compile_expr(c,text+3))return 0;
         jump_false=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
         (*position)++;
         if(!compile_block(c,position,end,indent+4))return 0;
-        if(*position<end && c->lines[*position].indent==indent && starts(trim(c->lines[*position].text),"else:")){
-            jump_end=emit(c,MOP_JUMP,0,0,0);
-            c->code[jump_false].a=(int32_t)c->code_len;
-            (*position)++;
-            if(!compile_block(c,position,end,indent+4))return 0;
-            c->code[jump_end].a=(int32_t)c->code_len;
-        } else c->code[jump_false].a=(int32_t)c->code_len;
+        while(*position<end && c->lines[*position].indent==indent){
+            char *next=(char*)trim(c->lines[*position].text);
+            strip_inline_comment(next);
+            next=(char*)trim(next);
+            if(starts(next,"elif ") && next[strlen(next)-1]==':'){
+                if(end_count<32)end_jumps[end_count++]=emit(c,MOP_JUMP,0,0,0);
+                c->code[jump_false].a=(int32_t)c->code_len;
+                next[strlen(next)-1]='\0';
+                c->current_line=c->lines[*position].number;
+                if(!compile_expr(c,next+5))return 0;
+                jump_false=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
+                (*position)++;
+                if(!compile_block(c,position,end,indent+4))return 0;
+                continue;
+            }
+            if(starts(next,"else:")){
+                if(end_count<32)end_jumps[end_count++]=emit(c,MOP_JUMP,0,0,0);
+                c->code[jump_false].a=(int32_t)c->code_len;
+                c->current_line=c->lines[*position].number;
+                (*position)++;
+                if(!compile_block(c,position,end,indent+4))return 0;
+                jump_false=-1;
+            }
+            break;
+        }
+        if(jump_false>=0)c->code[jump_false].a=(int32_t)c->code_len;
+        for(int j=0;j<end_count;++j)c->code[end_jumps[j]].a=(int32_t)c->code_len;
         return 1;
+    }
+    if (starts(text,"stop")) {
+        emit(c,MOP_STOP,0,0,0);(*position)++;return 1;
+    }
+    if (starts(text,"show ")) {
+        if(!compile_expr(c,trim(text+5)))return 0;
+        emit(c,MOP_SYSCALL,1,1,0);
+        (*position)++;return 1;
     }
     if (starts(text,"while ") && text[strlen(text)-1]==':') {
         int loop=(int)c->code_len, jf;
+        int depth=c->loop_depth++;
+        c->loop_break_count[depth]=0;
+        c->loop_continue_count[depth]=0;
         text[strlen(text)-1]='\0';
         if(!compile_expr(c,text+6))return 0;
         jf=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
         (*position)++;
         if(!compile_block(c,position,end,indent+4))return 0;
+        for(int j=0;j<c->loop_continue_count[depth];++j)c->code[c->loop_continues[depth][j]].a=loop;
         emit(c,MOP_JUMP,loop,0,0);
         c->code[jf].a=(int32_t)c->code_len;
+        for(int j=0;j<c->loop_break_count[depth];++j)c->code[c->loop_breaks[depth][j]].a=(int32_t)c->code_len;
+        c->loop_depth--;
         return 1;
     }
     if (starts(text,"for ") && text[strlen(text)-1]==':') {
         char name[64], start_expr[256], stop_expr[256];
         int slot, stop_slot, loop, jf;
+        int depth=c->loop_depth++;
+        c->loop_break_count[depth]=0;
+        c->loop_continue_count[depth]=0;
         if(sscanf(text,"for %63s in range(%255[^,],%255[^)]):",name,start_expr,stop_expr)!=3){
-            set_error(c,"expected for name in range(start, stop):");return 0;
+            if(sscanf(text,"for %63s in range(%255[^)]):",name,stop_expr)!=2){
+                set_error(c,"expected for name in range(start, stop):");return 0;
+            }
+            snprintf(start_expr,sizeof(start_expr),"0");
         }
         slot=scope_slot(c->scope,name,strlen(name),1);
         snprintf(name,sizeof(name),"__stop_%d",line->number);
@@ -484,11 +687,43 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         jf=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
         (*position)++;
         if(!compile_block(c,position,end,indent+4))return 0;
+        for(int j=0;j<c->loop_continue_count[depth];++j)c->code[c->loop_continues[depth][j]].a=(int32_t)c->code_len;
         emit(c,MOP_LOAD_LOCAL,slot,0,0);
         {int one=add_const(c,mval_i64(1));emit(c,MOP_PUSH_CONST,one,0,0);}
         emit(c,MOP_ADD,0,0,0);emit(c,MOP_STORE_LOCAL,slot,0,0);emit(c,MOP_JUMP,loop,0,0);
         c->code[jf].a=(int32_t)c->code_len;
+        for(int j=0;j<c->loop_break_count[depth];++j)c->code[c->loop_breaks[depth][j]].a=(int32_t)c->code_len;
+        c->loop_depth--;
         return 1;
+    }
+    if (starts(text,"break")) {
+        int depth=c->loop_depth-1;
+        int jump;
+        if(depth<0){set_error(c,"break outside loop");return 0;}
+        jump=emit(c,MOP_JUMP,0,0,0);
+        if(c->loop_break_count[depth]<64)c->loop_breaks[depth][c->loop_break_count[depth]++]=jump;
+        (*position)++;return 1;
+    }
+    if (starts(text,"continue")) {
+        int depth=c->loop_depth-1;
+        int jump;
+        if(depth<0){set_error(c,"continue outside loop");return 0;}
+        jump=emit(c,MOP_JUMP,0,0,0);
+        if(c->loop_continue_count[depth]<64)c->loop_continues[depth][c->loop_continue_count[depth]++]=jump;
+        (*position)++;return 1;
+    }
+    if (starts(text,"wait ")) {
+        char *expr=(char*)trim(text+5);
+        char *endp=NULL;
+        double seconds=strtod(expr,&endp);
+        if(endp&&*trim(endp)=='\0'){
+            int ci=add_const(c,mval_i64((int64_t)(seconds*1000.0)));
+            if(ci<0||emit(c,MOP_PUSH_CONST,ci,0,0)<0)return 0;
+        } else {
+            if(!compile_expr(c,expr))return 0;
+        }
+        emit(c,MOP_SYSCALL,18,1,0);
+        (*position)++;return 1;
     }
     if (starts(text,"return")) {
         const char *expr=trim(text+6);
@@ -501,6 +736,7 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         (*position)++;return 1;
     }
     if(starts(text,"let "))text=(char*)trim(text+4);
+    else if(starts(text,"var "))text=(char*)trim(text+4);
     else if(starts(text,"keep "))text=(char*)trim(text+5);
     assign=find_assignment(text);
     if(assign>=0){
@@ -524,6 +760,8 @@ static int compile_block(Compiler *c, int *position, int end, int indent) {
     while(*position<end){
         SourceLine *line=&c->lines[*position];
         char *text=(char*)trim(line->text);
+        strip_inline_comment(text);
+        text=(char*)trim(text);
         if(!*text||starts(text,"//")||*text=='#'){(*position)++;continue;}
         if(line->indent<indent)return 1;
         if(line->indent>indent){set_error(c,"unexpected indentation");return 0;}

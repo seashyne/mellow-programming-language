@@ -1,4 +1,4 @@
-# Mellow Programming Language 2.9.4
+# Mellow Programming Language 2.9.6
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -12,7 +12,7 @@ This release treats the language core as the stable surface:
 - string/math/list/map/json/money/data/ledger helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but are documented as **experimental** under [`docs/experimental/README.md`](docs/experimental/README.md). In v2.9.4 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, and core built-ins. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but are documented as **experimental** under [`docs/experimental/README.md`](docs/experimental/README.md). In v2.9.6 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, native terminal/system built-ins, builtin module aliases, and the first native GC/concurrency foundation APIs. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
 
 ## Quick Start
 
@@ -26,11 +26,20 @@ mellow check examples\hello.mellow
 mellow doctor
 ```
 
-Native C is the default execution engine. Mellow falls back to the Python VM
-when a script requests debugger, event, or record/replay features that do not
-yet have native parity. Use `--engine=py` to force Python.
+Native C is the default execution engine. `mellow run` is C-only by default and
+fails fast when native execution is unavailable. New runtime work should land in
+`native/standalone` first.
 
-Without installing:
+Without installing the Python package, build and run the standalone native
+runtime:
+
+```powershell
+cmake -S native\standalone -B native\standalone\build
+cmake --build native\standalone\build
+native\standalone\build\Debug\mellow.exe examples\hello.mellow
+```
+
+Python module entry points remain available for development tooling:
 
 ```powershell
 $env:PYTHONPATH = "src"
@@ -101,7 +110,29 @@ while len(batch) > 0:
 Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
 
 Finance and data sandbox profiles, plus Ledger Core, run on the default C engine
-in v2.9.4. Native parity tests run with Python fallback disabled.
+in v2.9.6. Native parity tests run in native-only mode.
+
+Native runtime foundation APIs:
+
+```mellow
+gc_collect()
+let stats = gc_stats()
+
+def worker():
+    return 1
+
+let task = spawn(worker)
+yield()
+
+let ch = channel()
+send(ch, "hello")
+print(recv(ch))
+```
+
+These APIs are native C built-ins in v2.9.6. They provide a truthful foundation
+for GC accounting, cooperative task handles, explicit yield points, and FIFO
+channels. Full tracing GC and full M:N stack-switching scheduling remain runtime
+engine work rather than being claimed as complete.
 
 Build an immutable, balanced ledger:
 
@@ -143,9 +174,12 @@ The default install keeps core Mellow lightweight. Install extras only when you 
 python -m pip install -e .[lsp]       # language server
 python -m pip install -e .[net]       # websocket/network helpers
 python -m pip install -e .[security]  # signing and secure-save helpers
-python -m pip install -e .[video]     # MELV video encode/decode
+python -m pip install -e .[video]     # optional MELV common-video bridge
 python -m pip install -e .[all]       # all optional features
 ```
+
+Native MELV2 pack/inspect/validate/extract is dependency-free. The `video` extra
+is only for bridge commands that import/export common video files.
 
 `mellow doctor` reports which optional features are available in the current Python environment.
 
@@ -177,12 +211,16 @@ The full suite includes extended and experimental coverage. Use `tests/core`
 plus `tests/native` as the release gate for stable language core and native C
 parity.
 
+For C-first release confidence, always include the standalone native binary gate
+or the native pytest gate in native-only mode.
+
 ## Release Process
 
 - Stable core definition: `docs/STABLE_CORE.md`
 - Core docs index: `docs/CORE_DOCS.md`
 - Experimental docs: `docs/experimental/README.md`
-- 2.9.4 stability gates: `scripts/test-v294-stability.ps1`
+- 2.9.6 stability manifest: `spec/mellow-2.9.6-stability.json`
+- 2.9.x stability gates: `scripts/test-v294-stability.ps1`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Changelog: `CHANGELOG.md`
 - Windows native build helper: `scripts/build-native-windows.ps1`

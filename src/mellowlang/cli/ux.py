@@ -29,7 +29,7 @@ CLI_GUIDES: dict[str, dict[str, Any]] = {
         "title": "Run a script",
         "use": "Use this when you just want to execute a .mellow file.",
         "commands": ["mellow run app.mellow", "mellow r app.mellow", "mellow app.mellow"],
-        "tips": ["Use `mellow check app.mellow` before running in CI.", "Use `--engine py` only when debugging Python fallback behavior."],
+        "tips": ["Use `mellow check app.mellow` before running in CI.", "Default `mellow run` uses the C runtime and fails fast when native execution is unavailable."],
     },
     "check": {
         "title": "Check syntax and lint",
