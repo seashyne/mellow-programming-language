@@ -1,6 +1,6 @@
 # Mellow Compiler v3
 
-Status: active development compiler on the `dev/2.9.5` branch.
+Status: active development compiler on the `dev/2.9.6` branch.
 
 ## Pipeline
 
