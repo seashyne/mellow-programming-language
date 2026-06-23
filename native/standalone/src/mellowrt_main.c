@@ -181,24 +181,60 @@ static void print_runtime_error(const char *source_name, const MRunResult *resul
 
 /* ── entry point ─────────────────────────────────────────────────────────── */
 static void usage(const char *argv0){
-    fprintf(stderr,
+    printf(
         "Mellow Programming Language 2.9.6 (Full Native C)\n"
-        "Usage: %s <program.mellow|program.mvi>\n"
-        "       %s check <program.mellow>\n"
-        "       %s --runtime-info\n"
-        "       %s --version\n",argv0,argv0,argv0,argv0);
+        "\n"
+        "Common:\n"
+        "  %s run <file>             Run a .mellow script\n"
+        "  %s check <file>           Compile/syntax check a .mellow script\n"
+        "  %s doctor                 Show native runtime status\n"
+        "  %s status                 Show native runtime status\n"
+        "  %s help                   Show this help\n"
+        "\n"
+        "Direct native forms:\n"
+        "  %s <program.mellow|program.mvi>\n"
+        "  %s --runtime-info\n"
+        "  %s --version\n",
+        argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0);
+}
+
+static void native_doctor(const char *argv0){
+    MRuntimePlatform platform=mellow_runtime_platform();
+    printf("MellowLang 2.9.6 (Full Native C)\n\n");
+    printf("Environment\n");
+    printf("  Executable    : %s\n",argv0);
+    printf("  Runtime       : mellow-c standalone\n");
+    printf("  Python        : not required\n");
+    printf("  Architecture  : %s\n",platform.architecture);
+    printf("  Backend       : %s\n",platform.backend);
+    printf("  Pointer bits  : %u\n",platform.pointer_bits);
+    printf("  Little endian : %s\n",platform.little_endian?"true":"false");
+    printf("\nChecks\n");
+    printf("  [OK] native_cli: standalone C launcher is running\n");
+    printf("  [OK] native_compiler: .mellow source compiler is built in\n");
+    printf("  [OK] native_runtime: bytecode VM and native built-ins are built in\n");
+    printf("  [OK] python_free: this command did not require Python\n");
 }
 
 int main(int argc, char **argv){
     int check_only=0;
+    int path_index=1;
     MellowRuntimeContext ctx;
     memset(&ctx,0,sizeof(ctx));
     ctx.argc=argc;
     ctx.argv=argv;
     ctx.script_arg_start=2;
-    if(argc<2){usage(argv[0]);return 1;}
-    if(!strcmp(argv[1],"--version")||!strcmp(argv[1],"-V")){
+    if(argc<2){usage(argv[0]);return 0;}
+    if(!strcmp(argv[1],"--help")||!strcmp(argv[1],"-h")||!strcmp(argv[1],"help")){
+        usage(argv[0]);
+        return 0;
+    }
+    if(!strcmp(argv[1],"--version")||!strcmp(argv[1],"-V")||!strcmp(argv[1],"version")){
         puts("Mellow Programming Language 2.9.6 (Full Native C)");
+        return 0;
+    }
+    if(!strcmp(argv[1],"doctor")||!strcmp(argv[1],"status")){
+        native_doctor(argv[0]);
         return 0;
     }
     if(!strcmp(argv[1],"--runtime-info")){
@@ -216,10 +252,14 @@ int main(int argc, char **argv){
     if(!strcmp(argv[1],"check")){
         if(argc<3){usage(argv[0]);return 1;}
         check_only=1;
+        path_index=2;
+    } else if(!strcmp(argv[1],"run")||!strcmp(argv[1],"r")){
+        if(argc<3){usage(argv[0]);return 1;}
+        path_index=2;
     }
     {
-        const char *path=argv[check_only?2:1];
-        ctx.script_arg_start=check_only?3:2;
+        const char *path=argv[path_index];
+        ctx.script_arg_start=path_index+1;
         size_t path_len=strlen(path);
         int is_image=path_len>=4&&!strcmp(path+path_len-4,".mvi");
         if(!is_image){
@@ -247,8 +287,8 @@ int main(int argc, char **argv){
         }
     }
     MLoadedProgram lp;
-    if(!parse_loaded_program(argv[1],&lp)){
-        fprintf(stderr,"failed to load standalone image: %s\n",argv[1]);
+    if(!parse_loaded_program(argv[path_index],&lp)){
+        fprintf(stderr,"failed to load standalone image: %s\n",argv[path_index]);
         return 1;
     }
     MProgram prog={lp.code,lp.code_len,lp.consts,lp.const_len,lp.spans,lp.span_len,lp.source_name};

@@ -1,0 +1,53 @@
+{
+  "name": "mellowlang",
+  "version": "2.9.6",
+  "description": "Native-first Mellow programming language CLI installer and wrapper.",
+  "license": "MIT",
+  "author": "Seashyne",
+  "homepage": "https://github.com/seashyne/mellow-programming-language#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seashyne/mellow-programming-language.git",
+    "directory": "packages/npm/mellowlang"
+  },
+  "bugs": {
+    "url": "https://github.com/seashyne/mellow-programming-language/issues"
+  },
+  "keywords": [
+    "mellow",
+    "mellowlang",
+    "language",
+    "native",
+    "scripting",
+    "compiler",
+    "runtime"
+  ],
+  "bin": {
+    "mellow": "bin/mellow.js"
+  },
+  "scripts": {
+    "prepack": "node scripts/prepack.js",
+    "postpack": "node scripts/postpack.js",
+    "postinstall": "node scripts/postinstall.js",
+    "test": "node bin/mellow.js doctor"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "native/",
+    "README.md",
+    "package.json"
+  ],
+  "os": [
+    "win32",
+    "linux",
+    "darwin"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=16"
+  }
+}

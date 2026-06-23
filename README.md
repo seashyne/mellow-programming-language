@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/mellow-logo.png" alt="Mellow logo" width="96">
+</p>
+
 # Mellow Programming Language 2.9.6
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
@@ -16,19 +20,62 @@ Larger systems such as agents, MMG, desktop bundles, package registries, and MEL
 
 ## Quick Start
 
-From a source checkout:
+Fresh Windows install from Git:
 
 ```powershell
-python -m pip install -e .[dev]
-mellow --version
+git clone https://github.com/seashyne/mellow-programming-language.git
+cd mellow-programming-language
+.\scripts\install-native.ps1
+mellow doctor
 mellow run examples\hello.mellow
 mellow check examples\hello.mellow
+```
+
+Fresh Linux/macOS install from Git:
+
+```bash
+git clone https://github.com/seashyne/mellow-programming-language.git
+cd mellow-programming-language
+sh scripts/install-native.sh --add-path
+export PATH="$HOME/.local/bin:$PATH"
+mellow doctor
+mellow run examples/hello.mellow
+mellow check examples/hello.mellow
+```
+
+From an existing source checkout, install the native C CLI first:
+
+```powershell
+.\scripts\install-native.ps1
+mellow doctor
+mellow run examples\hello.mellow
+mellow check examples\hello.mellow
+```
+
+On Linux/macOS:
+
+```bash
+sh scripts/install-native.sh --add-path
+mellow doctor
+mellow run examples/hello.mellow
+mellow check examples/hello.mellow
+```
+
+If you prefer npm after cloning the repository:
+
+```bash
+npm install -g ./packages/npm/mellowlang
 mellow doctor
 ```
 
-Native C is the default execution engine. `mellow run` is C-only by default and
-fails fast when native execution is unavailable. New runtime work should land in
-`native/standalone` first.
+Native C is the default execution engine. The native `mellow` executable runs
+without Python and reports `Python: not required` in `mellow doctor`. New runtime
+work should land in `native/standalone` first.
+
+The native runtime is also starting to expose an experimental embeddable C API.
+For now, standalone C remains the main supported path; `mellow_runtime.h` is a
+provisional wrapper for trying host embedding before the runtime ABI is marked
+stable.
 
 Without installing the Python package, build and run the standalone native
 runtime:
@@ -38,6 +85,8 @@ cmake -S native\standalone -B native\standalone\build
 cmake --build native\standalone\build
 native\standalone\build\Debug\mellow.exe examples\hello.mellow
 ```
+
+Full install guide: [`docs/INSTALL.md`](docs/INSTALL.md)
 
 Python module entry points remain available for development tooling:
 
@@ -168,7 +217,8 @@ Direct script invocation has been removed. Use explicit commands such as
 
 ## Optional Features
 
-The default install keeps core Mellow lightweight. Install extras only when you need them:
+The default install keeps core Mellow lightweight. Python is optional tooling,
+not the primary runtime. Install Python extras only when you need them:
 
 ```powershell
 python -m pip install -e .[lsp]       # language server

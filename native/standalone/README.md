@@ -1,11 +1,17 @@
 # Mellow Full Native C
 
+<p align="center">
+  <img src="../../docs/assets/mellow-logo.png" alt="Mellow logo" width="72">
+</p>
+
 The native package now contains the source frontend and execution runtime in C.
 The `mellow` executable reads, compiles, and runs `.mellow` source without
 loading Python or CPython.
 
-This tree is the forward path for Mellow runtime work. New core runtime features
-should land here first and be verified in native-only mode.
+This tree is the forward path for Mellow runtime work. The standalone C runtime
+is still the main supported path. The embeddable Mellow Runtime ABI is
+experimental for now and should be updated gradually until it is ready to be
+treated as stable.
 
 What moved into native standalone now:
 - lexer and expression parser
@@ -25,7 +31,9 @@ What moved into native standalone now:
 
 Native source layout:
 
+- `include/mellow_runtime.h` — experimental embeddable runtime ABI for host applications
 - `src/mellowc.c` — source lexer/compiler for `.mellow`
+- `src/mellow_runtime.c` — runtime ABI wrapper over compiler, VM, syscalls, and GC
 - `src/mellowrt_core.c` — bytecode VM and value ownership
 - `src/mellowrt_syscalls.c` — built-in syscall table for I/O, math, env, args, cwd, sleep, exit, GC/concurrency foundation, and channels
 - `src/mellowrt_main.c` — CLI entry point, source/image loading, and runtime wiring
@@ -58,6 +66,27 @@ cmake -S native/standalone -B native/standalone/build
 cmake --build native/standalone/build
 ./native/standalone/build/mellowrt
 ```
+
+Try the experimental embedding wrapper from C:
+
+```c
+#include "mellow_runtime.h"
+
+MellowRuntime *rt = mellow_runtime_new();
+MellowCompiledProgram program;
+MRunResult result;
+char error[512] = {0};
+
+if (mellow_runtime_compile_source(rt, "print(\"hi\")\n", "<embed>", &program, error, sizeof(error))) {
+    mellow_runtime_run_program(rt, &program, &result);
+    mellow_runtime_program_free(&program);
+}
+mellow_runtime_free(rt);
+```
+
+This wrapper is intentionally provisional. Use the `mellow` standalone
+executable as the stable native path while the runtime ABI is still being
+hardened.
 
 Memory safety and fuzzing on Linux with Clang:
 
