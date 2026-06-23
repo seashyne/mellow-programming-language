@@ -303,4 +303,7 @@ benchmark workspaces are ignored. Preview or remove them with
 
 ## License
 
-MIT. See `LICENSE`.
+MellowLang is released under the MIT License.
+
+- Full legal text: [`LICENSE`](LICENSE)
+- Plain-language usage and redistribution notes: [`NOTICE.md`](NOTICE.md)
