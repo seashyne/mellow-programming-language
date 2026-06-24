@@ -26,41 +26,79 @@ Use this checklist before tagging a stable Mellow Programming Language release.
   python -m pytest -q tests\core -p no:cacheprovider
   ```
 
-- [ ] Doctor runs:
+- [ ] Native doctor runs without Python:
 
   ```powershell
-  python -m mellowlang doctor
+  mellow doctor
   ```
 
-- [ ] Hello example runs:
+- [ ] Native hello example runs:
 
   ```powershell
-  python -m mellowlang run examples\hello.mellow
+  mellow run examples\hello.mellow
   ```
 
-## Native VM
+## Native Runtime
 
-- [ ] Native build status checked:
+- [ ] Standalone native runtime builds:
 
   ```powershell
-  python -m mellowlang native status
+  cmake -S native\standalone -B build\standalone-release -DCMAKE_BUILD_TYPE=Release
+  cmake --build build\standalone-release --config Release
   ```
 
-- [ ] If releasing native support, build the optional extension:
+- [ ] Standalone native runtime smoke test passes:
 
   ```powershell
-  .\scripts\build-native-windows.ps1
+  .\build\standalone-release\Release\mellow.exe doctor
+  .\build\standalone-release\Release\mellow.exe check examples\hello.mellow
+  .\build\standalone-release\Release\mellow.exe run examples\hello.mellow
   ```
+
+- [ ] GitHub Actions `core-tests` passes, including `native-safety`.
+
+## Native-first release pipeline
+
+Mellow 2.9.6 and later ship native C artifacts from GitHub Actions.
+
+To create a release from the current release branch:
+
+```powershell
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+The `release` workflow builds and uploads:
+
+- `mellow-<version>-windows-x64.zip`
+- `mellow-<version>-linux-x64.tar.gz`
+- `mellow-<version>-macos-x64.tar.gz`
+- `mellow-<version>-macos-arm64.tar.gz`
+- `mellowlang-<version>.vsix`
+- `mellowlang-<version>.tgz`
+
+Only tag pushes create a GitHub Release. To check packaging without publishing
+a release, run the `release` workflow manually with `workflow_dispatch`.
+
+Native archives include:
+
+- `bin/mellow` or `bin/mellow.exe`
+- `bin/mellowrt` or `bin/mellowrt.exe`
+- `LICENSE`
+- `NOTICE.md`
+- `README.md`
+- `INSTALL.md`
+- the matching native install helper.
 
 ## Git
 
 - [ ] Working tree is clean.
-- [ ] Release commit is on `main`.
+- [ ] Release commit is on `main` or the active release branch.
 - [ ] Tag created:
 
   ```powershell
   git tag vX.Y.Z
-  git push origin main --tags
+  git push origin vX.Y.Z
   ```
 
 ## Do Not Release
