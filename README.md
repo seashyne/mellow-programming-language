@@ -78,12 +78,12 @@ provisional wrapper for trying host embedding before the runtime ABI is marked
 stable.
 
 Without installing the Python package, build and run the standalone native
-runtime:
+runtime from the same output layout used by CI:
 
 ```powershell
-cmake -S native\standalone -B native\standalone\build
-cmake --build native\standalone\build
-native\standalone\build\Debug\mellow.exe examples\hello.mellow
+cmake -S native\standalone -B build\standalone-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build\standalone-release --config Release
+build\standalone-release\Release\mellow.exe run examples\hello.mellow
 ```
 
 Full install guide: [`docs/INSTALL.md`](docs/INSTALL.md)
@@ -205,15 +205,22 @@ Ledger Core is intended for deterministic business rules and audit-friendly prot
 ## Stable CLI
 
 ```bash
+mellow help
 mellow run <file>
 mellow check <file-or-dir>
-mellow fmt <files...>
-mellow modules --json
 mellow doctor
+mellow status
+mellow --runtime-info
+mellow --version
 ```
 
 Direct script invocation has been removed. Use explicit commands such as
 `mellow run <file>` and `mellow check <file-or-dir>`.
+
+Commands such as formatting, package/module registry helpers, LSP, media
+bridges, and agent tooling still live in the optional Python tooling layer while
+the native C CLI is being expanded. Keep new language/runtime behavior in the
+native path first, then expose tooling around it.
 
 ## Optional Features
 
@@ -247,8 +254,9 @@ python -m pytest -q tests\native -p no:cacheprovider
 Native core parity gate:
 
 ```powershell
-python setup.py build_ext --inplace
-python -m pytest -q tests\native -p no:cacheprovider
+cmake -S native\standalone -B build\standalone-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build\standalone-release --config Release
+python -m pytest -q tests\core\test_core_language.py -p no:cacheprovider
 ```
 
 Full suite:
@@ -266,6 +274,24 @@ or the native pytest gate in native-only mode.
 
 ## Release Process
 
+Mellow 2.9.6 uses a native-first release pipeline. Pushing a tag named `v*`
+starts `.github/workflows/release.yml`, builds standalone C CLI artifacts for
+Windows, Linux, and macOS, and packages the editor/npm delivery artifacts.
+
+```bash
+git tag v2.9.6
+git push origin v2.9.6
+```
+
+Expected release assets:
+
+- `mellow-<version>-windows-x64.zip`
+- `mellow-<version>-linux-x64.tar.gz`
+- `mellow-<version>-macos-x64.tar.gz`
+- `mellow-<version>-macos-arm64.tar.gz`
+- `mellowlang-<version>.vsix`
+- `mellowlang-<version>.tgz`
+
 - Stable core definition: `docs/STABLE_CORE.md`
 - Core docs index: `docs/CORE_DOCS.md`
 - Experimental docs: `docs/experimental/README.md`
@@ -273,7 +299,7 @@ or the native pytest gate in native-only mode.
 - 2.9.x stability gates: `scripts/test-v294-stability.ps1`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Changelog: `CHANGELOG.md`
-- Windows native build helper: `scripts/build-native-windows.ps1`
+- Native install guide: `docs/INSTALL.md`
 
 ## Frameworks
 

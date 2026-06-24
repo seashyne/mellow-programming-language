@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ...compiler import Compiler
+from ...standalone_runtime import standalone_runtime_status
 from ...vm import MellowVM, RunConfig
 from ..common import _cli_line, _find_project_root, _json_print, _lazy_attr, _print_pretty_error, _read_text
 
@@ -20,17 +21,10 @@ def _project_root() -> Path:
 
 
 def _standalone_mellow_binary() -> Path | None:
-    root = _project_root()
-    exe = "mellow.exe" if os.name == "nt" else "mellow"
-    candidates = [
-        root / "native" / "standalone" / "build" / exe,
-        root / "native" / "standalone" / "build" / "Debug" / exe,
-        root / "build" / "standalone-local-safety" / "Debug" / exe,
-        root / "build" / "standalone-local-safety" / exe,
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
+    status = standalone_runtime_status()
+    path = Path(str(status.get("binary_path") or ""))
+    if status.get("binary_exists") and path.exists():
+        return path
     return None
 
 
@@ -209,7 +203,7 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
         if native_binary is not None:
             completed = subprocess.run([str(native_binary), str(p)], check=False)
             return int(completed.returncode)
-        message = "standalone native mellow binary not found; build with `cmake -S native/standalone -B native/standalone/build && cmake --build native/standalone/build`"
+        message = "standalone native mellow binary not found; build with `cmake -S native/standalone -B build/standalone-release -DCMAKE_BUILD_TYPE=Release && cmake --build build/standalone-release --config Release`"
         if json_out:
             _json_print({"ok": False, "error": message})
         else:

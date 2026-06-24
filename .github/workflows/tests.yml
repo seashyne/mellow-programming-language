@@ -22,6 +22,11 @@ jobs:
       - name: Probe tooling package imports
         run: |
           python -c "import mellowlang; import mellowlang.compiler; import mellowlang.vm; print(mellowlang.__file__)"
+      - name: Build native CLI for tooling checks
+        run: |
+          cmake -S native/standalone -B build/standalone-release \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/standalone-release --parallel 2
       - name: Reference core language
         run: python -m pytest -q tests/core/test_core_language.py -p no:cacheprovider
       - name: Reference syntax and specification
