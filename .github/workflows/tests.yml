@@ -197,7 +197,7 @@ jobs:
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             tail -n 80 native-ctest.log >> "$GITHUB_STEP_SUMMARY"
-            detail=$(tail -n 30 native-ctest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            detail=$(tail -n 120 native-ctest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
             echo "::error file=native/standalone/CMakeLists.txt::$detail"
           fi
           exit "$status"
