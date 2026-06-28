@@ -95,7 +95,10 @@ typedef enum {
     MOP_LEN = 26,
     MOP_PUSH_FUNC = 27,
     MOP_CALL_VAL = 28,
-    MOP_STOP = 29
+    MOP_STOP = 29,
+    MOP_I64_ADD_LOCAL_CONST = 30,
+    MOP_I64_ADD_LOCAL_LOCAL = 31,
+    MOP_JUMP_IF_LOCAL_I64_LT_FALSE = 32
 } MOpcode;
 
 typedef enum {

@@ -202,6 +202,9 @@ void mvm_free(MVM *vm) {
         }
         for (i = 0; i < vm->task_len; ++i) mellowrt_task_free_values(&vm->tasks[i]);
         free(vm->tasks);
+        vm->tasks = NULL;
+        vm->task_len = vm->task_cap = 0;
+        vm->current_task = 0;
         vm->stack = NULL; vm->frames = NULL; vm->locals = NULL;
         vm->stack_len = vm->frame_len = vm->locals_len = 0;
         mvm_gc_collect(vm);
@@ -289,6 +292,27 @@ static int truthy(MValue v) {
         case MVAL_STR:  return v.as.str.len != 0; case MVAL_LIST: return v.as.list.len != 0;
         case MVAL_MAP:  return v.as.map.len != 0; default: return 1;
     }
+}
+static int mvalue_is_scalar(MValue v) {
+    switch (v.tag) {
+        case MVAL_NONE:
+        case MVAL_BOOL:
+        case MVAL_I64:
+        case MVAL_F64:
+        case MVAL_FUNC:
+        case MVAL_NATIVE:
+            return 1;
+        default:
+            return 0;
+    }
+}
+static void mvalue_release_temp(MValue *v) {
+    if (!v) return;
+    if (mvalue_is_scalar(*v)) {
+        *v = mval_none();
+        return;
+    }
+    mvalue_free(v);
 }
 static int push(MVM *vm, MValue v) {
     if (!ensure_stack(vm, vm->stack_len+1)) return 0;
@@ -436,7 +460,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             if (!push(vm, cv)) { set_error(out,"push_const_failed"); return 0; }
             pc++; break;
         }
-        case MOP_POP: { MValue discarded=pop(vm); mvalue_free(&discarded); pc++; break; }
+        case MOP_POP: { MValue discarded=pop(vm); mvalue_release_temp(&discarded); pc++; break; }
         case MOP_DUP:
             if (!vm->stack_len||!push(vm,vm->stack[vm->stack_len-1])){set_error(out,"dup_failed");return 0;}
             pc++; break;
@@ -445,9 +469,9 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         case MOP_LOAD_LOCAL: {
             MValue *slot=local_ptr(vm,frame,insn->a);
             if (!slot){set_error(out,"load_local_failed");return 0;}
-            /* Full deep-copy (strings, lists, maps) so mvm_free never
-               double-frees a value that lives in both stack and locals. */
-            MValue cv = mvalue_clone(vm, slot);
+            /* Scalars are immutable/unowned in the VM, so hot loops can copy
+               them directly. Containers/strings still need ownership isolation. */
+            MValue cv = mvalue_is_scalar(*slot) ? *slot : mvalue_clone(vm, slot);
             if (!push(vm, cv)){set_error(out,"load_local_failed");return 0;}
             pc++; break;
         }
@@ -455,38 +479,56 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             size_t base=frame?frame->local_base:0, idx=base+(size_t)insn->a;
             if (!ensure_local_window(vm,idx+1)){set_error(out,"store_local_alloc_failed");return 0;}
             if (frame&&frame->local_count<(uint32_t)(insn->a+1)) frame->local_count=(uint32_t)(insn->a+1);
-            /* Free any existing value in this local slot before overwriting. */
-            mvalue_free(&vm->locals[idx]);
+            /* Release owned values before overwrite; scalar locals are unowned. */
+            mvalue_release_temp(&vm->locals[idx]);
             /* Move (not copy) from stack — pop zeros the stack_len, value ownership
                transfers to locals so mvm_free won't double-free. */
             vm->locals[idx] = pop(vm);
-            /* Zero the now-consumed stack slot for safety. */
-            memset(&vm->stack[vm->stack_len], 0, sizeof(MValue));
+            pc++; break;
+        }
+        case MOP_I64_ADD_LOCAL_CONST: {
+            MValue *slot=local_ptr(vm,frame,insn->a);
+            if (!slot || slot->tag!=MVAL_I64){set_error(out,"i64_add_local_const_requires_i64");return 0;}
+            slot->as.i64 += (int64_t)insn->b;
+            pc++; break;
+        }
+        case MOP_I64_ADD_LOCAL_LOCAL: {
+            MValue *slot=local_ptr(vm,frame,insn->a);
+            MValue *rhs=local_ptr(vm,frame,insn->b);
+            if (!slot || !rhs || slot->tag!=MVAL_I64 || rhs->tag!=MVAL_I64){set_error(out,"i64_add_local_local_requires_i64");return 0;}
+            slot->as.i64 += rhs->as.i64;
             pc++; break;
         }
 
         /* arithmetic */
         case MOP_ADD: case MOP_SUB: case MOP_MUL: case MOP_DIV: {
             MValue b=pop(vm), a=pop(vm);
+            if (a.tag==MVAL_I64 && b.tag==MVAL_I64 && insn->opcode!=MOP_DIV) {
+                int64_t r = (insn->opcode==MOP_ADD) ? (a.as.i64 + b.as.i64)
+                          : (insn->opcode==MOP_SUB) ? (a.as.i64 - b.as.i64)
+                          : (a.as.i64 * b.as.i64);
+                if (!push(vm,mval_i64(r))){set_error(out,"numeric_push_failed");return 0;}
+                pc++; break;
+            }
             if (insn->opcode==MOP_ADD&&(a.tag==MVAL_STR||b.tag==MVAL_STR)){
                 char abuf[64],bbuf[64]; const char *ap=NULL,*bp=NULL; size_t alen=0,blen=0;
                 if (!coerce_str(a,abuf,sizeof(abuf),&ap,&alen)||!coerce_str(b,bbuf,sizeof(bbuf),&bp,&blen)){
-                    mvalue_free(&a);mvalue_free(&b);set_error(out,"string_concat_unsupported_type");return 0;
+                    mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"string_concat_unsupported_type");return 0;
                 }
                 MValue sv=mval_owned_str(vm,NULL,alen+blen);
-                if (!sv.as.str.ptr){mvalue_free(&a);mvalue_free(&b);set_error(out,"string_concat_alloc_failed");return 0;}
+                if (!sv.as.str.ptr){mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"string_concat_alloc_failed");return 0;}
                 memcpy((char*)sv.as.str.ptr,ap,alen); memcpy((char*)sv.as.str.ptr+alen,bp,blen);
-                mvalue_free(&a);mvalue_free(&b);
+                mvalue_release_temp(&a);mvalue_release_temp(&b);
                 if (!push(vm,sv)){mvalue_free(&sv);set_error(out,"string_concat_push_failed");return 0;}
                 pc++; break;
             }
-            if ((a.tag!=MVAL_I64&&a.tag!=MVAL_F64)||(b.tag!=MVAL_I64&&b.tag!=MVAL_F64)){mvalue_free(&a);mvalue_free(&b);set_error(out,"numeric_op_requires_numbers");return 0;}
+            if ((a.tag!=MVAL_I64&&a.tag!=MVAL_F64)||(b.tag!=MVAL_I64&&b.tag!=MVAL_F64)){mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"numeric_op_requires_numbers");return 0;}
             int use_f=(a.tag==MVAL_F64||b.tag==MVAL_F64||insn->opcode==MOP_DIV);
             double da=(a.tag==MVAL_F64)?a.as.f64:(double)a.as.i64;
             double db=(b.tag==MVAL_F64)?b.as.f64:(double)b.as.i64;
-            if (insn->opcode==MOP_DIV&&db==0.0){mvalue_free(&a);mvalue_free(&b);set_error(out,"division_by_zero");return 0;}
+            if (insn->opcode==MOP_DIV&&db==0.0){mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"division_by_zero");return 0;}
             double res=(insn->opcode==MOP_ADD)?da+db:(insn->opcode==MOP_SUB)?da-db:(insn->opcode==MOP_MUL)?da*db:da/db;
-            mvalue_free(&a);mvalue_free(&b);
+            mvalue_release_temp(&a);mvalue_release_temp(&b);
             if (!push(vm,use_f?mval_f64(res):mval_i64((int64_t)res))){set_error(out,"numeric_push_failed");return 0;}
             pc++; break;
         }
@@ -495,17 +537,17 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         case MOP_MOD: {
             MValue b=pop(vm), a=pop(vm);
             if (a.tag==MVAL_I64&&b.tag==MVAL_I64){
-                if (b.as.i64==0){mvalue_free(&a);mvalue_free(&b);set_error(out,"modulo_by_zero");return 0;}
+                if (b.as.i64==0){set_error(out,"modulo_by_zero");return 0;}
                 int64_t r=a.as.i64%b.as.i64;
                 if (r!=0&&((r<0)!=(b.as.i64<0))) r+=b.as.i64; /* Python-style sign */
                 if (!push(vm,mval_i64(r))){set_error(out,"mod_push_failed");return 0;}
             } else {
                 double da=(a.tag==MVAL_F64)?a.as.f64:(double)a.as.i64;
                 double db=(b.tag==MVAL_F64)?b.as.f64:(double)b.as.i64;
-                if (db==0.0){mvalue_free(&a);mvalue_free(&b);set_error(out,"modulo_by_zero");return 0;}
+                if (db==0.0){mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"modulo_by_zero");return 0;}
                 if (!push(vm,mval_f64(fmod(da,db)))){set_error(out,"mod_push_failed");return 0;}
             }
-            mvalue_free(&a);mvalue_free(&b);
+            mvalue_release_temp(&a);mvalue_release_temp(&b);
             pc++; break;
         }
 
@@ -521,19 +563,44 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 double exp_v=(b.tag==MVAL_F64)?b.as.f64:(double)b.as.i64;
                 if (!push(vm,mval_f64(pow(base,exp_v)))){set_error(out,"pow_push_failed");return 0;}
             }
-            mvalue_free(&a);mvalue_free(&b);
+            mvalue_release_temp(&a);mvalue_release_temp(&b);
             pc++; break;
         }
 
         /* v2.3.4: boolean ops */
-        case MOP_BOOL_AND: { MValue b=pop(vm),a=pop(vm); int r=truthy(a)&&truthy(b); mvalue_free(&a);mvalue_free(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_and_failed");return 0;} pc++; break; }
-        case MOP_BOOL_OR:  { MValue b=pop(vm),a=pop(vm); int r=truthy(a)||truthy(b); mvalue_free(&a);mvalue_free(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_or_failed"); return 0;} pc++; break; }
-        case MOP_BOOL_NOT: { MValue a=pop(vm); int r=!truthy(a); mvalue_free(&a); if(!push(vm,mval_bool(r))){set_error(out,"bool_not_failed");return 0;} pc++; break; }
+        case MOP_BOOL_AND: { MValue b=pop(vm),a=pop(vm); int r=truthy(a)&&truthy(b); mvalue_release_temp(&a);mvalue_release_temp(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_and_failed");return 0;} pc++; break; }
+        case MOP_BOOL_OR:  { MValue b=pop(vm),a=pop(vm); int r=truthy(a)||truthy(b); mvalue_release_temp(&a);mvalue_release_temp(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_or_failed"); return 0;} pc++; break; }
+        case MOP_BOOL_NOT: { MValue a=pop(vm); int r=!truthy(a); mvalue_release_temp(&a); if(!push(vm,mval_bool(r))){set_error(out,"bool_not_failed");return 0;} pc++; break; }
 
         /* compare + jumps */
-        case MOP_COMPARE: { MValue b=pop(vm),a=pop(vm); int r=generic_compare(a,b,(MCompareOp)insn->a); mvalue_free(&a);mvalue_free(&b); if(!push(vm,mval_bool(r))){set_error(out,"compare_failed");return 0;} pc++; break; }
+        case MOP_COMPARE: {
+            MValue b=pop(vm),a=pop(vm);
+            int r=0;
+            if (a.tag==MVAL_I64 && b.tag==MVAL_I64) {
+                switch((MCompareOp)insn->a){
+                    case MCMP_EQ: r=a.as.i64==b.as.i64; break;
+                    case MCMP_NE: r=a.as.i64!=b.as.i64; break;
+                    case MCMP_LT: r=a.as.i64<b.as.i64; break;
+                    case MCMP_LE: r=a.as.i64<=b.as.i64; break;
+                    case MCMP_GT: r=a.as.i64>b.as.i64; break;
+                    case MCMP_GE: r=a.as.i64>=b.as.i64; break;
+                    default: r=0; break;
+                }
+            } else {
+                r=generic_compare(a,b,(MCompareOp)insn->a);
+                mvalue_release_temp(&a);mvalue_release_temp(&b);
+            }
+            if(!push(vm,mval_bool(r))){set_error(out,"compare_failed");return 0;} pc++; break;
+        }
         case MOP_JUMP: pc=(uint32_t)insn->a; break;
-        case MOP_JUMP_IF_FALSE: { MValue c=pop(vm); int r=truthy(c); mvalue_free(&c); pc=r?pc+1:(uint32_t)insn->a; break; }
+        case MOP_JUMP_IF_FALSE: { MValue c=pop(vm); int r=truthy(c); mvalue_release_temp(&c); pc=r?pc+1:(uint32_t)insn->a; break; }
+        case MOP_JUMP_IF_LOCAL_I64_LT_FALSE: {
+            MValue *left=local_ptr(vm,frame,insn->a);
+            MValue *right=local_ptr(vm,frame,insn->b);
+            if (!left || !right || left->tag!=MVAL_I64 || right->tag!=MVAL_I64){set_error(out,"i64_lt_local_jump_requires_i64");return 0;}
+            pc = (left->as.i64 < right->as.i64) ? pc+1 : (uint32_t)insn->c;
+            break;
+        }
 
         /* functions */
         case MOP_CALL: {

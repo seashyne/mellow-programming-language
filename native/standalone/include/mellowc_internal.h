@@ -39,6 +39,7 @@ typedef struct {
 
 typedef struct {
     Variable vars[256];
+    unsigned char is_i64[256];
     int len;
 } Scope;
 

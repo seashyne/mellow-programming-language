@@ -113,6 +113,56 @@ def test_full_native_runs_every_frozen_core_surface(native_binary: Path) -> None
     assert result.stdout.splitlines() == expected
 
 
+def test_full_native_runs_specialized_integer_loop_fast_path(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "integer-loop-fast-path.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "let i = 0",
+                "let total = 0",
+                "let n = 1000",
+                "while i < n:",
+                "    total = total + i",
+                "    i = i + 1",
+                "print(total)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "499500"
+
+
+def test_full_native_string_addition_does_not_use_integer_fast_path(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "string-add-fallback.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                'let text = "mel"',
+                'text = text + "low"',
+                "print(text)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "mellow"
+
+
 def test_full_native_reports_compile_error_location(native_binary: Path, tmp_path: Path) -> None:
     source = tmp_path / "bad-syntax.mellow"
     source.write_text("let values = [1, 2\n", encoding="utf-8")

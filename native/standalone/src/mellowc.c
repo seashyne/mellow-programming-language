@@ -1,6 +1,7 @@
 #include "mellowc_internal.h"
 
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,6 +78,7 @@ int scope_slot(Scope *scope, const char *name, size_t len, int create) {
     slot = scope->len;
     snprintf(scope->vars[scope->len].name, sizeof(scope->vars[scope->len].name), "%.*s", (int)len, name);
     scope->vars[scope->len].slot = slot;
+    scope->is_i64[scope->len] = 0;
     scope->len++;
     return slot;
 }
@@ -119,6 +121,82 @@ void strip_inline_comment(char *text) {
 int starts(const char *text, const char *prefix) {
     size_t n = strlen(prefix);
     return strncmp(text, prefix, n) == 0;
+}
+
+static int ident_len_at(const char *text) {
+    int n = 0;
+    if (!text || !(isalpha((unsigned char)text[0]) || text[0] == '_')) return 0;
+    while (isalnum((unsigned char)text[n]) || text[n] == '_') n++;
+    return n;
+}
+
+static const char *skip_spaces(const char *text) {
+    while (*text && isspace((unsigned char)*text)) text++;
+    return text;
+}
+
+static int expr_is_i64_literal(const char *expr) {
+    char *endp = NULL;
+    const char *p = skip_spaces(expr);
+    (void)strtoll(p, &endp, 10);
+    return endp != p && *skip_spaces(endp) == '\0';
+}
+
+static int emit_fast_i64_lt_jump(Compiler *c, const char *condition, int *jump_index) {
+    const char *p = skip_spaces(condition);
+    int left_len = ident_len_at(p);
+    char left[64], right[64];
+    int right_len, left_slot, right_slot;
+    if (!left_len || left_len >= (int)sizeof(left)) return 0;
+    memcpy(left, p, (size_t)left_len); left[left_len] = '\0';
+    p = skip_spaces(p + left_len);
+    if (*p != '<' || p[1] == '=') return 0;
+    p = skip_spaces(p + 1);
+    right_len = ident_len_at(p);
+    if (!right_len || right_len >= (int)sizeof(right)) return 0;
+    memcpy(right, p, (size_t)right_len); right[right_len] = '\0';
+    p = skip_spaces(p + right_len);
+    if (*p) return 0;
+    left_slot = scope_find(c->scope, left, strlen(left));
+    right_slot = scope_find(c->scope, right, strlen(right));
+    if (left_slot < 0 || right_slot < 0) return 0;
+    if (!c->scope->is_i64[left_slot] || !c->scope->is_i64[right_slot]) return 0;
+    *jump_index = emit(c, MOP_JUMP_IF_LOCAL_I64_LT_FALSE, left_slot, right_slot, 0);
+    return *jump_index >= 0 ? 1 : -1;
+}
+
+static int emit_fast_i64_add_assignment(Compiler *c, const char *lhs, const char *expr) {
+    const char *p = skip_spaces(expr);
+    int left_len = ident_len_at(p);
+    char left[64], rhs_name[64];
+    int lhs_slot, rhs_slot, rhs_len;
+    char *endp = NULL;
+    long long delta;
+    if (!left_len || left_len >= (int)sizeof(left)) return 0;
+    memcpy(left, p, (size_t)left_len); left[left_len] = '\0';
+    p = skip_spaces(p + left_len);
+    if (*p != '+') return 0;
+    p = skip_spaces(p + 1);
+    if (strcmp(lhs, left) != 0) return 0;
+    lhs_slot = scope_find(c->scope, lhs, strlen(lhs));
+    if (lhs_slot < 0) return 0;
+    if (!c->scope->is_i64[lhs_slot]) return 0;
+
+    rhs_len = ident_len_at(p);
+    if (rhs_len > 0) {
+        if (rhs_len >= (int)sizeof(rhs_name)) return 0;
+        memcpy(rhs_name, p, (size_t)rhs_len); rhs_name[rhs_len] = '\0';
+        p = skip_spaces(p + rhs_len);
+        if (*p) return 0;
+        rhs_slot = scope_find(c->scope, rhs_name, strlen(rhs_name));
+        if (rhs_slot < 0) return 0;
+        if (!c->scope->is_i64[rhs_slot]) return 0;
+        return emit(c, MOP_I64_ADD_LOCAL_LOCAL, lhs_slot, rhs_slot, 0) >= 0 ? 1 : -1;
+    }
+
+    delta = strtoll(p, &endp, 10);
+    if (endp == p || *skip_spaces(endp) || delta < INT_MIN || delta > INT_MAX) return 0;
+    return emit(c, MOP_I64_ADD_LOCAL_CONST, lhs_slot, (int)delta, 0) >= 0 ? 1 : -1;
 }
 
 int find_assignment(const char *text) {
@@ -208,13 +286,20 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         c->loop_break_count[depth]=0;
         c->loop_continue_count[depth]=0;
         text[strlen(text)-1]='\0';
-        if(!compile_expr(c,text+6))return 0;
-        jf=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
+        {
+            int fast_condition = emit_fast_i64_lt_jump(c, trim(text+6), &jf);
+            if (fast_condition < 0) return 0;
+            if (!fast_condition) {
+                if(!compile_expr(c,text+6))return 0;
+                jf=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
+            }
+        }
         (*position)++;
         if(!compile_block(c,position,end,indent+4))return 0;
         for(int j=0;j<c->loop_continue_count[depth];++j)c->code[c->loop_continues[depth][j]].a=loop;
         emit(c,MOP_JUMP,loop,0,0);
-        c->code[jf].a=(int32_t)c->code_len;
+        if (c->code[jf].opcode == MOP_JUMP_IF_LOCAL_I64_LT_FALSE) c->code[jf].c=(int32_t)c->code_len;
+        else c->code[jf].a=(int32_t)c->code_len;
         for(int j=0;j<c->loop_break_count[depth];++j)c->code[c->loop_breaks[depth][j]].a=(int32_t)c->code_len;
         c->loop_depth--;
         return 1;
@@ -299,10 +384,19 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         while(n&&isspace((unsigned char)text[n-1]))n--;
         snprintf(name,sizeof(name),"%.*s",(int)n,text);
         expr=trim(text+assign+1);
-        if(!compile_expr(c,expr))return 0;
         {
-            int slot=scope_slot(c->scope,name,strlen(name),1);
-            if(slot<0||emit(c,MOP_STORE_LOCAL,slot,0,0)<0)return 0;
+            int fast_assign = emit_fast_i64_add_assignment(c, name, expr);
+            if (fast_assign < 0) return 0;
+            if (fast_assign) {
+                int slot = scope_find(c->scope, name, strlen(name));
+                if (slot >= 0) c->scope->is_i64[slot] = 1;
+            } else {
+                int slot;
+                if(!compile_expr(c,expr))return 0;
+                slot=scope_slot(c->scope,name,strlen(name),1);
+                if(slot<0||emit(c,MOP_STORE_LOCAL,slot,0,0)<0)return 0;
+                c->scope->is_i64[slot] = (unsigned char)expr_is_i64_literal(expr);
+            }
         }
         (*position)++;return 1;
     }
