@@ -182,7 +182,7 @@ static void print_runtime_error(const char *source_name, const MRunResult *resul
 /* ── entry point ─────────────────────────────────────────────────────────── */
 static void usage(const char *argv0){
     printf(
-        "Mellow Programming Language 2.9.6 (Full Native C)\n"
+        "Mellow Programming Language 2.9.7 (Full Native C)\n"
         "\n"
         "Common:\n"
         "  %s run <file>             Run a .mellow script\n"
@@ -200,7 +200,7 @@ static void usage(const char *argv0){
 
 static void native_doctor(const char *argv0){
     MRuntimePlatform platform=mellow_runtime_platform();
-    printf("MellowLang 2.9.6 (Full Native C)\n\n");
+    printf("MellowLang 2.9.7 (Full Native C)\n\n");
     printf("Environment\n");
     printf("  Executable    : %s\n",argv0);
     printf("  Runtime       : mellow-c standalone\n");
@@ -230,7 +230,7 @@ int main(int argc, char **argv){
         return 0;
     }
     if(!strcmp(argv[1],"--version")||!strcmp(argv[1],"-V")||!strcmp(argv[1],"version")){
-        puts("Mellow Programming Language 2.9.6 (Full Native C)");
+        puts("Mellow Programming Language 2.9.7 (Full Native C)");
         return 0;
     }
     if(!strcmp(argv[1],"doctor")||!strcmp(argv[1],"status")){

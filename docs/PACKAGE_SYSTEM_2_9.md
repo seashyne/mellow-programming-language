@@ -115,14 +115,14 @@ remote registry directly.
 
 Starter packages include:
 
-`core-ai`, `core-collections`, `core-data`, `core-gamekit`, `core-http`,
+`core-ai`, `core-canvas`, `core-collections`, `core-data`, `core-gamekit`, `core-http`,
 `core-json`, `core-ledger`, `core-math`, `core-mmg`, `core-money`,
 `core-print`, `core-save`, `core-storage`, `core-strings`, `core-time`,
 `core-window`, and `core-workflow`.
 
-The local registry also contains `core-melv` and `core-sm`. Their starter source
-directories do not yet include complete manifests, so `seed-core` does not copy
-them.
+The local registry also contains `core-melv` and `core-sm`. `core-melv` now has
+a complete starter manifest for the dependency-free MELV2 path; `core-sm` still
+needs a complete starter manifest before joining the starter package set.
 
 The default `mellow new` set is intentionally smaller: `core-print`,
 `core-strings`, `core-collections`, `core-math`, `core-json`, and `core-time`.
@@ -159,5 +159,5 @@ or major version instead.
   production deployment still needs durable database/object storage,
   operational monitoring, backups, rate limiting, and key rotation.
 - Package signing is optional rather than mandatory.
-- `core-sm` and `core-melv` need complete starter manifests and package-level
-  tests before joining the starter package set.
+- `core-sm` needs a complete starter manifest and package-level tests before
+  joining the starter package set.

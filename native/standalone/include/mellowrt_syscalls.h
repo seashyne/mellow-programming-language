@@ -16,6 +16,8 @@ typedef struct {
     uint64_t spawned_tasks;
     uint64_t yielded_tasks;
     uint64_t channel_count;
+    uint64_t canvas_count;
+    int recv_would_block;
     void *native_registry;
 } MellowRuntimeContext;
 

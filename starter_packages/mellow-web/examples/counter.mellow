@@ -1,0 +1,10 @@
+use mellow-web as web
+
+page Counter
+  state count = 0
+
+  view:
+    Stack(gap: 12)
+      Title("Mellow Counter")
+      Text("Count: {count}")
+      Button("Add", onClick: count += 1)

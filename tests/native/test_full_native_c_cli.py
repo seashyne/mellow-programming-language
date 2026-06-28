@@ -33,8 +33,13 @@ def native_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
         str(NATIVE / "src" / "mellowrt_core.c"),
         str(NATIVE / "src" / "mellowrt_debug.c"),
         str(NATIVE / "src" / "mellowrt_platform.c"),
+        str(NATIVE / "src" / "mellowrt_packages.c"),
+        str(NATIVE / "src" / "mellowrt_scheduler.c"),
         str(NATIVE / "src" / "mellowrt_syscalls.c"),
         str(NATIVE / "src" / "mellowc.c"),
+        str(NATIVE / "src" / "mellowc_lexer.c"),
+        str(NATIVE / "src" / "mellowc_modules.c"),
+        str(NATIVE / "src" / "mellowc_parser.c"),
         str(NATIVE / "src" / "mellowrt_main.c"),
         "-o",
         str(binary),
@@ -53,7 +58,7 @@ def test_full_native_version_has_no_python_runtime(native_binary: Path) -> None:
         check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == "Mellow Programming Language 2.9.6 (Full Native C)"
+    assert result.stdout.strip() == "Mellow Programming Language 2.9.7 (Full Native C)"
 
 
 def test_full_native_reports_runtime_platform(native_binary: Path) -> None:
@@ -267,6 +272,51 @@ def test_full_native_imports_builtin_module_aliases(native_binary: Path, tmp_pat
     assert result.stdout.splitlines() == ["5", "str", "native-import"]
 
 
+def test_full_native_accepts_installed_package_import(native_binary: Path, tmp_path: Path) -> None:
+    project = tmp_path / "pkg-project"
+    source = project / "src" / "main.mellow"
+    package = project / "mellow_packages" / "installed" / "demo-pkg" / "current" / "package"
+    source.parent.mkdir(parents=True)
+    package.joinpath("src").mkdir(parents=True)
+    (project / "mellow.toml").write_text(
+        'name = "pkg-project"\nversion = "0.1.0"\nentry = "src/main.mellow"\n',
+        encoding="utf-8",
+    )
+    (package / "manifest.json").write_text(
+        '{"name":"demo-pkg","version":"0.1.0","entry":"src/main.mellow"}\n',
+        encoding="utf-8",
+    )
+    (package / "src" / "main.mellow").write_text('keep ok = true\n', encoding="utf-8")
+    source.write_text('use demo-pkg as demo\nprint("package-ok")\n', encoding="utf-8")
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["package-ok"]
+
+
+def test_full_native_reports_missing_package_import(native_binary: Path, tmp_path: Path) -> None:
+    project = tmp_path / "missing-pkg-project"
+    source = project / "src" / "main.mellow"
+    source.parent.mkdir(parents=True)
+    (project / "mellow.toml").write_text(
+        'name = "missing-pkg-project"\nversion = "0.1.0"\nentry = "src/main.mellow"\n',
+        encoding="utf-8",
+    )
+    source.write_text('use missing-pkg as missing\nprint("never")\n', encoding="utf-8")
+    result = subprocess.run(
+        [str(native_binary), "check", str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "package import not installed" in result.stderr
+
+
 def test_full_native_gc_stats_foundation(native_binary: Path, tmp_path: Path) -> None:
     source = tmp_path / "gc-foundation.mellow"
     source.write_text(
@@ -403,6 +453,171 @@ def test_full_native_channels_send_recv_and_module_alias(native_binary: Path, tm
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == ["true", "hello", "none", "1", "1"]
+
+
+def test_full_native_green_threads_switch_between_tasks(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "green-thread-switching.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "def task_a():",
+                '    print("A1")',
+                "    yield()",
+                '    print("A2")',
+                "def task_b():",
+                '    print("B1")',
+                "    yield()",
+                '    print("B2")',
+                "spawn(task_a)",
+                "spawn(task_b)",
+                "yield()",
+                'print("M1")',
+                "yield()",
+                'print("M2")',
+                "yield()",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["A1", "B1", "M1", "A2", "B2", "M2"]
+
+
+def test_full_native_recv_empty_channel_implicitly_yields(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "channel-implicit-yield.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "let ch = channel()",
+                "def receiver():",
+                '    print("R wait")',
+                "    print(recv(ch))",
+                '    print("R done")',
+                "def sender():",
+                "    yield()",
+                '    send(ch, "msg")',
+                '    print("S sent")',
+                "spawn(receiver)",
+                "spawn(sender)",
+                "yield()",
+                "yield()",
+                "yield()",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["R wait", "S sent", "msg", "R done"]
+
+
+def test_full_native_gc_reports_heap_bytes_blocks_and_nested_ownership(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "gc-nested-ownership.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                'let inner = ["alpha", "beta"]',
+                'let outer = {"inner": inner, "label": "root"}',
+                'let holder = [outer, {"copy": inner}]',
+                "inner = none",
+                "outer = none",
+                "holder = none",
+                "gc_collect()",
+                "let stats = gc_stats()",
+                'print(stats["heap_blocks"])',
+                'print(stats["heap_bytes"])',
+                'print(stats["last_freed_blocks"] > 0)',
+                'print(stats["last_freed_bytes"] > 0)',
+                'print(stats["heap_live"])',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["0", "0", "true", "true", "0"]
+
+
+def test_full_native_gc_stress_collects_repeated_nested_values(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "gc-stress.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "var i = 0",
+                "var item = none",
+                "while i < 200:",
+                '    item = {"name": "item", "values": [i, str(i), {"again": str(i)}]}',
+                "    i = i + 1",
+                "item = none",
+                "gc_collect()",
+                "let stats = gc_stats()",
+                'print(stats["last_freed_blocks"] > 100)',
+                'print(stats["last_freed_bytes"] > 100)',
+                'print(stats["heap_live"])',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["true", "true", "0"]
+
+
+def test_full_native_canvas_package_surface_writes_ppm(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "canvas-circle.mellow"
+    image = (tmp_path / "circle.ppm").as_posix()
+    source.write_text(
+        "\n".join(
+            [
+                "use canvas as c",
+                "img = c.create(48, 48)",
+                'c.clear(img, "white")',
+                'c.circle(img, 24, 24, 14, "#33ccff")',
+                'c.rect(img, 4, 4, 8, 8, "yellow")',
+                f'print(c.save(img, "{image}"))',
+                "let stats = gc_stats()",
+                'print(stats["canvases"])',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["true", "1"]
+    data = (tmp_path / "circle.ppm").read_bytes()
+    assert data.startswith(b"P6\n48 48\n255\n")
+    assert len(data) == len(b"P6\n48 48\n255\n") + 48 * 48 * 3
 
 
 def test_full_native_syntax_parity_for_elif_show_stop_and_inline_comments(native_binary: Path, tmp_path: Path) -> None:

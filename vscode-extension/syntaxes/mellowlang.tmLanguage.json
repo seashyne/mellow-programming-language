@@ -14,6 +14,12 @@
       "include": "#keywords"
     },
     {
+      "include": "#builtins"
+    },
+    {
+      "include": "#modules"
+    },
+    {
       "include": "#types"
     }
   ],
@@ -23,6 +29,10 @@
         {
           "name": "comment.line.double-slash.frinds",
           "match": "//.*$"
+        },
+        {
+          "name": "comment.line.number-sign.mellow",
+          "match": "#.*$"
         },
         {
           "name": "comment.line.semicolon.frinds",
@@ -68,7 +78,23 @@
       "patterns": [
         {
           "name": "keyword.control.frinds",
-          "match": "\\b(if|else|elif|end|then|do|while|for|in|range|repeat|until|break|continue|return|fn|func|let|var|const|true|false|nil|null|and|or|not|import|emit)\\b"
+          "match": "\\b(if|else|elif|check|also|end|then|do|while|for|in|loop|range|repeat|until|break|continue|return|stop|wait|def|fn|func|function|skill|let|var|keep|const|true|false|none|null|nil|and|or|not|import|use|need|as|get|call|emit|on|try|catch|finally|save|load|into|put|show|precision)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.mellow",
+          "match": "\\b(print|println|write|input|readline|read_line|ask|args|argv|cwd|sleep_ms|exit|len|str|type|abs|floor|ceil|sqrt|min|max|range|clock_ms|getenv|gc_collect|gc_stats|spawn|yield|channel|send|recv)\\b(?=\\s*\\()"
+        }
+      ]
+    },
+    "modules": {
+      "patterns": [
+        {
+          "name": "support.module.mellow",
+          "match": "\\b(io|sys|math|time|gc|thread|chan)\\b(?=\\.)"
         }
       ]
     },

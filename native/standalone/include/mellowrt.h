@@ -131,6 +131,25 @@ typedef struct {
 } MFrame;
 
 typedef struct {
+    uint64_t id;
+    uint32_t pc;
+    int active;
+    int finished;
+    int blocked;
+    void *waiting_native;
+    MValue result;
+    MValue *stack;
+    size_t stack_len;
+    size_t stack_cap;
+    MFrame *frames;
+    size_t frame_len;
+    size_t frame_cap;
+    MValue *locals;
+    size_t locals_len;
+    size_t locals_cap;
+} MTask;
+
+typedef struct {
     const MInstruction *code;
     size_t code_len;
     const MValue *const_pool;
@@ -204,7 +223,15 @@ typedef struct {
     uint64_t heap_allocated;
     uint64_t heap_freed;
     uint64_t heap_live;
+    uint64_t heap_blocks;
+    uint64_t heap_bytes;
     uint64_t heap_last_gc_freed;
+    uint64_t heap_last_gc_freed_bytes;
+    MTask *tasks;
+    size_t task_len;
+    size_t task_cap;
+    size_t current_task;
+    uint64_t next_task_id;
 } MVM;
 
 typedef struct {
@@ -233,7 +260,10 @@ MValue mval_str(const char *ptr, size_t len);
 MValue mval_func(uint32_t address, uint16_t arity, uint16_t local_count, uint16_t flags);
 const char *mvalue_tag_name(MValueTag tag);
 void mvalue_free(MValue *v);
+MValue mvalue_clone(MVM *vm, const MValue *src);
+void mvm_gc_mark_value(MVM *vm, const MValue *value);
 uint64_t mvm_gc_collect(MVM *vm);
+uint64_t mvm_gc_collect_with_marker(MVM *vm, void (*marker)(void *user, MVM *vm), void *user);
 
 int mellow_compile_source(const char *source, const char *source_name, MNativeProgram *out, char *error, size_t error_cap);
 int mellow_compile_file(const char *path, MNativeProgram *out, char *error, size_t error_cap);

@@ -167,11 +167,13 @@ c.send(mailbox, "hello")
 print(c.recv(mailbox))
 ```
 
-In v2.9.6 these APIs are native C built-ins. Channels are FIFO native handles,
-`spawn` returns cooperative task ids, and `yield` records explicit scheduling
-points. `gc_stats()["mode"]` reports `mark-sweep-native-handles`; the collector
-marks native handles from VM stack/locals and sweeps unreachable channel handles.
-Full stack-switching M:N scheduling is still future runtime-engine work.
+In v2.9.7 these APIs are native C built-ins. Channels are FIFO native handles,
+`spawn` creates cooperative tasks, and `yield` round-robin switches between
+runnable tasks. `recv(ch)` on an empty channel implicitly yields when another
+task can run. `gc_stats()["mode"]` reports `mark-sweep-native-handles`; the
+collector marks native handles from VM stack/locals and sweeps unreachable
+channel handles. Full preemptive or OS-backed M:N scheduling is still future
+runtime-engine work.
 
 Inspect the binary's actual target and backend:
 

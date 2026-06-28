@@ -73,7 +73,10 @@ from .commands.media import (
     _cmd_melv_decode,
     _cmd_melv_encode,
     _cmd_melv_extract,
+    _cmd_melv_extract_native,
     _cmd_melv_inspect,
+    _cmd_melv_pack_frames,
+    _cmd_melv_validate,
     _cmd_mmg_build_native,
     _cmd_mmg_export_native,
     _cmd_mmg_run,
@@ -94,6 +97,7 @@ from .commands.standalone import (
     _cmd_standalone_run,
     _cmd_standalone_status,
 )
+from .commands.web import _cmd_web, _cmd_web_dev
 from .ux import (
     CLI_ALIASES,
     MODERN_CMDS,
@@ -380,6 +384,18 @@ def main(argv: List[str] | None = None) -> int:
                 return _cmd_desktop_status(getattr(ns, "json", False))
             p.print_help()
             return 2
+        if cmd == "web":
+            if getattr(ns, "web_cmd", None) == "dev":
+                return _cmd_web_dev(
+                    getattr(ns, "file", None),
+                    app_dir=getattr(ns, "dir", None),
+                    port=getattr(ns, "port", None),
+                    host=getattr(ns, "host", None),
+                    json_out=getattr(ns, "json", False),
+                    build_only=getattr(ns, "build_only", False),
+                    prepare_only=getattr(ns, "prepare_only", False),
+                )
+            return _cmd_web(getattr(ns, "web_cmd", None), getattr(ns, "file", None), getattr(ns, "out", None), getattr(ns, "json", False))
         if cmd == "mmg":
             subcmd = getattr(ns, "mmg_cmd", None)
             if subcmd == "run":
@@ -406,14 +422,20 @@ def main(argv: List[str] | None = None) -> int:
             return 2
         if cmd == "melv":
             subcmd = getattr(ns, "melv_cmd", None)
-            if subcmd == "encode":
+            if subcmd in {"encode", "import-video"}:
                 return _cmd_melv_encode(ns.input, ns.out, getattr(ns, "fps", None), getattr(ns, "max_frames", None), getattr(ns, "json", False))
-            if subcmd == "decode":
+            if subcmd == "pack-frames":
+                return _cmd_melv_pack_frames(ns.frames, ns.out, getattr(ns, "fps", None), getattr(ns, "json", False))
+            if subcmd in {"decode", "export-video"}:
                 return _cmd_melv_decode(ns.input, ns.out, getattr(ns, "json", False))
+            if subcmd == "extract-native":
+                return _cmd_melv_extract_native(ns.input, ns.out, getattr(ns, "json", False))
             if subcmd == "extract":
                 return _cmd_melv_extract(ns.input, ns.out, getattr(ns, "json", False))
             if subcmd == "inspect":
                 return _cmd_melv_inspect(ns.input, getattr(ns, "json", False))
+            if subcmd == "validate":
+                return _cmd_melv_validate(ns.input, getattr(ns, "strict", False), getattr(ns, "json", False))
             p.print_help()
             return 2
         if cmd == "lsp":

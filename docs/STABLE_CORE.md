@@ -47,7 +47,8 @@ These features are allowed to be missing from a default install and should be re
 - `lsp`: language server support
 - `net`: websocket/network helpers
 - `security`: signing and secure-save helpers
-- `video`: MELV video encode/decode
+- `video`: MELV2 native container pack/inspect/validate/extract; common-video
+  encode/decode remains an optional bridge
 - native VM: default engine with stable-core, money, data, and ledger parity
 - Full Native C CLI: lexer, compiler, bytecode VM, and Core built-ins
 - finance sandbox profile: supports native execution with storage denial enforced in the C VM

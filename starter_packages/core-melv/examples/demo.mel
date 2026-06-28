@@ -1,0 +1,4 @@
+# Native MELV2 is produced by the CLI:
+# mellow melv pack-frames frame000.ppm frame001.ppm -o demo.melv --fps 24
+keep package = "core-melv"
+keep native_codec = "mellow-rgb-rle"

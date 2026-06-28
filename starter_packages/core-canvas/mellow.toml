@@ -1,0 +1,12 @@
+name = "core-canvas"
+version = "0.1.0"
+description = "Native headless canvas drawing package for Mellow C runtime."
+entry = "src/main.mellow"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "canvas", "graphics", "native", "starter"]
+badges = ["official", "native"]
+official = true
+[dependencies]

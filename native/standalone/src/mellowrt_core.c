@@ -1,4 +1,6 @@
 #include "mellowrt.h"
+#include "mellowrt_syscalls.h"
+#include "mellowrt_scheduler.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -48,6 +50,8 @@ static void *heap_alloc(MVM *vm, size_t count, size_t item_size, MHeapKind kind)
     g_heap_blocks = block;
     vm->heap_allocated++;
     vm->heap_live++;
+    vm->heap_blocks++;
+    vm->heap_bytes += bytes;
     return ptr;
 }
 
@@ -84,21 +88,40 @@ static void heap_mark_value(MVM *vm, const MValue *value) {
     }
 }
 
-uint64_t mvm_gc_collect(MVM *vm) {
+void mvm_gc_mark_value(MVM *vm, const MValue *value) {
+    heap_mark_value(vm, value);
+}
+
+uint64_t mvm_gc_collect_with_marker(MVM *vm, void (*marker)(void *user, MVM *vm), void *user) {
     MHeapBlock *block;
     MHeapBlock *prev = NULL;
     MHeapBlock *next;
     uint64_t freed = 0;
+    uint64_t freed_bytes = 0;
     size_t i;
     if (!vm) return 0;
     for (block = g_heap_blocks; block; block = block->next)
         if (block->owner == vm) block->marked = 0;
     for (i = 0; i < vm->stack_len; ++i) heap_mark_value(vm, &vm->stack[i]);
     for (i = 0; i < vm->locals_len; ++i) heap_mark_value(vm, &vm->locals[i]);
+    for (i = 0; i < vm->task_len; ++i) {
+        MTask *task = &vm->tasks[i];
+        size_t j;
+        if (!task->active || task->finished || i == vm->current_task) continue;
+        for (j = 0; j < task->stack_len; ++j) heap_mark_value(vm, &task->stack[j]);
+        for (j = 0; j < task->locals_len; ++j) heap_mark_value(vm, &task->locals[j]);
+    }
+    if (marker) marker(user, vm);
     block = g_heap_blocks;
     while (block) {
         next = block->next;
         if (block->owner == vm && !block->marked) {
+            {
+                size_t block_bytes = block->bytes;
+                freed_bytes += block_bytes;
+                if (vm->heap_bytes >= block_bytes) vm->heap_bytes -= block_bytes;
+                else vm->heap_bytes = 0;
+            }
             if (prev) prev->next = next;
             else g_heap_blocks = next;
             free(block->ptr);
@@ -106,13 +129,19 @@ uint64_t mvm_gc_collect(MVM *vm) {
             freed++;
             vm->heap_freed++;
             if (vm->heap_live > 0) vm->heap_live--;
+            if (vm->heap_blocks > 0) vm->heap_blocks--;
         } else {
             prev = block;
         }
         block = next;
     }
     vm->heap_last_gc_freed = freed;
+    vm->heap_last_gc_freed_bytes = freed_bytes;
     return freed;
+}
+
+uint64_t mvm_gc_collect(MVM *vm) {
+    return mvm_gc_collect_with_marker(vm, NULL, NULL);
 }
 
 static int ensure_stack(MVM *vm, size_t cap) {
@@ -162,7 +191,23 @@ void mvalue_free(MValue *v) {
     *v = mval_none();
 }
 void mvm_free(MVM *vm) {
+    size_t i;
     if (!vm) return;
+    if (vm->tasks) {
+        if (vm->current_task < vm->task_len) {
+            MTask *task = &vm->tasks[vm->current_task];
+            task->stack = vm->stack; task->stack_len = vm->stack_len; task->stack_cap = vm->stack_cap;
+            task->frames = vm->frames; task->frame_len = vm->frame_len; task->frame_cap = vm->frame_cap;
+            task->locals = vm->locals; task->locals_len = vm->locals_len; task->locals_cap = vm->locals_cap;
+        }
+        for (i = 0; i < vm->task_len; ++i) mellowrt_task_free_values(&vm->tasks[i]);
+        free(vm->tasks);
+        vm->stack = NULL; vm->frames = NULL; vm->locals = NULL;
+        vm->stack_len = vm->frame_len = vm->locals_len = 0;
+        mvm_gc_collect(vm);
+        memset(vm, 0, sizeof(*vm));
+        return;
+    }
     for (size_t i = 0; i < vm->stack_len; ++i) mvalue_free(&vm->stack[i]);
     for (size_t i = 0; i < vm->locals_len; ++i) mvalue_free(&vm->locals[i]);
     mvm_gc_collect(vm);
@@ -202,8 +247,8 @@ static MValue mval_owned_str(MVM *vm, const char *src, size_t len) {
     return v;
 }
 
-/* Deep-copy a value so every allocation is independently owned. */
-static MValue mvalue_deep_copy(MVM *vm, const MValue *src) {
+/* Deep-copy a value so every allocation is independently owned by this VM. */
+MValue mvalue_clone(MVM *vm, const MValue *src) {
     if (!src) return mval_none();
     switch (src->tag) {
     case MVAL_STR:
@@ -216,7 +261,7 @@ static MValue mvalue_deep_copy(MVM *vm, const MValue *src) {
         v.as.list.items = src->as.list.len ? (MValue*)heap_alloc(vm, src->as.list.len, sizeof(MValue), MHEAP_LIST_ITEMS) : NULL;
         if (src->as.list.len && !v.as.list.items) return mval_none();
         for (size_t i=0;i<src->as.list.len;++i)
-            v.as.list.items[i] = mvalue_deep_copy(vm, &src->as.list.items[i]);
+            v.as.list.items[i] = mvalue_clone(vm, &src->as.list.items[i]);
         return v;
     }
     case MVAL_MAP: {
@@ -228,8 +273,8 @@ static MValue mvalue_deep_copy(MVM *vm, const MValue *src) {
             mvalue_free(&v); return mval_none();
         }
         for (size_t i=0;i<src->as.map.len;++i) {
-            v.as.map.keys[i]   = mvalue_deep_copy(vm, &src->as.map.keys[i]);
-            v.as.map.values[i] = mvalue_deep_copy(vm, &src->as.map.values[i]);
+            v.as.map.keys[i]   = mvalue_clone(vm, &src->as.map.keys[i]);
+            v.as.map.values[i] = mvalue_clone(vm, &src->as.map.values[i]);
         }
         return v;
     }
@@ -349,6 +394,7 @@ static int coerce_str(MValue v, char *buf, size_t bufsz, const char **out_ptr, s
 }
 
 int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
+    size_t next_task;
     if (!vm||!program||!out) return 0;
     memset(out,0,sizeof(*out));
     uint32_t pc=0;
@@ -356,8 +402,14 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
     if (!ensure_frames(vm,1)){set_error(out,"frame_alloc_failed");return 0;}
     vm->frame_len=1;
     vm->frames[0]=(MFrame){.frame_id=0,.return_pc=(uint32_t)program->code_len,.base=0,.local_base=0,.local_count=0,.function={0,0,0,0}};
+    if (!mellowrt_scheduler_bootstrap(vm)){set_error(out,"scheduler_alloc_failed");return 0;}
+    mellowrt_task_save_from_vm(vm, 0, 0);
+    mellowrt_task_load_into_vm(vm, 0);
+    pc = vm->tasks[vm->current_task].pc;
 
-    while (pc<program->code_len) {
+    while (1) {
+        if (pc >= program->code_len) goto finish_current_task;
+        if (vm->current_task >= vm->task_len) { set_error(out,"scheduler_current_task_oob"); return 0; }
         const MInstruction *insn=&program->code[pc];
         const MSourceSpan  *span=(program->span_map&&pc<program->span_len)?&program->span_map[pc]:NULL;
         out->error_pc=pc;
@@ -375,12 +427,12 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         /* control */
         case MOP_HALT:
         case MOP_STOP:
-            out->halted=1; out->result=vm->stack_len?vm->stack[vm->stack_len-1]:mval_none(); return 1;
+            goto finish_current_task;
 
         /* stack */
         case MOP_PUSH_CONST: {
             if ((size_t)insn->a >= program->const_len) { set_error(out,"push_const_oob"); return 0; }
-            MValue cv = mvalue_deep_copy(vm, &program->const_pool[insn->a]);
+            MValue cv = mvalue_clone(vm, &program->const_pool[insn->a]);
             if (!push(vm, cv)) { set_error(out,"push_const_failed"); return 0; }
             pc++; break;
         }
@@ -395,7 +447,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             if (!slot){set_error(out,"load_local_failed");return 0;}
             /* Full deep-copy (strings, lists, maps) so mvm_free never
                double-frees a value that lives in both stack and locals. */
-            MValue cv = mvalue_deep_copy(vm, slot);
+            MValue cv = mvalue_clone(vm, slot);
             if (!push(vm, cv)){set_error(out,"load_local_failed");return 0;}
             pc++; break;
         }
@@ -527,7 +579,11 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
 
         case MOP_RETURN: {
             MValue ret=vm->stack_len?pop(vm):mval_none();
-            if (vm->frame_len<=1){out->halted=1;out->result=ret;return 1;}
+            if (vm->frame_len<=1){
+                if (vm->current_task == 0) out->result = ret;
+                else vm->tasks[vm->current_task].result = ret;
+                goto finish_current_task_with_result;
+            }
             MFrame ended=vm->frames[--vm->frame_len];
             for(size_t i=ended.local_base;i<vm->locals_len;++i) mvalue_free(&vm->locals[i]);
             vm->locals_len=ended.local_base; vm->stack_len=ended.base;
@@ -551,11 +607,11 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 int64_t i=(idx.tag==MVAL_I64)?idx.as.i64:(idx.tag==MVAL_F64)?(int64_t)idx.as.f64:-1;
                 if (i<0) i+=(int64_t)cont.as.list.len;
                 if (i<0||(size_t)i>=cont.as.list.len){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_index_out_of_range");return 0;}
-                selected=mvalue_deep_copy(vm, &cont.as.list.items[(size_t)i]);
+                selected=mvalue_clone(vm, &cont.as.list.items[(size_t)i]);
             } else if (cont.tag==MVAL_MAP){
                 MValue val=mval_none();
                 if (!map_get(&cont.as.map,&idx,&val)){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_key_not_found");return 0;}
-                selected=mvalue_deep_copy(vm, &val);
+                selected=mvalue_clone(vm, &val);
             } else if (cont.tag==MVAL_STR){
                 int64_t i=(idx.tag==MVAL_I64)?idx.as.i64:(idx.tag==MVAL_F64)?(int64_t)idx.as.f64:-1;
                 if (i<0) i+=(int64_t)cont.as.str.len;
@@ -584,18 +640,70 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         case MOP_IMPORT: pc++; break; /* metadata in image; no-op at runtime */
 
         case MOP_SYSCALL: {
+            MellowRuntimeContext *rt_ctx = (MellowRuntimeContext *)vm->syscall.user;
             if (!vm->syscall.fn){set_error(out,"syscall_bridge_missing");return 0;}
             size_t argc=(size_t)insn->b;
             if (argc>vm->stack_len){set_error(out,"syscall_stack_underflow");return 0;}
             MValue result=mval_none();
+            if (insn->a == 23) {
+                uint64_t task_id;
+                if (argc != 1 || vm->stack[vm->stack_len - 1].tag != MVAL_FUNC) {
+                    set_error(out,"spawn_requires_function"); return 0;
+                }
+                task_id = mellowrt_scheduler_spawn(vm, vm->stack[vm->stack_len - 1].as.func);
+                if (!task_id) { set_error(out,"spawn_failed"); return 0; }
+                if (rt_ctx) rt_ctx->spawned_tasks++;
+                for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
+                vm->stack_len-=argc;
+                if (insn->c && !push(vm, mval_i64((int64_t)task_id))) { set_error(out,"spawn_result_push_failed"); return 0; }
+                out->syscalls++; pc++; break;
+            }
+            if (insn->a == 24) {
+                if (argc != 0) { set_error(out,"yield_takes_no_args"); return 0; }
+                if (rt_ctx) rt_ctx->yielded_tasks++;
+                out->syscalls++; pc++;
+                mellowrt_task_save_from_vm(vm, vm->current_task, pc);
+                next_task = mellowrt_scheduler_next_runnable(vm);
+                if (next_task != (size_t)-1) {
+                    mellowrt_task_load_into_vm(vm, next_task);
+                    pc = vm->tasks[vm->current_task].pc;
+                }
+                break;
+            }
             if (!vm->syscall.fn(vm->syscall.user,insn->a,vm->stack+(vm->stack_len-argc),argc,&result)){
                 for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
                 vm->stack_len-=argc;set_error(out,"syscall_failed");return 0;
+            }
+            if (rt_ctx && rt_ctx->recv_would_block) {
+                void *waiting = NULL;
+                if (argc == 1 && vm->stack[vm->stack_len - 1].tag == MVAL_NATIVE)
+                    waiting = vm->stack[vm->stack_len - 1].as.ptr;
+                rt_ctx->recv_would_block = 0;
+                mvalue_free(&result);
+                vm->tasks[vm->current_task].blocked = 1;
+                vm->tasks[vm->current_task].waiting_native = waiting;
+                mellowrt_task_save_from_vm(vm, vm->current_task, pc);
+                next_task = mellowrt_scheduler_next_runnable(vm);
+                if (next_task == (size_t)-1) {
+                    vm->tasks[vm->current_task].blocked = 0;
+                    vm->tasks[vm->current_task].waiting_native = NULL;
+                    for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
+                    vm->stack_len-=argc;
+                    if (insn->c&&!push(vm,result)){mvalue_free(&result);set_error(out,"syscall_result_push_failed");return 0;}
+                    if (!insn->c) mvalue_free(&result);
+                    out->syscalls++; pc++;
+                    break;
+                }
+                mellowrt_task_load_into_vm(vm, next_task);
+                pc = vm->tasks[vm->current_task].pc;
+                out->syscalls++;
+                break;
             }
             for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
             vm->stack_len-=argc;
             if (insn->c&&!push(vm,result)){mvalue_free(&result);set_error(out,"syscall_result_push_failed");return 0;}
             if (!insn->c) mvalue_free(&result);
+            if (insn->a == 26) mellowrt_scheduler_unblock_native_waiters(vm, NULL);
             out->syscalls++; pc++; break;
         }
 
@@ -615,6 +723,21 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         if (vm->debug.on_after_instruction&&!vm->debug.on_after_instruction(vm->debug.user,&snap)){
             out->halted=1; out->result=vm->stack_len?vm->stack[vm->stack_len-1]:mval_none(); return 1;
         }
+        continue;
+
+finish_current_task:
+        if (vm->current_task == 0)
+            out->result = vm->stack_len ? mvalue_clone(vm, &vm->stack[vm->stack_len-1]) : mval_none();
+        else
+            vm->tasks[vm->current_task].result = vm->stack_len ? mvalue_clone(vm, &vm->stack[vm->stack_len-1]) : mval_none();
+finish_current_task_with_result:
+        vm->tasks[vm->current_task].finished = 1;
+        mellowrt_task_save_from_vm(vm, vm->current_task, pc);
+        next_task = mellowrt_scheduler_next_runnable(vm);
+        if (next_task == (size_t)-1) break;
+        mellowrt_task_load_into_vm(vm, next_task);
+        pc = vm->tasks[vm->current_task].pc;
     }
-    out->halted=1; out->result=vm->stack_len?vm->stack[vm->stack_len-1]:mval_none(); return 1;
+    out->halted=1;
+    return 1;
 }

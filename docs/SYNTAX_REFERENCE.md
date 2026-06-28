@@ -1,4 +1,4 @@
-# คู่มือ Syntax Mellow Programming Language v2.9.6
+# คู่มือ Syntax Mellow Programming Language v2.9.7
 
 เอกสารนี้เป็นคู่มือรวม syntax ทั้ง Core, Extended และ Compatibility ที่ compiler
 รองรับ สำหรับข้อกำหนดแบบบังคับและ syntax ที่ล็อกแล้วของ v2.9 ให้ยึด
@@ -105,17 +105,37 @@ print show precision wait stop save load put into on do end
 
 ## 5. Variable และ assignment
 
-ประกาศ variable ด้วย `let`:
+Mellow รองรับทั้ง style แบบ Mellow และ style ที่ใกล้ Python
+
+แบบ Mellow ใช้ `let` เพื่อบอกเจตนาว่านี่คือชื่อใหม่:
 
 ```mellow
 let score = 0
 let name = "Mellow"
 ```
 
-เปลี่ยนค่าโดยไม่ต้องเขียน `let` ซ้ำ:
+แบบ Python-style สามารถเขียน assignment โดยไม่ต้องมี `let` ได้ ถ้าชื่อนั้นยัง
+ไม่มีอยู่ compiler จะสร้างชื่อใหม่ใน scope ปัจจุบันให้:
+
+```mellow
+score = 0
+name = "Mellow"
+```
+
+เปลี่ยนค่าใช้ assignment เหมือนกัน:
 
 ```mellow
 score = score + 10
+```
+
+ทั้งสองแบบนี้เทียบเท่ากันใน Full Native C runtime:
+
+```mellow
+let radius = 10
+```
+
+```mellow
+radius = 10
 ```
 
 ประกาศหรือกำหนดหลายค่าแบบขนาน:
@@ -134,6 +154,30 @@ keep display_name = "supported"
 
 Mellow เป็นภาษา dynamic typing จึงไม่ต้องประกาศ type แต่ควรรักษาชนิดข้อมูลของ
 variable ให้สม่ำเสมอเพื่อให้อ่านง่าย
+
+ตัวอย่าง Python-style ที่รันได้ด้วย native C:
+
+```mellow
+radius = 10
+y = 0 - radius
+
+while y <= radius:
+    line = ""
+    x = 0 - radius
+
+    while x <= radius:
+        distance = x * x + y * y
+
+        if distance <= radius * radius:
+            line = line + "●"
+        else:
+            line = line + " "
+
+        x = x + 1
+
+    print(line)
+    y = y + 1
+```
 
 ## 6. ชนิดข้อมูลพื้นฐาน
 
@@ -314,7 +358,7 @@ out.println(m.sqrt(25))
 out.println(system.cwd())
 ```
 
-ใน Full Native C runtime รอบ v2.9.6, `import` / `use` / `need` รองรับเฉพาะ
+ใน Full Native C runtime รอบ v2.9.7, `import` / `use` / `need` รองรับเฉพาะ
 builtin modules แบบ allowlist (`io`, `sys`, `math`, `time`, `gc`, `thread`, `chan`) และทำหน้าที่เป็น
 alias ตอน compile เท่านั้น. Local file/package import ยังเป็นงานของ module
 loader รอบถัดไป
@@ -352,10 +396,13 @@ c.send(mailbox, "ping")
 print(c.recv(mailbox))
 ```
 
-ใน v2.9.6 ส่วน GC เป็น native mark/sweep สำหรับ runtime-owned native handles:
-runtime จะ mark จาก VM stack/locals แล้ว sweep channel handles ที่ไม่ reachable.
-`gc_stats()["mode"]` จะเป็น `mark-sweep-native-handles`. ส่วน `spawn/yield`
-ยังเป็น cooperative task API ขั้นแรก และยังไม่ใช่ full M:N stack-switching scheduler
+ใน v2.9.7 ส่วน GC เป็น native mark/sweep สำหรับ runtime-owned native handles
+และ VM heap ของ string/list/map: runtime จะ mark จาก VM stack/locals/task state
+แล้ว sweep channel handles และ heap blocks ที่ไม่ reachable.
+`gc_stats()["mode"]` จะเป็น `mark-sweep-native-handles`. `spawn(fn)` สร้าง
+cooperative task จริง, `yield()` สลับ task แบบ round-robin และ `recv(ch)` บน
+channel ว่างจะ implicit yield ถ้ามี task อื่นให้รัน. ยังไม่ใช่ full preemptive
+หรือ OS-backed M:N scheduler
 
 ### Wait และ stop
 
@@ -921,7 +968,7 @@ mellow doctor
 ## 24. ขอบเขตของ v2.9.0
 
 - ไม่มี class, object declaration, decorator หรือ static type annotation
-- ไม่มี `raise`, `async/await`, generator และ match expression; `yield()` ใน v2.9.6 เป็น native builtin call ไม่ใช่ generator keyword
+- ไม่มี `raise`, `async/await`, generator และ match expression; `yield()` ใน v2.9.7 เป็น native builtin call ไม่ใช่ generator keyword
 - assignment target ต้องเป็นชื่อ variable ไม่รองรับ `items[0] = value`
 - slice step ถูก parse แต่ยังไม่ถูกใช้โดย compiler
 - events, debugger และ record/replay ยังไม่อยู่ใน Full Native C Core Profile

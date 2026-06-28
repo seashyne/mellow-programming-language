@@ -1,6 +1,6 @@
 {
   "name": "mellowlang",
-  "version": "2.9.6",
+  "version": "2.9.7",
   "description": "Native-first Mellow programming language CLI installer and wrapper.",
   "license": "MIT",
   "author": "Seashyne",

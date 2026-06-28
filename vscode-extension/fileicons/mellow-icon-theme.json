@@ -1,0 +1,17 @@
+{
+  "iconDefinitions": {
+    "_mellow": {
+      "iconPath": "../icons/mellow-logo.png"
+    }
+  },
+  "fileExtensions": {
+    "mellow": "_mellow",
+    "mel": "_mellow",
+    "fds": "_mellow",
+    "frinds": "_mellow",
+    "frlib": "_mellow"
+  },
+  "languageIds": {
+    "mellow": "_mellow"
+  }
+}

@@ -23,6 +23,7 @@ REQUIRED_STARTER_PACKAGES = {
     "core-time",
     "core-window",
     "core-workflow",
+    "mellow-web",
 }
 
 

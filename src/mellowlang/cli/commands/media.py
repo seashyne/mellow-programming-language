@@ -22,6 +22,10 @@ encode_video_to_melv = _lazy_attr("mellowlang.melv_codec", "encode_video_to_melv
 decode_melv_to_video = _lazy_attr("mellowlang.melv_codec", "decode_melv_to_video")
 inspect_melv = _lazy_attr("mellowlang.melv_codec", "inspect_melv")
 extract_melv_frames = _lazy_attr("mellowlang.melv_codec", "extract_melv_frames")
+validate_melv = _lazy_attr("mellowlang.melv_codec", "validate_melv")
+encode_ppm_sequence_to_melv = _lazy_attr("mellowlang.melv_native_codec", "encode_ppm_sequence_to_melv")
+inspect_native_melv = _lazy_attr("mellowlang.melv_native_codec", "inspect_native_melv")
+extract_native_melv_frames = _lazy_attr("mellowlang.melv_native_codec", "extract_native_melv_frames")
 
 def _cmd_mmg_status(json_out: bool = False) -> int:
     payload = mmg_status()
@@ -119,12 +123,30 @@ def _cmd_melv_encode(input_path: str, out_path: str, fps: float | None, max_fram
     return 0
 
 
+def _cmd_melv_pack_frames(frame_paths: list[str], out_path: str, fps: float | None, json_out: bool) -> int:
+    payload = encode_ppm_sequence_to_melv(frame_paths, out_path, fps=float(fps or 24.0))
+    if json_out:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"packed {payload['frames']} PPM frames -> {payload['output']} ({payload['codec']}, native C-readable)")
+    return 0
+
+
 def _cmd_melv_decode(input_path: str, out_path: str, json_out: bool) -> int:
     payload = decode_melv_to_video(input_path, out_path)
     if json_out:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         print(f"decoded {payload['input']} -> {payload['output']} ({payload['frames']} frames)")
+    return 0
+
+
+def _cmd_melv_extract_native(input_path: str, out_dir: str, json_out: bool) -> int:
+    payload = extract_native_melv_frames(input_path, out_dir)
+    if json_out:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"extracted {payload['frames']} native MELV frames to {payload['output']}")
     return 0
 
 
@@ -138,14 +160,45 @@ def _cmd_melv_extract(input_path: str, out_dir: str, json_out: bool) -> int:
 
 
 def _cmd_melv_inspect(input_path: str, json_out: bool) -> int:
-    payload = inspect_melv(input_path)
+    try:
+        payload = inspect_native_melv(input_path)
+    except Exception:
+        payload = inspect_melv(input_path)
     if json_out:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         print(f".melv codec: {payload['codec']}")
         print(f"size: {payload['width']}x{payload['height']} @ {payload['fps']} fps")
         print(f"frames: {payload['frames']}")
+        if payload.get("native"):
+            print("backend: native C-readable")
     return 0
+
+
+def _cmd_melv_validate(input_path: str, strict: bool, json_out: bool) -> int:
+    try:
+        payload = inspect_native_melv(input_path)
+        payload.setdefault("errors", [])
+        payload.setdefault("warnings", [])
+        payload["ok"] = bool(payload.get("ok", True))
+    except Exception:
+        payload = validate_melv(input_path, strict=strict)
+    if strict and payload.get("warnings"):
+        payload["ok"] = False
+    if json_out:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        if payload.get("ok"):
+            print(f"valid MELV: {input_path}")
+        else:
+            print(f"invalid MELV: {input_path}")
+            for err in payload.get("errors") or []:
+                print(f"- {err}")
+        for warning in payload.get("warnings") or []:
+            print(f"! {warning}")
+        if payload.get("native"):
+            print("backend: native C-readable")
+    return 0 if payload.get("ok") else 1
 
 
 def _cmd_desktop_status(json_out: bool = False) -> int:

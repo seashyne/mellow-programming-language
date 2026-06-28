@@ -1,0 +1,4 @@
+[package]
+name = "core-melv"
+version = "0.2.0"
+description = "Mellow-owned dependency-free video container package (.melv)"

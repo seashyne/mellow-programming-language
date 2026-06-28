@@ -1,102 +1,17 @@
-#include "mellowrt.h"
+#include "mellowc_internal.h"
 
 #include <ctype.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-typedef enum {
-    TK_EOF, TK_NUM, TK_STR, TK_ID, TK_LP, TK_RP, TK_LB, TK_RB, TK_LC, TK_RC,
-    TK_COMMA, TK_COLON, TK_PLUS, TK_MINUS, TK_STAR, TK_SLASH, TK_PERCENT,
-    TK_EQ, TK_NE, TK_LT, TK_LE, TK_GT, TK_GE
-} TokenKind;
-
-typedef struct {
-    TokenKind kind;
-    const char *start;
-    size_t len;
-    double number;
-    int is_float;
-} Token;
-
-typedef struct {
-    const char *cur;
-    Token token;
-    int line;
-} Lexer;
-
-typedef struct {
-    char *text;
-    int indent;
-    int number;
-} SourceLine;
-
-typedef struct {
-    char name[64];
-    int slot;
-} Variable;
-
-typedef struct {
-    Variable vars[256];
-    int len;
-} Scope;
-
-typedef struct {
-    char alias[64];
-    char module[32];
-} ModuleAlias;
-
-typedef struct {
-    char name[64];
-    char params[16][64];
-    int arity;
-    int address;
-    int local_count;
-    int const_slot;
-    int line_start;
-    int line_end;
-    int body_indent;
-} Function;
-
-typedef struct {
-    MInstruction *code;
-    size_t code_len, code_cap;
-    MSourceSpan *spans;
-    size_t span_len, span_cap;
-    MValue *consts;
-    size_t const_len, const_cap;
-    SourceLine *lines;
-    int line_count;
-    Function funcs[128];
-    int func_count;
-    ModuleAlias module_aliases[32];
-    int module_alias_count;
-    int loop_depth;
-    int loop_breaks[32][64];
-    int loop_break_count[32];
-    int loop_continues[32][64];
-    int loop_continue_count[32];
-    Scope globals;
-    Scope *scope;
-    int current_line;
-    const char *source_name;
-    char *error;
-    size_t error_cap;
-} Compiler;
-
-typedef struct {
-    Compiler *compiler;
-    Lexer lexer;
-} Expr;
-
-static void set_error(Compiler *c, const char *message) {
+void set_error(Compiler *c, const char *message) {
     if (c->error && c->error_cap && !c->error[0])
         snprintf(c->error, c->error_cap, "%s:%d:1: syntax error: %s",
                  c->source_name ? c->source_name : "<memory>", c->current_line, message);
 }
 
-static char *copy_text(const char *s, size_t n) {
+char *copy_text(const char *s, size_t n) {
     char *p = (char *)calloc(n + 1, 1);
     if (p && n) memcpy(p, s, n);
     return p;
@@ -115,7 +30,7 @@ static int reserve(void **ptr, size_t *cap, size_t need, size_t item_size) {
     return 1;
 }
 
-static int emit(Compiler *c, int op, int a, int b, int d) {
+int emit(Compiler *c, int op, int a, int b, int d) {
     MSourceSpan span;
     if (!reserve((void **)&c->code, &c->code_cap, c->code_len + 1, sizeof(*c->code)) ||
         !reserve((void **)&c->spans, &c->span_cap, c->span_len + 1, sizeof(*c->spans))) {
@@ -128,7 +43,7 @@ static int emit(Compiler *c, int op, int a, int b, int d) {
     return (int)c->code_len++;
 }
 
-static int add_const(Compiler *c, MValue value) {
+int add_const(Compiler *c, MValue value) {
     if (!reserve((void **)&c->consts, &c->const_cap, c->const_len + 1, sizeof(*c->consts))) {
         set_error(c, "constant pool allocation failed");
         return -1;
@@ -137,7 +52,7 @@ static int add_const(Compiler *c, MValue value) {
     return (int)c->const_len++;
 }
 
-static MValue owned_string(const char *s, size_t n) {
+MValue owned_string(const char *s, size_t n) {
     MValue value = mval_none();
     char *copy = copy_text(s, n);
     if (!copy) return value;
@@ -148,75 +63,7 @@ static MValue owned_string(const char *s, size_t n) {
     return value;
 }
 
-static void lex_next(Lexer *l) {
-    const char *start;
-    while (*l->cur == ' ' || *l->cur == '\t') l->cur++;
-    start = l->cur;
-    l->token = (Token){TK_EOF, start, 0, 0, 0};
-    if (!*start || *start == '#') return;
-    if (isdigit((unsigned char)*start)) {
-        char *end;
-        l->token.number = strtod(start, &end);
-        l->token.kind = TK_NUM;
-        l->token.start = start;
-        l->token.len = (size_t)(end - start);
-        l->token.is_float = memchr(start, '.', l->token.len) != NULL ||
-                            memchr(start, 'e', l->token.len) != NULL ||
-                            memchr(start, 'E', l->token.len) != NULL;
-        l->cur = end;
-        return;
-    }
-    if (isalpha((unsigned char)*start) || *start == '_') {
-        l->cur++;
-        while (isalnum((unsigned char)*l->cur) || *l->cur == '_' || *l->cur == '.') l->cur++;
-        l->token = (Token){TK_ID, start, (size_t)(l->cur - start), 0, 0};
-        return;
-    }
-    if (*start == '"' || *start == '\'') {
-        char quote = *start++;
-        l->cur = start;
-        while (*l->cur && *l->cur != quote) {
-            if (*l->cur == '\\' && l->cur[1]) l->cur += 2;
-            else l->cur++;
-        }
-        l->token = (Token){TK_STR, start, (size_t)(l->cur - start), 0, 0};
-        if (*l->cur == quote) l->cur++;
-        return;
-    }
-#define ONE(ch, token_kind) case ch: l->cur++; l->token.kind=token_kind; l->token.len=1; return
-    switch (*start) {
-        ONE('(', TK_LP); ONE(')', TK_RP); ONE('[', TK_LB); ONE(']', TK_RB);
-        ONE('{', TK_LC); ONE('}', TK_RC); ONE(',', TK_COMMA); ONE(':', TK_COLON);
-        ONE('+', TK_PLUS); ONE('-', TK_MINUS); ONE('*', TK_STAR);
-        ONE('/', TK_SLASH); ONE('%', TK_PERCENT);
-        case '=': l->cur++; l->token.kind = (*l->cur == '=') ? (l->cur++, TK_EQ) : TK_EOF; l->token.len=(size_t)(l->cur-start); return;
-        case '!': l->cur++; l->token.kind = (*l->cur == '=') ? (l->cur++, TK_NE) : TK_EOF; l->token.len=(size_t)(l->cur-start); return;
-        case '<': l->cur++; l->token.kind = (*l->cur == '=') ? (l->cur++, TK_LE) : TK_LT; l->token.len=(size_t)(l->cur-start); return;
-        case '>': l->cur++; l->token.kind = (*l->cur == '=') ? (l->cur++, TK_GE) : TK_GT; l->token.len=(size_t)(l->cur-start); return;
-        default: l->cur++; return;
-    }
-#undef ONE
-}
-
-static int token_is(Token *t, const char *text) {
-    size_t n = strlen(text);
-    return t->kind == TK_ID && t->len == n && memcmp(t->start, text, n) == 0;
-}
-
-static int parse_integer_literal(const Token *token, int64_t *result) {
-    uint64_t value = 0;
-    const uint64_t limit = (uint64_t)INT64_MAX;
-    size_t i;
-    for (i = 0; i < token->len; ++i) {
-        uint64_t digit = (uint64_t)(token->start[i] - '0');
-        if (value > (limit - digit) / 10u) return 0;
-        value = value * 10u + digit;
-    }
-    *result = (int64_t)value;
-    return 1;
-}
-
-static int scope_find(Scope *scope, const char *name, size_t len) {
+int scope_find(Scope *scope, const char *name, size_t len) {
     int i;
     for (i = 0; i < scope->len; ++i)
         if (strlen(scope->vars[i].name) == len && memcmp(scope->vars[i].name, name, len) == 0)
@@ -224,7 +71,7 @@ static int scope_find(Scope *scope, const char *name, size_t len) {
     return -1;
 }
 
-static int scope_slot(Scope *scope, const char *name, size_t len, int create) {
+int scope_slot(Scope *scope, const char *name, size_t len, int create) {
     int slot = scope_find(scope, name, len);
     if (slot >= 0 || !create || scope->len >= 256) return slot;
     slot = scope->len;
@@ -234,7 +81,7 @@ static int scope_slot(Scope *scope, const char *name, size_t len, int create) {
     return slot;
 }
 
-static Function *find_function(Compiler *c, const char *name, size_t len) {
+Function *find_function(Compiler *c, const char *name, size_t len) {
     int i;
     for (i = 0; i < c->func_count; ++i)
         if (strlen(c->funcs[i].name) == len && memcmp(c->funcs[i].name, name, len) == 0)
@@ -242,274 +89,12 @@ static Function *find_function(Compiler *c, const char *name, size_t len) {
     return NULL;
 }
 
-static int builtin_id(const char *name, size_t len) {
-    static const struct { const char *name; int id; } builtins[] = {
-        {"print",1},{"println",1},{"io.print",1},{"io.println",1},
-        {"len",2},{"clock_ms",3},{"time.clock_ms",3},{"getenv",4},{"sys.getenv",4},
-        {"str",5},{"type",6},
-        {"abs",7},{"math.abs",7},{"floor",8},{"math.floor",8},{"ceil",9},{"math.ceil",9},
-        {"sqrt",10},{"math.sqrt",10},{"min",11},{"math.min",11},{"max",12},{"math.max",12},
-        {"write",14},{"io.write",14},{"input",15},{"io.input",15},{"readline",15},{"io.readline",15},
-        {"read_line",15},{"io.read_line",15},{"ask",15},{"io.ask",15},
-        {"args",16},{"argv",16},{"sys.args",16},{"sys.argv",16},{"cwd",17},{"sys.cwd",17},
-        {"sleep_ms",18},{"sys.sleep_ms",18},{"exit",19},{"sys.exit",19},{"range",20},
-        {"gc_collect",21},{"gc.collect",21},{"gc_stats",22},{"gc.stats",22},
-        {"spawn",23},{"thread.spawn",23},{"yield",24},{"thread.yield",24},
-        {"channel",25},{"chan.channel",25},{"send",26},{"chan.send",26},
-        {"recv",27},{"chan.recv",27}
-    };
-    size_t i;
-    for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)
-        if (strlen(builtins[i].name)==len && memcmp(name,builtins[i].name,len)==0) return builtins[i].id;
-    return 0;
-}
-
-static int module_is_builtin(const char *module) {
-    return strcmp(module, "io") == 0 || strcmp(module, "sys") == 0 ||
-           strcmp(module, "math") == 0 || strcmp(module, "time") == 0 ||
-           strcmp(module, "gc") == 0 || strcmp(module, "thread") == 0 ||
-           strcmp(module, "chan") == 0;
-}
-
-static int add_module_alias(Compiler *c, const char *module, const char *alias) {
-    int i;
-    if (!module_is_builtin(module)) {
-        set_error(c, "unknown native module");
-        return 0;
-    }
-    if (!alias || !*alias) alias = module;
-    for (i = 0; i < c->module_alias_count; ++i) {
-        if (strcmp(c->module_aliases[i].alias, alias) == 0) {
-            snprintf(c->module_aliases[i].module, sizeof(c->module_aliases[i].module), "%s", module);
-            return 1;
-        }
-    }
-    if (c->module_alias_count >= 32) {
-        set_error(c, "too many module imports");
-        return 0;
-    }
-    snprintf(c->module_aliases[c->module_alias_count].alias,
-             sizeof(c->module_aliases[c->module_alias_count].alias), "%s", alias);
-    snprintf(c->module_aliases[c->module_alias_count].module,
-             sizeof(c->module_aliases[c->module_alias_count].module), "%s", module);
-    c->module_alias_count++;
-    return 1;
-}
-
-static int resolve_builtin_id(Compiler *c, const char *name, size_t len) {
-    char rewritten[128];
-    const char *dot = memchr(name, '.', len);
-    int direct = builtin_id(name, len);
-    int i;
-    if (direct || !dot) return direct;
-    for (i = 0; i < c->module_alias_count; ++i) {
-        size_t alias_len = strlen(c->module_aliases[i].alias);
-        if ((size_t)(dot - name) == alias_len && memcmp(name, c->module_aliases[i].alias, alias_len) == 0) {
-            snprintf(rewritten, sizeof(rewritten), "%s.%.*s",
-                     c->module_aliases[i].module, (int)(len - alias_len - 1), dot + 1);
-            return builtin_id(rewritten, strlen(rewritten));
-        }
-    }
-    return 0;
-}
-
-static int parse_expression(Expr *e, int min_prec);
-
-static int expect(Expr *e, TokenKind kind, const char *message) {
-    if (e->lexer.token.kind != kind) {
-        set_error(e->compiler, message);
-        return 0;
-    }
-    lex_next(&e->lexer);
-    return 1;
-}
-
-static int parse_primary(Expr *e) {
-    Compiler *c = e->compiler;
-    Token token = e->lexer.token;
-    int slot;
-    if (token.kind == TK_NUM) {
-        int ci;
-        MValue value;
-        if (token.is_float) {
-            if (!isfinite(token.number)) {
-                set_error(c, "numeric literal is not finite");
-                return 0;
-            }
-            value = mval_f64(token.number);
-        } else {
-            int64_t integer;
-            if (!parse_integer_literal(&token, &integer)) {
-                set_error(c, "integer literal is outside the signed 64-bit range");
-                return 0;
-            }
-            value = mval_i64(integer);
-        }
-        ci = add_const(c, value);
-        lex_next(&e->lexer);
-        return ci >= 0 && emit(c, MOP_PUSH_CONST, ci, 0, 0) >= 0;
-    }
-    if (token.kind == TK_STR) {
-        int ci = add_const(c, owned_string(token.start, token.len));
-        lex_next(&e->lexer);
-        return ci >= 0 && emit(c, MOP_PUSH_CONST, ci, 0, 0) >= 0;
-    }
-    if (token_is(&token, "true") || token_is(&token, "false") || token_is(&token, "none") || token_is(&token, "null")) {
-        MValue v = (token_is(&token, "none") || token_is(&token, "null")) ? mval_none() : mval_bool(token_is(&token, "true"));
-        int ci = add_const(c, v);
-        lex_next(&e->lexer);
-        return ci >= 0 && emit(c, MOP_PUSH_CONST, ci, 0, 0) >= 0;
-    }
-    if (token.kind == TK_MINUS || token_is(&token, "not")) {
-        int is_not = token_is(&token, "not");
-        lex_next(&e->lexer);
-        if (is_not) return parse_primary(e) && emit(c, MOP_BOOL_NOT, 0, 0, 0) >= 0;
-        {
-            int zero = add_const(c, mval_i64(0));
-            if (emit(c, MOP_PUSH_CONST, zero, 0, 0) < 0 || !parse_primary(e)) return 0;
-            return emit(c, MOP_SUB, 0, 0, 0) >= 0;
-        }
-    }
-    if (token.kind == TK_LP) {
-        lex_next(&e->lexer);
-        if (!parse_expression(e, 0)) return 0;
-        return expect(e, TK_RP, "expected ')'");
-    }
-    if (token.kind == TK_LB) {
-        int count = 0;
-        lex_next(&e->lexer);
-        while (e->lexer.token.kind != TK_RB && e->lexer.token.kind != TK_EOF) {
-            if (!parse_expression(e, 0)) return 0;
-            count++;
-            if (e->lexer.token.kind != TK_COMMA) break;
-            lex_next(&e->lexer);
-        }
-        if (!expect(e, TK_RB, "expected ']'")) return 0;
-        return emit(c, MOP_BUILD_LIST, count, 0, 0) >= 0;
-    }
-    if (token.kind == TK_LC) {
-        int count = 0;
-        lex_next(&e->lexer);
-        while (e->lexer.token.kind != TK_RC && e->lexer.token.kind != TK_EOF) {
-            if (!parse_expression(e, 0) || !expect(e, TK_COLON, "expected ':' in map") ||
-                !parse_expression(e, 0)) return 0;
-            count++;
-            if (e->lexer.token.kind != TK_COMMA) break;
-            lex_next(&e->lexer);
-        }
-        if (!expect(e, TK_RC, "expected '}'")) return 0;
-        return emit(c, MOP_BUILD_MAP, count, 0, 0) >= 0;
-    }
-    if (token.kind == TK_ID) {
-        lex_next(&e->lexer);
-        if (token_is(&token, "get") || token_is(&token, "call")) {
-            Token target = e->lexer.token;
-            int argc = 0, id;
-            if (target.kind != TK_ID || !memchr(target.start, '.', target.len)) {
-                set_error(c, "expected module.function after get");
-                return 0;
-            }
-            id = resolve_builtin_id(c, target.start, target.len);
-            if (!id) {
-                set_error(c, "unknown native module function");
-                return 0;
-            }
-            lex_next(&e->lexer);
-            if (e->lexer.token.kind == TK_LP) {
-                lex_next(&e->lexer);
-                while (e->lexer.token.kind != TK_RP && e->lexer.token.kind != TK_EOF) {
-                    if (!parse_expression(e, 0)) return 0;
-                    argc++;
-                    if (e->lexer.token.kind != TK_COMMA) break;
-                    lex_next(&e->lexer);
-                }
-                if (!expect(e, TK_RP, "expected ')' after arguments")) return 0;
-            }
-            return emit(c, MOP_SYSCALL, id, argc, 1) >= 0;
-        }
-        if (e->lexer.token.kind == TK_LP) {
-            int argc = 0, id = resolve_builtin_id(c, token.start, token.len);
-            Function *fn = find_function(c, token.start, token.len);
-            lex_next(&e->lexer);
-            while (e->lexer.token.kind != TK_RP && e->lexer.token.kind != TK_EOF) {
-                if (!parse_expression(e, 0)) return 0;
-                argc++;
-                if (e->lexer.token.kind != TK_COMMA) break;
-                lex_next(&e->lexer);
-            }
-            if (!expect(e, TK_RP, "expected ')' after arguments")) return 0;
-            if (id) return emit(c, MOP_SYSCALL, id, argc, id == 1 ? 0 : 1) >= 0;
-            if (!fn) { set_error(c, "unknown function"); return 0; }
-            if (emit(c, MOP_PUSH_CONST, fn->const_slot, 0, 0) < 0) return 0;
-            return emit(c, MOP_CALL, argc, 0, 0) >= 0;
-        }
-        slot = scope_find(c->scope, token.start, token.len);
-        if (slot < 0 && c->scope != &c->globals) slot = scope_find(&c->globals, token.start, token.len);
-        if (slot < 0) {
-            Function *fn = find_function(c, token.start, token.len);
-            if (fn) return emit(c, MOP_PUSH_CONST, fn->const_slot, 0, 0) >= 0;
-        }
-        if (slot < 0) { set_error(c, "unknown variable"); return 0; }
-        if (emit(c, MOP_LOAD_LOCAL, slot, 0, 0) < 0) return 0;
-        while (e->lexer.token.kind == TK_LB) {
-            lex_next(&e->lexer);
-            if (!parse_expression(e, 0) || !expect(e, TK_RB, "expected ']' after index")) return 0;
-            if (emit(c, MOP_GETITEM, 0, 0, 0) < 0) return 0;
-        }
-        return 1;
-    }
-    set_error(c, "expected expression");
-    return 0;
-}
-
-static int precedence(Token *t) {
-    if (token_is(t, "or")) return 1;
-    if (token_is(t, "and")) return 2;
-    if (t->kind==TK_EQ||t->kind==TK_NE||t->kind==TK_LT||t->kind==TK_LE||t->kind==TK_GT||t->kind==TK_GE) return 3;
-    if (t->kind==TK_PLUS||t->kind==TK_MINUS) return 4;
-    if (t->kind==TK_STAR||t->kind==TK_SLASH||t->kind==TK_PERCENT) return 5;
-    return -1;
-}
-
-static int parse_expression(Expr *e, int min_prec) {
-    Compiler *c = e->compiler;
-    if (!parse_primary(e)) return 0;
-    for (;;) {
-        Token op = e->lexer.token;
-        int prec = precedence(&op), opcode = -1, cmp = 0;
-        if (prec < min_prec) break;
-        lex_next(&e->lexer);
-        if (!parse_expression(e, prec + 1)) return 0;
-        if (op.kind==TK_PLUS) opcode=MOP_ADD; else if(op.kind==TK_MINUS) opcode=MOP_SUB;
-        else if(op.kind==TK_STAR) opcode=MOP_MUL; else if(op.kind==TK_SLASH) opcode=MOP_DIV;
-        else if(op.kind==TK_PERCENT) opcode=MOP_MOD; else if(token_is(&op,"and")) opcode=MOP_BOOL_AND;
-        else if(token_is(&op,"or")) opcode=MOP_BOOL_OR;
-        else {
-            opcode=MOP_COMPARE;
-            if(op.kind==TK_EQ)cmp=MCMP_EQ; else if(op.kind==TK_NE)cmp=MCMP_NE;
-            else if(op.kind==TK_LT)cmp=MCMP_LT; else if(op.kind==TK_LE)cmp=MCMP_LE;
-            else if(op.kind==TK_GT)cmp=MCMP_GT; else cmp=MCMP_GE;
-        }
-        if (emit(c, opcode, cmp, 0, 0) < 0) return 0;
-    }
-    return 1;
-}
-
-static int compile_expr(Compiler *c, const char *text) {
-    Expr e;
-    e.compiler = c;
-    e.lexer.cur = text;
-    e.lexer.line = c->current_line;
-    lex_next(&e.lexer);
-    return parse_expression(&e, 0);
-}
-
-static const char *trim(char *text) {
+const char *trim(char *text) {
     while (*text && isspace((unsigned char)*text)) text++;
     return text;
 }
 
-static void strip_inline_comment(char *text) {
+void strip_inline_comment(char *text) {
     int quote = 0;
     int escaped = 0;
     int depth = 0;
@@ -531,12 +116,12 @@ static void strip_inline_comment(char *text) {
     while (i > 0 && isspace((unsigned char)text[i - 1])) text[--i] = '\0';
 }
 
-static int starts(const char *text, const char *prefix) {
+int starts(const char *text, const char *prefix) {
     size_t n = strlen(prefix);
     return strncmp(text, prefix, n) == 0;
 }
 
-static int find_assignment(const char *text) {
+int find_assignment(const char *text) {
     int depth=0, quote=0, i;
     for(i=0;text[i];++i) {
         char ch=text[i];
@@ -548,37 +133,6 @@ static int find_assignment(const char *text) {
                 (i==0||(text[i-1]!='!'&&text[i-1]!='<'&&text[i-1]!='>')))return i;
     }
     return -1;
-}
-
-static int parse_import_statement(Compiler *c, const char *text) {
-    char module[64] = {0};
-    char alias[64] = {0};
-    const char *rest = NULL;
-    const char *as_pos = NULL;
-    size_t module_len;
-    if (starts(text, "import ")) rest = trim((char *)text + 7);
-    else if (starts(text, "use ")) rest = trim((char *)text + 4);
-    else if (starts(text, "need ")) rest = trim((char *)text + 5);
-    else return 0;
-
-    as_pos = strstr(rest, " as ");
-    if (!as_pos) {
-        set_error(c, "module import requires 'as'");
-        return -1;
-    }
-    module_len = (size_t)(as_pos - rest);
-    while (module_len && isspace((unsigned char)rest[module_len - 1])) module_len--;
-    if (module_len >= sizeof(module)) module_len = sizeof(module) - 1;
-    snprintf(module, sizeof(module), "%.*s", (int)module_len, rest);
-    snprintf(alias, sizeof(alias), "%s", trim((char *)as_pos + 4));
-
-    if ((module[0] == '"' || module[0] == '\'') && module[strlen(module) - 1] == module[0]) {
-        size_t n = strlen(module);
-        memmove(module, module + 1, n - 2);
-        module[n - 2] = '\0';
-    }
-    if (strncmp(module, "pkg:", 4) == 0) memmove(module, module + 4, strlen(module + 4) + 1);
-    return add_module_alias(c, module, alias) ? 1 : -1;
 }
 
 static int compile_block(Compiler *c, int *position, int end, int indent);

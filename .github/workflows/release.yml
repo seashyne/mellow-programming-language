@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version without the v prefix, for example 2.9.6"
+        description: "Release version without the v prefix, for example 2.9.7"
         required: true
         type: string
 
@@ -173,12 +173,46 @@ jobs:
           path: dist/mellowlang-*.tgz
           if-no-files-found: error
 
+  native-safety:
+    name: native-safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure ASan, UBSan, LeakSanitizer, and libFuzzer
+        env:
+          CC: clang
+        run: |
+          cmake -S native/standalone -B build/standalone-safety \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DMELLOW_ENABLE_SANITIZERS=ON \
+            -DMELLOW_BUILD_FUZZER=ON
+          cmake --build build/standalone-safety --parallel 2
+
+      - name: Run sanitizer-backed native runtime tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:strict_string_checks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build/standalone-safety --output-on-failure
+
+      - name: Fuzz compiler and runtime ownership paths
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          build/standalone-safety/mellow_fuzz \
+            native/standalone/fuzz/corpus \
+            -runs=5000 \
+            -timeout=5 \
+            -max_len=65536
+
   github-release:
     name: github-release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     needs:
       - native
+      - native-safety
       - vscode
       - npm-package
     steps:

@@ -1,0 +1,9 @@
+use canvas as c
+
+img = c.create(160, 120)
+c.clear(img, "white")
+c.circle(img, 80, 60, 42, "#33ccff")
+c.rect(img, 16, 16, 28, 18, "yellow")
+c.line(img, 0, 0, 159, 119, "magenta")
+
+print(c.save(img, "canvas_circle.ppm"))
