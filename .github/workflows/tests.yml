@@ -45,10 +45,14 @@ jobs:
           python -m pytest -q \
             tests/core/test_interop_core.py \
             -p no:cacheprovider
-      - name: Reference money and ledger
+      - name: Reference money
         run: |
           python -m pytest -q \
             tests/core/test_money_and_finance_sandbox.py \
+            -p no:cacheprovider
+      - name: Reference ledger
+        run: |
+          python -m pytest -q \
             tests/core/test_ledger_core.py \
             -p no:cacheprovider
       - name: Reference SDK
@@ -185,11 +189,13 @@ jobs:
       - name: Run native memory-safety tests
         env:
           ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:strict_string_checks=1
+          LSAN_OPTIONS: detect_leaks=0
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: ctest --test-dir build/standalone-safety --output-on-failure
       - name: Fuzz compiler and runtime ownership paths
         env:
           ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
+          LSAN_OPTIONS: detect_leaks=0
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
           set +e
