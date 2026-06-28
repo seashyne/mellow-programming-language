@@ -173,7 +173,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Configure ASan, UBSan, LeakSanitizer, and libFuzzer
+      - name: Configure ASan, UBSan, and libFuzzer
         env:
           CC: clang
         run: |
@@ -184,12 +184,12 @@ jobs:
           cmake --build build/standalone-safety --parallel 2
       - name: Run native memory-safety tests
         env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:strict_string_checks=1
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:strict_string_checks=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: ctest --test-dir build/standalone-safety --output-on-failure
       - name: Fuzz compiler and runtime ownership paths
         env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
           set +e

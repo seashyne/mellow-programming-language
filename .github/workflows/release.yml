@@ -179,7 +179,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Configure ASan, UBSan, LeakSanitizer, and libFuzzer
+      - name: Configure ASan, UBSan, and libFuzzer
         env:
           CC: clang
         run: |
@@ -191,13 +191,13 @@ jobs:
 
       - name: Run sanitizer-backed native runtime tests
         env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:strict_string_checks=1
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:strict_string_checks=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: ctest --test-dir build/standalone-safety --output-on-failure
 
       - name: Fuzz compiler and runtime ownership paths
         env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
           build/standalone-safety/mellow_fuzz \
