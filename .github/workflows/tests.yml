@@ -35,10 +35,14 @@ jobs:
             tests/core/test_language_spec_2_9.py \
             tests/language/test_compiler_v3.py \
             -p no:cacheprovider
-      - name: Reference data and interop
+      - name: Reference data
         run: |
           python -m pytest -q \
             tests/core/test_data_processing_core.py \
+            -p no:cacheprovider
+      - name: Reference interop
+        run: |
+          python -m pytest -q \
             tests/core/test_interop_core.py \
             -p no:cacheprovider
       - name: Reference money and ledger
