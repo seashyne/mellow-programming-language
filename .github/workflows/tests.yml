@@ -191,7 +191,16 @@ jobs:
           ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:strict_string_checks=1
           LSAN_OPTIONS: detect_leaks=0
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build/standalone-safety --output-on-failure
+        run: |
+          set +e
+          ctest --test-dir build/standalone-safety --output-on-failure 2>&1 | tee native-ctest.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            tail -n 80 native-ctest.log >> "$GITHUB_STEP_SUMMARY"
+            detail=$(tail -n 30 native-ctest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error file=native/standalone/CMakeLists.txt::$detail"
+          fi
+          exit "$status"
       - name: Fuzz compiler and runtime ownership paths
         env:
           ASAN_OPTIONS: detect_leaks=0:halt_on_error=1

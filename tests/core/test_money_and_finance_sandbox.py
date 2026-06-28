@@ -60,7 +60,7 @@ def test_finance_sandbox_profile_blocks_storage(tmp_path: Path):
     out = io.StringIO()
     err = io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = cli_main(["run", str(script), "--sandbox=finance", "--no-resolve"])
+        code = cli_main(["run", str(script), "--engine=py", "--sandbox=finance", "--no-resolve"])
     try:
         assert code == 1
         assert "storage is disabled" in out.getvalue() or "storage is disabled" in err.getvalue()
