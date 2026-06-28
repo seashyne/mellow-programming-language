@@ -26,7 +26,9 @@ static int builtin_id(const char *name, size_t len) {
         {"canvas_line",31},{"canvas.line",31},
         {"canvas_rect",32},{"canvas.rect",32},
         {"canvas_circle",33},{"canvas.circle",33},
-        {"canvas_save",34},{"canvas.save",34}
+        {"canvas_save",34},{"canvas.save",34},
+        {"workers",35},{"thread.workers",35},{"worker_count",36},{"thread.worker_count",36},
+        {"scheduler_mode",37},{"thread.scheduler_mode",37}
     };
     size_t i;
     for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)

@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MELLOWRT_MAX_SCHEDULER_WORKERS 256u
+
 void mellowrt_task_free_values(MTask *task) {
     size_t i;
     if (!task) return;
@@ -53,6 +55,7 @@ int mellowrt_scheduler_bootstrap(MVM *vm) {
     MTask *main_task;
     if (vm->tasks) return 1;
     if (!ensure_tasks(vm, 1)) return 0;
+    if (!vm->scheduler_workers) vm->scheduler_workers = 1;
     vm->task_len = 1;
     vm->current_task = 0;
     vm->next_task_id = 1;
@@ -74,7 +77,10 @@ size_t mellowrt_scheduler_next_runnable(MVM *vm) {
     for (i = 1; i <= vm->task_len; ++i) {
         size_t idx = (vm->current_task + i) % vm->task_len;
         MTask *task = &vm->tasks[idx];
-        if (task->active && !task->finished && !task->blocked) return idx;
+        if (task->active && !task->finished && !task->blocked) {
+            if (idx != vm->current_task) vm->scheduler_switches++;
+            return idx;
+        }
     }
     return (size_t)-1;
 }
@@ -90,6 +96,33 @@ void mellowrt_scheduler_unblock_native_waiters(MVM *vm, void *native_ptr) {
             task->waiting_native = NULL;
         }
     }
+}
+
+int mellowrt_scheduler_set_workers(MVM *vm, size_t workers) {
+    if (!vm || workers == 0 || workers > MELLOWRT_MAX_SCHEDULER_WORKERS) return 0;
+    vm->scheduler_workers = workers;
+    return 1;
+}
+
+size_t mellowrt_scheduler_worker_count(const MVM *vm) {
+    if (!vm || !vm->scheduler_workers) return 1;
+    return vm->scheduler_workers;
+}
+
+size_t mellowrt_scheduler_runnable_count(const MVM *vm) {
+    size_t i;
+    size_t count = 0;
+    if (!vm) return 0;
+    for (i = 0; i < vm->task_len; ++i) {
+        const MTask *task = &vm->tasks[i];
+        if (task->active && !task->finished && !task->blocked) count++;
+    }
+    return count;
+}
+
+const char *mellowrt_scheduler_mode(const MVM *vm) {
+    (void)vm;
+    return "m:n-cooperative";
 }
 
 uint64_t mellowrt_scheduler_spawn(MVM *vm, MFunctionRef fn) {

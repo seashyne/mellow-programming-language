@@ -477,6 +477,50 @@ def test_full_native_green_thread_foundation_and_yield(native_binary: Path, tmp_
     assert result.stdout.splitlines() == ["1", "1", "1"]
 
 
+def test_full_native_mn_scheduler_workers_are_configurable(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "mn-scheduler-workers.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "use thread as t",
+                "print(t.scheduler_mode())",
+                "print(t.worker_count())",
+                "print(t.workers(4))",
+                "def worker():",
+                "    yield()",
+                "    return 7",
+                "spawn(worker)",
+                "yield()",
+                "let stats = gc_stats()",
+                'print(stats["scheduler_mode"])',
+                'print(stats["workers"])',
+                'print(stats["tasks"])',
+                'print(stats["switches"] > 0)',
+                'print(stats["worker_changes"])',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "m:n-cooperative",
+        "1",
+        "4",
+        "m:n-cooperative",
+        "4",
+        "2",
+        "true",
+        "1",
+    ]
+
+
 def test_full_native_channels_send_recv_and_module_alias(native_binary: Path, tmp_path: Path) -> None:
     source = tmp_path / "channel-foundation.mellow"
     source.write_text(

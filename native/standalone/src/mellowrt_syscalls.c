@@ -3,6 +3,7 @@
 #endif
 
 #include "mellowrt_syscalls.h"
+#include "mellowrt_scheduler.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -429,9 +430,9 @@ static int canvas_save_ppm(MellowCanvas *canvas,const MValue *path_value){
 static MValue stats_map(const MellowRuntimeContext *ctx){
     MValue v=mval_none();
     v.tag=MVAL_MAP;
-    v.as.map.len=v.as.map.cap=18;
-    v.as.map.keys=(MValue*)calloc(18,sizeof(MValue));
-    v.as.map.values=(MValue*)calloc(18,sizeof(MValue));
+    v.as.map.len=v.as.map.cap=25;
+    v.as.map.keys=(MValue*)calloc(25,sizeof(MValue));
+    v.as.map.values=(MValue*)calloc(25,sizeof(MValue));
     if(!v.as.map.keys||!v.as.map.values){
         free(v.as.map.keys);free(v.as.map.values);return mval_none();
     }
@@ -471,6 +472,22 @@ static MValue stats_map(const MellowRuntimeContext *ctx){
     v.as.map.values[16]=mval_i64((ctx&&ctx->vm)?(int64_t)ctx->vm->heap_last_gc_freed_bytes:0);
     v.as.map.keys[17]=mval_owned_copy("canvases",8);
     v.as.map.values[17]=mval_i64(ctx?(int64_t)ctx->canvas_count:0);
+    v.as.map.keys[18]=mval_owned_copy("scheduler_mode",14);
+    v.as.map.values[18]=mval_owned_copy(
+        (ctx&&ctx->vm)?mellowrt_scheduler_mode(ctx->vm):"m:n-cooperative",
+        strlen((ctx&&ctx->vm)?mellowrt_scheduler_mode(ctx->vm):"m:n-cooperative"));
+    v.as.map.keys[19]=mval_owned_copy("workers",7);
+    v.as.map.values[19]=mval_i64((ctx&&ctx->vm)?(int64_t)mellowrt_scheduler_worker_count(ctx->vm):1);
+    v.as.map.keys[20]=mval_owned_copy("tasks",5);
+    v.as.map.values[20]=mval_i64((ctx&&ctx->vm)?(int64_t)ctx->vm->task_len:0);
+    v.as.map.keys[21]=mval_owned_copy("runnable",8);
+    v.as.map.values[21]=mval_i64((ctx&&ctx->vm)?(int64_t)mellowrt_scheduler_runnable_count(ctx->vm):0);
+    v.as.map.keys[22]=mval_owned_copy("switches",8);
+    v.as.map.values[22]=mval_i64((ctx&&ctx->vm)?(int64_t)ctx->vm->scheduler_switches:0);
+    v.as.map.keys[23]=mval_owned_copy("blocked",7);
+    v.as.map.values[23]=mval_i64((ctx&&ctx->vm)?(int64_t)ctx->vm->scheduler_blocks:0);
+    v.as.map.keys[24]=mval_owned_copy("worker_changes",14);
+    v.as.map.values[24]=mval_i64(ctx?(int64_t)ctx->scheduler_worker_changes:0);
     return v;
 }
 
@@ -785,6 +802,25 @@ int mellowrt_default_syscall(void *user, int32_t id, const MValue *args, size_t 
         canvas=as_canvas(&args[0]);
         if(!canvas)return 0;
         *out_result=mval_bool(canvas_save_ppm(canvas,&args[1]));
+        return 1;
+    }
+    case 35:{
+        int workers;
+        if(argc!=1||!ctx||!ctx->vm)return 0;
+        if(!integer_arg(&args[0],&workers)||workers<=0)return 0;
+        if(!mellowrt_scheduler_set_workers(ctx->vm,(size_t)workers))return 0;
+        ctx->scheduler_worker_changes++;
+        *out_result=mval_i64((int64_t)mellowrt_scheduler_worker_count(ctx->vm));
+        return 1;
+    }
+    case 36:
+        if(argc!=0)return 0;
+        *out_result=mval_i64((ctx&&ctx->vm)?(int64_t)mellowrt_scheduler_worker_count(ctx->vm):1);
+        return 1;
+    case 37:{
+        const char *mode=(ctx&&ctx->vm)?mellowrt_scheduler_mode(ctx->vm):"m:n-cooperative";
+        if(argc!=0)return 0;
+        *out_result=mval_owned_copy(mode,strlen(mode));
         return 1;
     }
     default: return 0;

@@ -390,6 +390,9 @@ use chan as c
 
 memory.collect()
 task.yield()
+print(task.scheduler_mode())
+print(task.workers(4))
+print(task.worker_count())
 
 let mailbox = c.channel()
 c.send(mailbox, "ping")
@@ -401,8 +404,11 @@ print(c.recv(mailbox))
 แล้ว sweep channel handles และ heap blocks ที่ไม่ reachable.
 `gc_stats()["mode"]` จะเป็น `mark-sweep-native-handles`. `spawn(fn)` สร้าง
 cooperative task จริง, `yield()` สลับ task แบบ round-robin และ `recv(ch)` บน
-channel ว่างจะ implicit yield ถ้ามี task อื่นให้รัน. ยังไม่ใช่ full preemptive
-หรือ OS-backed M:N scheduler
+channel ว่างจะ implicit yield ถ้ามี task อื่นให้รัน. `thread.workers(n)` ตั้ง
+จำนวน worker ใน topology แบบ M:N, `thread.worker_count()` อ่านค่าปัจจุบัน และ
+`thread.scheduler_mode()` คืนค่า `m:n-cooperative`. ตอนนี้ worker topology อยู่
+ใน C runtime แล้ว แต่การรัน bytecode แบบ parallel จริงยังรอการทำ heap/channel
+ownership ให้ thread-safe ก่อน
 
 ### Wait และ stop
 

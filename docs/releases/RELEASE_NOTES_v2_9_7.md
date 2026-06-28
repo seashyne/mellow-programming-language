@@ -9,13 +9,19 @@ syntax; it is making the C runtime behave more like a real language runtime.
   counter.
 - `yield()` saves the current task state and round-robin switches to the next
   runnable task.
+- `thread.workers(n)`, `thread.worker_count()`, and
+  `thread.scheduler_mode()` expose the native M:N scheduler topology. The
+  current execution mode is `m:n-cooperative`.
+- `gc_stats()` now reports `scheduler_mode`, `workers`, `tasks`, `runnable`,
+  `switches`, `blocked`, and `worker_changes`.
 - `recv(ch)` on an empty channel implicitly yields when another task can run,
   then retries after a sender wakes the channel.
 - Scheduler internals moved into `mellowrt_scheduler.c/.h` so
   `mellowrt_core.c` can stay focused on the opcode loop.
 
-This is still cooperative scheduling. Full preemptive or OS-backed M:N
-scheduling remains future runtime-engine work.
+This is still cooperative bytecode execution. The M:N worker topology is now
+part of the C runtime surface; parallel workers remain gated on thread-safe
+heap/channel ownership.
 
 ## GC and ownership hardening
 

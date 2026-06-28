@@ -142,7 +142,7 @@ static int expr_is_i64_literal(const char *expr) {
     return endp != p && *skip_spaces(endp) == '\0';
 }
 
-static int emit_fast_i64_lt_jump(Compiler *c, const char *condition, int *jump_index) {
+static int parse_i64_lt_condition(Compiler *c, const char *condition, int *left_slot_out, int *right_slot_out) {
     const char *p = skip_spaces(condition);
     int left_len = ident_len_at(p);
     char left[64], right[64];
@@ -161,6 +161,14 @@ static int emit_fast_i64_lt_jump(Compiler *c, const char *condition, int *jump_i
     right_slot = scope_find(c->scope, right, strlen(right));
     if (left_slot < 0 || right_slot < 0) return 0;
     if (!c->scope->is_i64[left_slot] || !c->scope->is_i64[right_slot]) return 0;
+    *left_slot_out = left_slot;
+    *right_slot_out = right_slot;
+    return 1;
+}
+
+static int emit_fast_i64_lt_jump(Compiler *c, const char *condition, int *jump_index) {
+    int left_slot, right_slot;
+    if (!parse_i64_lt_condition(c, condition, &left_slot, &right_slot)) return 0;
     *jump_index = emit(c, MOP_JUMP_IF_LOCAL_I64_LT_FALSE, left_slot, right_slot, 0);
     return *jump_index >= 0 ? 1 : -1;
 }
@@ -197,6 +205,105 @@ static int emit_fast_i64_add_assignment(Compiler *c, const char *lhs, const char
     delta = strtoll(p, &endp, 10);
     if (endp == p || *skip_spaces(endp) || delta < INT_MIN || delta > INT_MAX) return 0;
     return emit(c, MOP_I64_ADD_LOCAL_CONST, lhs_slot, (int)delta, 0) >= 0 ? 1 : -1;
+}
+
+static char *normalized_line_copy(SourceLine *line) {
+    char *copy = copy_text(line->text, strlen(line->text));
+    char *trimmed;
+    if (!copy) return NULL;
+    strip_inline_comment(copy);
+    trimmed = (char *)trim(copy);
+    if (trimmed != copy) memmove(copy, trimmed, strlen(trimmed) + 1);
+    return copy;
+}
+
+static int parse_assignment_parts(const char *text, char *lhs, size_t lhs_cap, const char **expr_out) {
+    int assign = find_assignment(text);
+    size_t n;
+    if (assign < 0) return 0;
+    n = (size_t)assign;
+    while (n && isspace((unsigned char)text[n-1])) n--;
+    if (!n || n >= lhs_cap) return 0;
+    memcpy(lhs, text, n);
+    lhs[n] = '\0';
+    *expr_out = trim((char *)text + assign + 1);
+    return 1;
+}
+
+static int parse_self_plus_ident(const char *lhs, const char *expr, char *rhs, size_t rhs_cap) {
+    const char *p = skip_spaces(expr);
+    int left_len = ident_len_at(p), rhs_len;
+    if (!left_len || strlen(lhs) != (size_t)left_len || memcmp(lhs, p, (size_t)left_len) != 0) return 0;
+    p = skip_spaces(p + left_len);
+    if (*p != '+') return 0;
+    p = skip_spaces(p + 1);
+    rhs_len = ident_len_at(p);
+    if (!rhs_len || rhs_len >= (int)rhs_cap) return 0;
+    memcpy(rhs, p, (size_t)rhs_len);
+    rhs[rhs_len] = '\0';
+    p = skip_spaces(p + rhs_len);
+    return *p == '\0';
+}
+
+static int parse_self_plus_one(const char *lhs, const char *expr) {
+    const char *p = skip_spaces(expr);
+    int left_len = ident_len_at(p);
+    char *endp = NULL;
+    long long delta;
+    if (!left_len || strlen(lhs) != (size_t)left_len || memcmp(lhs, p, (size_t)left_len) != 0) return 0;
+    p = skip_spaces(p + left_len);
+    if (*p != '+') return 0;
+    p = skip_spaces(p + 1);
+    delta = strtoll(p, &endp, 10);
+    return endp != p && *skip_spaces(endp) == '\0' && delta == 1;
+}
+
+static int emit_fast_i64_sum_loop(Compiler *c, int *position, int end, int indent, const char *condition) {
+    int idx_slot, limit_slot, body_start, body_end, count = 0;
+    int body_indices[2];
+    char *line0 = NULL, *line1 = NULL;
+    char lhs0[64], lhs1[64], rhs0[64];
+    const char *expr0, *expr1;
+    int acc_slot;
+
+    if (!parse_i64_lt_condition(c, condition, &idx_slot, &limit_slot)) return 0;
+    body_start = *position + 1;
+    body_end = body_start;
+    while (body_end < end && c->lines[body_end].indent > indent) body_end++;
+    for (int i = body_start; i < body_end; ++i) {
+        char *copy;
+        if (c->lines[i].indent != indent + 4) return 0;
+        copy = normalized_line_copy(&c->lines[i]);
+        if (!copy) return -1;
+        if (*copy) {
+            if (count >= 2) { free(copy); return 0; }
+            body_indices[count++] = i;
+        }
+        free(copy);
+    }
+    if (count != 2) return 0;
+
+    line0 = normalized_line_copy(&c->lines[body_indices[0]]);
+    line1 = normalized_line_copy(&c->lines[body_indices[1]]);
+    if (!line0 || !line1) { free(line0); free(line1); return -1; }
+    if (!parse_assignment_parts(line0, lhs0, sizeof(lhs0), &expr0) ||
+        !parse_assignment_parts(line1, lhs1, sizeof(lhs1), &expr1) ||
+        !parse_self_plus_ident(lhs0, expr0, rhs0, sizeof(rhs0)) ||
+        !parse_self_plus_one(lhs1, expr1)) {
+        free(line0); free(line1); return 0;
+    }
+    if (scope_find(c->scope, lhs1, strlen(lhs1)) != idx_slot ||
+        scope_find(c->scope, rhs0, strlen(rhs0)) != idx_slot) {
+        free(line0); free(line1); return 0;
+    }
+    acc_slot = scope_find(c->scope, lhs0, strlen(lhs0));
+    if (acc_slot < 0 || !c->scope->is_i64[acc_slot]) {
+        free(line0); free(line1); return 0;
+    }
+    free(line0); free(line1);
+    if (emit(c, MOP_I64_SUM_RANGE_STEP1, acc_slot, idx_slot, limit_slot) < 0) return -1;
+    *position = body_end;
+    return 1;
 }
 
 int find_assignment(const char *text) {
@@ -281,11 +388,15 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         (*position)++;return 1;
     }
     if (starts(text,"while ") && text[strlen(text)-1]==':') {
-        int loop=(int)c->code_len, jf;
-        int depth=c->loop_depth++;
+        int loop, jf, depth, fast_loop;
+        text[strlen(text)-1]='\0';
+        fast_loop = emit_fast_i64_sum_loop(c, position, end, indent, trim(text+6));
+        if (fast_loop < 0) return 0;
+        if (fast_loop) return 1;
+        loop=(int)c->code_len;
+        depth=c->loop_depth++;
         c->loop_break_count[depth]=0;
         c->loop_continue_count[depth]=0;
-        text[strlen(text)-1]='\0';
         {
             int fast_condition = emit_fast_i64_lt_jump(c, trim(text+6), &jf);
             if (fast_condition < 0) return 0;

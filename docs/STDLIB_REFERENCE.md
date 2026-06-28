@@ -1,6 +1,6 @@
-# MellowLang Stdlib Reference (v2.9.6)
+# MellowLang Stdlib Reference (v2.9.7)
 
-This is a pragmatic reference for the stable 2.9 line plus the v2.9.6
+This is a pragmatic reference for the stable 2.9 line plus the v2.9.7
 native C I/O, system, builtin-module, and GC/concurrency foundation additions.
 
 > Note: Host modules are **allowlisted**. Use `mellow modules` to see what is available.
@@ -22,6 +22,9 @@ native C I/O, system, builtin-module, and GC/concurrency foundation additions.
 - `gc_stats()` — return a map with GC/concurrency and native-handle heap counters
 - `spawn(fn)` — register a cooperative native task handle for a function and return a task id
 - `yield()` — explicit cooperative yield point
+- `workers(n)` / `thread.workers(n)` — configure the native scheduler worker topology and return the active worker count
+- `worker_count()` / `thread.worker_count()` — return the active native scheduler worker count
+- `scheduler_mode()` / `thread.scheduler_mode()` — return the scheduler mode string, currently `m:n-cooperative`
 - `channel()` — create a native FIFO channel handle
 - `send(ch, value)` — enqueue a value into a channel and return `true`
 - `recv(ch)` — dequeue the next value or return `none` when the channel is empty
@@ -30,13 +33,14 @@ native C I/O, system, builtin-module, and GC/concurrency foundation additions.
 - `call(fn, ...args)` *(dynamic function call)*
 
 Full Native C supports these built-ins directly in the standalone runtime and
-is the authoritative implementation for new v2.9.6 runtime work.
+is the authoritative implementation for new v2.9.7 runtime work.
 
-The v2.9.6 GC API marks reachable native handles from the VM stack/locals and
+The v2.9.7 GC API marks reachable native handles from the VM stack/locals and
 sweeps unreachable channel handles. `gc_stats()["mode"]` reports
-`mark-sweep-native-handles`. Channels work as native FIFO handles. `spawn` and
-`yield` expose the cooperative scheduling API shape, but full M:N
-stack-switching scheduler work remains a future runtime-engine milestone.
+`mark-sweep-native-handles`. Channels work as native FIFO handles. `spawn`,
+`yield`, `workers`, `worker_count`, and `scheduler_mode` expose the native M:N
+scheduler topology. Execution is still cooperative while parallel bytecode
+execution waits on thread-safe heap/channel ownership.
 
 Module forms are available for native built-ins:
 
@@ -50,6 +54,9 @@ c.send(ch, "message")
 print(c.recv(ch))
 
 thread.yield()
+thread.workers(4)
+print(thread.worker_count())
+print(thread.scheduler_mode())
 ```
 
 ## Math / vectors

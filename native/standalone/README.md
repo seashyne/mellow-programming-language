@@ -26,7 +26,7 @@ What moved into native standalone now:
 - syscall bridge: host callback contract in pure C
 - native terminal I/O built-ins: `print`, `println`, `write`, `input`, `readline`, `read_line`, `ask`
 - native system built-ins: `args`, `argv`, `cwd`, `sleep_ms`, `exit`
-- native GC/concurrency foundation built-ins: `gc_collect`, `gc_stats`, `spawn`, `yield`, `channel`, `send`, `recv`
+- native GC/concurrency foundation built-ins: `gc_collect`, `gc_stats`, `spawn`, `yield`, `workers`, `worker_count`, `scheduler_mode`, `channel`, `send`, `recv`
 - debugger snapshots now include stack, frames, and locals
 
 Native source layout:
@@ -49,7 +49,7 @@ Native source syntax in v2.9.0:
 - lists, maps, and indexing
 - `print`, `println`, `write`, `input`, `readline`, `read_line`, `ask`
 - `args`, `argv`, `cwd`, `sleep_ms`, `exit`
-- `gc_collect`, `gc_stats`, `spawn`, `yield`, `channel`, `send`, `recv`
+- `gc_collect`, `gc_stats`, `spawn`, `yield`, `workers`, `worker_count`, `scheduler_mode`, `channel`, `send`, `recv`
 - `len`, `str`, `type`, `abs`, `floor`, `ceil`, `sqrt`, `min`, `max`
 - builtin module aliases: `import "math" as m`, `use sys as sys`, `need io as io`, `use chan as c`
 
@@ -161,6 +161,11 @@ def worker():
 let task = spawn(worker)
 yield()
 
+use thread as t
+print(t.scheduler_mode())
+print(t.workers(4))
+print(t.worker_count())
+
 use chan as c
 let mailbox = c.channel()
 c.send(mailbox, "hello")
@@ -169,11 +174,13 @@ print(c.recv(mailbox))
 
 In v2.9.7 these APIs are native C built-ins. Channels are FIFO native handles,
 `spawn` creates cooperative tasks, and `yield` round-robin switches between
-runnable tasks. `recv(ch)` on an empty channel implicitly yields when another
-task can run. `gc_stats()["mode"]` reports `mark-sweep-native-handles`; the
+runnable tasks. `workers(n)` configures the native M:N scheduler topology,
+`worker_count()` reports the configured worker count, and `scheduler_mode()`
+reports `m:n-cooperative`. `recv(ch)` on an empty channel implicitly yields
+when another task can run. `gc_stats()["mode"]` reports `mark-sweep-native-handles`; the
 collector marks native handles from VM stack/locals and sweeps unreachable
-channel handles. Full preemptive or OS-backed M:N scheduling is still future
-runtime-engine work.
+channel handles. The worker topology is now part of the C runtime surface;
+parallel bytecode execution remains gated on thread-safe heap/channel ownership.
 
 Inspect the binary's actual target and backend:
 

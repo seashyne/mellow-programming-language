@@ -499,6 +499,21 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             slot->as.i64 += rhs->as.i64;
             pc++; break;
         }
+        case MOP_I64_SUM_RANGE_STEP1: {
+            MValue *acc=local_ptr(vm,frame,insn->a);
+            MValue *idx=local_ptr(vm,frame,insn->b);
+            MValue *limit=local_ptr(vm,frame,insn->c);
+            int64_t total, i, n;
+            if (!acc || !idx || !limit || acc->tag!=MVAL_I64 || idx->tag!=MVAL_I64 || limit->tag!=MVAL_I64){set_error(out,"i64_sum_range_step1_requires_i64");return 0;}
+            total=acc->as.i64; i=idx->as.i64; n=limit->as.i64;
+            while (i < n) {
+                total += i;
+                i += 1;
+            }
+            acc->as.i64=total;
+            idx->as.i64=i;
+            pc++; break;
+        }
 
         /* arithmetic */
         case MOP_ADD: case MOP_SUB: case MOP_MUL: case MOP_DIV: {
@@ -652,8 +667,13 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 goto finish_current_task_with_result;
             }
             MFrame ended=vm->frames[--vm->frame_len];
-            for(size_t i=ended.local_base;i<vm->locals_len;++i) mvalue_free(&vm->locals[i]);
-            vm->locals_len=ended.local_base; vm->stack_len=ended.base;
+            {
+                size_t local_end=(size_t)ended.local_base+(size_t)ended.local_count;
+                if (local_end>vm->locals_len) local_end=vm->locals_len;
+                for(size_t i=ended.local_base;i<local_end;++i) mvalue_release_temp(&vm->locals[i]);
+                if (local_end==vm->locals_len) vm->locals_len=ended.local_base;
+            }
+            vm->stack_len=ended.base;
             if (!push(vm,ret)){set_error(out,"return_push_failed");return 0;}
             pc=ended.return_pc; break;
         }
@@ -749,6 +769,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 mvalue_free(&result);
                 vm->tasks[vm->current_task].blocked = 1;
                 vm->tasks[vm->current_task].waiting_native = waiting;
+                vm->scheduler_blocks++;
                 mellowrt_task_save_from_vm(vm, vm->current_task, pc);
                 next_task = mellowrt_scheduler_next_runnable(vm);
                 if (next_task == (size_t)-1) {

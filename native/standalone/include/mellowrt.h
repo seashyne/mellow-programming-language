@@ -98,7 +98,8 @@ typedef enum {
     MOP_STOP = 29,
     MOP_I64_ADD_LOCAL_CONST = 30,
     MOP_I64_ADD_LOCAL_LOCAL = 31,
-    MOP_JUMP_IF_LOCAL_I64_LT_FALSE = 32
+    MOP_JUMP_IF_LOCAL_I64_LT_FALSE = 32,
+    MOP_I64_SUM_RANGE_STEP1 = 33
 } MOpcode;
 
 typedef enum {
@@ -235,6 +236,9 @@ typedef struct {
     size_t task_cap;
     size_t current_task;
     uint64_t next_task_id;
+    size_t scheduler_workers;
+    uint64_t scheduler_switches;
+    uint64_t scheduler_blocks;
 } MVM;
 
 typedef struct {
