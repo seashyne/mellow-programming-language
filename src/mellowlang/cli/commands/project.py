@@ -1,16 +1,56 @@
 from __future__ import annotations
 
 import shutil
+import os
+import subprocess
 import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import List
 
 from ...compiler import Compiler
+from ...standalone_runtime import standalone_runtime_status
 from ...lint import lint_source, format_source
 from ..common import _json_print, _lazy_attr, _print_pretty_error, _read_text
 
 pkg_scaffold_project = _lazy_attr("mellowlang.package_manager", "scaffold_project")
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _standalone_mellow_binary() -> Path | None:
+    status = standalone_runtime_status()
+    path = Path(str(status.get("binary_path") or ""))
+    if status.get("binary_exists") and path.exists():
+        return path
+    return None
+
+
+def _native_check_file(p: Path, *, json_out: bool) -> int:
+    native = _standalone_mellow_binary()
+    if native is None:
+        message = "standalone native mellow binary not found; build with `cmake -S native/standalone -B build/standalone-release -DCMAKE_BUILD_TYPE=Release && cmake --build build/standalone-release --config Release`"
+        if json_out:
+            _json_print({"ok": False, "file": str(p), "error": message})
+        else:
+            print(f"error: {message}", file=sys.stderr)
+        return 1
+    completed = subprocess.run([str(native), "check", str(p)], capture_output=True, text=True, check=False)
+    if json_out:
+        _json_print({
+            "ok": completed.returncode == 0,
+            "file": str(p),
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+        })
+    else:
+        if completed.stdout:
+            sys.stdout.write(completed.stdout)
+        if completed.stderr:
+            sys.stderr.write(completed.stderr)
+    return int(completed.returncode)
+
 
 def _cmd_check(file: str, json_out: bool) -> int:
     """
@@ -52,6 +92,8 @@ def _cmd_check(file: str, json_out: bool) -> int:
             else:
                 print(f"\nERR {errors} error(s) in {checked} file(s)")
         return 0 if errors == 0 else 1
+
+    return _native_check_file(p, json_out=json_out)
 
     src = _read_text(p)
     lines = src.splitlines(True)

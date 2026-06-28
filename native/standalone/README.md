@@ -1,8 +1,17 @@
-# Mellow 2.9.1 Full Native C
+# Mellow Full Native C
+
+<p align="center">
+  <img src="../../docs/assets/mellow-logo.png" alt="Mellow logo" width="72">
+</p>
 
 The native package now contains the source frontend and execution runtime in C.
 The `mellow` executable reads, compiles, and runs `.mellow` source without
 loading Python or CPython.
+
+This tree is the forward path for Mellow runtime work. The standalone C runtime
+is still the main supported path. The embeddable Mellow Runtime ABI is
+experimental for now and should be updated gradually until it is ready to be
+treated as stable.
 
 What moved into native standalone now:
 - lexer and expression parser
@@ -15,7 +24,21 @@ What moved into native standalone now:
 - jump/jump_if_false
 - list/map builders
 - syscall bridge: host callback contract in pure C
+- native terminal I/O built-ins: `print`, `println`, `write`, `input`, `readline`, `read_line`, `ask`
+- native system built-ins: `args`, `argv`, `cwd`, `sleep_ms`, `exit`
+- native GC/concurrency foundation built-ins: `gc_collect`, `gc_stats`, `spawn`, `yield`, `workers`, `worker_count`, `scheduler_mode`, `channel`, `send`, `recv`
 - debugger snapshots now include stack, frames, and locals
+
+Native source layout:
+
+- `include/mellow_runtime.h` — experimental embeddable runtime ABI for host applications
+- `src/mellowc.c` — source lexer/compiler for `.mellow`
+- `src/mellow_runtime.c` — runtime ABI wrapper over compiler, VM, syscalls, and GC
+- `src/mellowrt_core.c` — bytecode VM and value ownership
+- `src/mellowrt_syscalls.c` — built-in syscall table for I/O, math, env, args, cwd, sleep, exit, GC/concurrency foundation, and channels
+- `src/mellowrt_main.c` — CLI entry point, source/image loading, and runtime wiring
+- `src/mellowrt_platform.c` — target architecture/runtime-info probing
+- `src/mellowrt_debug.c` — debug snapshot helpers
 
 Native source syntax in v2.9.0:
 - `let` / `keep` declarations and assignment
@@ -24,7 +47,11 @@ Native source syntax in v2.9.0:
 - `if` / `else`, `while`, and `for ... in range(...)`
 - functions and return values
 - lists, maps, and indexing
-- `print`, `len`, `str`, `type`, `abs`, `floor`, `ceil`, `sqrt`, `min`, `max`
+- `print`, `println`, `write`, `input`, `readline`, `read_line`, `ask`
+- `args`, `argv`, `cwd`, `sleep_ms`, `exit`
+- `gc_collect`, `gc_stats`, `spawn`, `yield`, `workers`, `worker_count`, `scheduler_mode`, `channel`, `send`, `recv`
+- `len`, `str`, `type`, `abs`, `floor`, `ceil`, `sqrt`, `min`, `max`
+- builtin module aliases: `import "math" as m`, `use sys as sys`, `need io as io`, `use chan as c`
 
 Extended systems that remain outside the native runtime:
 - import/module loader parity
@@ -39,6 +66,27 @@ cmake -S native/standalone -B native/standalone/build
 cmake --build native/standalone/build
 ./native/standalone/build/mellowrt
 ```
+
+Try the experimental embedding wrapper from C:
+
+```c
+#include "mellow_runtime.h"
+
+MellowRuntime *rt = mellow_runtime_new();
+MellowCompiledProgram program;
+MRunResult result;
+char error[512] = {0};
+
+if (mellow_runtime_compile_source(rt, "print(\"hi\")\n", "<embed>", &program, error, sizeof(error))) {
+    mellow_runtime_run_program(rt, &program, &result);
+    mellow_runtime_program_free(&program);
+}
+mellow_runtime_free(rt);
+```
+
+This wrapper is intentionally provisional. Use the `mellow` standalone
+executable as the stable native path while the runtime ABI is still being
+hardened.
 
 Memory safety and fuzzing on Linux with Clang:
 
@@ -63,6 +111,76 @@ Run source directly:
 ./native/standalone/build/mellow examples/hello.mellow
 ./native/standalone/build/mellow check examples/hello.mellow
 ```
+
+Native terminal I/O example:
+
+```mellow
+let name = input("Name: ")
+write("Hello, ")
+println(name)
+```
+
+When run by the native executable, the prompt is written to stdout, one line is
+read from stdin, the trailing newline is stripped, and the result is returned as
+a string.
+
+Native system example:
+
+```mellow
+let argv = args()
+print("argc:", len(argv))
+print("cwd:", cwd())
+sleep_ms(10)
+exit(0)
+```
+
+Native builtin module alias example:
+
+```mellow
+import "math" as m
+use sys as system
+need io as out
+
+out.println(m.sqrt(25))
+out.println(system.cwd())
+```
+
+These imports are compile-time aliases for allowlisted native built-ins. They do
+not load local files or packages yet.
+
+Native GC/concurrency foundation example:
+
+```mellow
+gc_collect()
+let stats = gc_stats()
+print(stats["mode"])
+
+def worker():
+    return 1
+
+let task = spawn(worker)
+yield()
+
+use thread as t
+print(t.scheduler_mode())
+print(t.workers(4))
+print(t.worker_count())
+
+use chan as c
+let mailbox = c.channel()
+c.send(mailbox, "hello")
+print(c.recv(mailbox))
+```
+
+In v2.9.7 these APIs are native C built-ins. Channels are FIFO native handles,
+`spawn` creates cooperative tasks, and `yield` round-robin switches between
+runnable tasks. `workers(n)` configures the native M:N scheduler topology,
+`worker_count()` reports the configured worker count, and `scheduler_mode()`
+reports `m:n-cooperative`. `recv(ch)` on an empty channel implicitly yields
+when another task can run. `gc_stats()["mode"]` reports `mark-sweep-native-handles`; the
+collector marks native handles from VM stack/locals and sweeps unreachable
+channel handles. The worker topology is now part of the C runtime surface;
+parallel bytecode execution remains gated on thread-safe heap/channel ownership.
 
 Inspect the binary's actual target and backend:
 

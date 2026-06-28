@@ -21,10 +21,16 @@ mellow_saves/
 node_modules/
 dist/
 build/
+/bin/
+.tmp_native_install_test/
+packages/npm/mellowlang/vendor/
+packages/npm/mellowlang/.native-build/
+packages/npm/mellowlang/native/
 .vscode/
 .idea/
 .DS_Store
 *.log
+*.vsix
 replay*.jsonl
 .mellow_imports.json
 .mellow_runtime.json

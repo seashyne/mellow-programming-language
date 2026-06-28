@@ -1,90 +1,18 @@
-#include "mellowrt.h"
+#include "mellowc_internal.h"
 
 #include <ctype.h>
-#include <math.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-typedef enum {
-    TK_EOF, TK_NUM, TK_STR, TK_ID, TK_LP, TK_RP, TK_LB, TK_RB, TK_LC, TK_RC,
-    TK_COMMA, TK_COLON, TK_PLUS, TK_MINUS, TK_STAR, TK_SLASH, TK_PERCENT,
-    TK_EQ, TK_NE, TK_LT, TK_LE, TK_GT, TK_GE
-} TokenKind;
-
-typedef struct {
-    TokenKind kind;
-    const char *start;
-    size_t len;
-    double number;
-    int is_float;
-} Token;
-
-typedef struct {
-    const char *cur;
-    Token token;
-    int line;
-} Lexer;
-
-typedef struct {
-    char *text;
-    int indent;
-    int number;
-} SourceLine;
-
-typedef struct {
-    char name[64];
-    int slot;
-} Variable;
-
-typedef struct {
-    Variable vars[256];
-    int len;
-} Scope;
-
-typedef struct {
-    char name[64];
-    char params[16][64];
-    int arity;
-    int address;
-    int local_count;
-    int const_slot;
-    int line_start;
-    int line_end;
-    int body_indent;
-} Function;
-
-typedef struct {
-    MInstruction *code;
-    size_t code_len, code_cap;
-    MSourceSpan *spans;
-    size_t span_len, span_cap;
-    MValue *consts;
-    size_t const_len, const_cap;
-    SourceLine *lines;
-    int line_count;
-    Function funcs[128];
-    int func_count;
-    Scope globals;
-    Scope *scope;
-    int current_line;
-    const char *source_name;
-    char *error;
-    size_t error_cap;
-} Compiler;
-
-typedef struct {
-    Compiler *compiler;
-    Lexer lexer;
-} Expr;
-
-static void set_error(Compiler *c, const char *message) {
+void set_error(Compiler *c, const char *message) {
     if (c->error && c->error_cap && !c->error[0])
         snprintf(c->error, c->error_cap, "%s:%d:1: syntax error: %s",
                  c->source_name ? c->source_name : "<memory>", c->current_line, message);
 }
 
-static char *copy_text(const char *s, size_t n) {
+char *copy_text(const char *s, size_t n) {
     char *p = (char *)calloc(n + 1, 1);
     if (p && n) memcpy(p, s, n);
     return p;
@@ -103,7 +31,7 @@ static int reserve(void **ptr, size_t *cap, size_t need, size_t item_size) {
     return 1;
 }
 
-static int emit(Compiler *c, int op, int a, int b, int d) {
+int emit(Compiler *c, int op, int a, int b, int d) {
     MSourceSpan span;
     if (!reserve((void **)&c->code, &c->code_cap, c->code_len + 1, sizeof(*c->code)) ||
         !reserve((void **)&c->spans, &c->span_cap, c->span_len + 1, sizeof(*c->spans))) {
@@ -116,7 +44,7 @@ static int emit(Compiler *c, int op, int a, int b, int d) {
     return (int)c->code_len++;
 }
 
-static int add_const(Compiler *c, MValue value) {
+int add_const(Compiler *c, MValue value) {
     if (!reserve((void **)&c->consts, &c->const_cap, c->const_len + 1, sizeof(*c->consts))) {
         set_error(c, "constant pool allocation failed");
         return -1;
@@ -125,7 +53,7 @@ static int add_const(Compiler *c, MValue value) {
     return (int)c->const_len++;
 }
 
-static MValue owned_string(const char *s, size_t n) {
+MValue owned_string(const char *s, size_t n) {
     MValue value = mval_none();
     char *copy = copy_text(s, n);
     if (!copy) return value;
@@ -136,75 +64,7 @@ static MValue owned_string(const char *s, size_t n) {
     return value;
 }
 
-static void lex_next(Lexer *l) {
-    const char *start;
-    while (*l->cur == ' ' || *l->cur == '\t') l->cur++;
-    start = l->cur;
-    l->token = (Token){TK_EOF, start, 0, 0, 0};
-    if (!*start || *start == '#') return;
-    if (isdigit((unsigned char)*start)) {
-        char *end;
-        l->token.number = strtod(start, &end);
-        l->token.kind = TK_NUM;
-        l->token.start = start;
-        l->token.len = (size_t)(end - start);
-        l->token.is_float = memchr(start, '.', l->token.len) != NULL ||
-                            memchr(start, 'e', l->token.len) != NULL ||
-                            memchr(start, 'E', l->token.len) != NULL;
-        l->cur = end;
-        return;
-    }
-    if (isalpha((unsigned char)*start) || *start == '_') {
-        l->cur++;
-        while (isalnum((unsigned char)*l->cur) || *l->cur == '_' || *l->cur == '.') l->cur++;
-        l->token = (Token){TK_ID, start, (size_t)(l->cur - start), 0, 0};
-        return;
-    }
-    if (*start == '"' || *start == '\'') {
-        char quote = *start++;
-        l->cur = start;
-        while (*l->cur && *l->cur != quote) {
-            if (*l->cur == '\\' && l->cur[1]) l->cur += 2;
-            else l->cur++;
-        }
-        l->token = (Token){TK_STR, start, (size_t)(l->cur - start), 0, 0};
-        if (*l->cur == quote) l->cur++;
-        return;
-    }
-#define ONE(ch, token_kind) case ch: l->cur++; l->token.kind=token_kind; l->token.len=1; return
-    switch (*start) {
-        ONE('(', TK_LP); ONE(')', TK_RP); ONE('[', TK_LB); ONE(']', TK_RB);
-        ONE('{', TK_LC); ONE('}', TK_RC); ONE(',', TK_COMMA); ONE(':', TK_COLON);
-        ONE('+', TK_PLUS); ONE('-', TK_MINUS); ONE('*', TK_STAR);
-        ONE('/', TK_SLASH); ONE('%', TK_PERCENT);
-        case '=': l->cur++; l->token.kind = (*l->cur == '=') ? (l->cur++, TK_EQ) : TK_EOF; l->token.len=(size_t)(l->cur-start); return;
-        case '!': l->cur++; l->token.kind = (*l->cur == '=') ? (l->cur++, TK_NE) : TK_EOF; l->token.len=(size_t)(l->cur-start); return;
-        case '<': l->cur++; l->token.kind = (*l->cur == '=') ? (l->cur++, TK_LE) : TK_LT; l->token.len=(size_t)(l->cur-start); return;
-        case '>': l->cur++; l->token.kind = (*l->cur == '=') ? (l->cur++, TK_GE) : TK_GT; l->token.len=(size_t)(l->cur-start); return;
-        default: l->cur++; return;
-    }
-#undef ONE
-}
-
-static int token_is(Token *t, const char *text) {
-    size_t n = strlen(text);
-    return t->kind == TK_ID && t->len == n && memcmp(t->start, text, n) == 0;
-}
-
-static int parse_integer_literal(const Token *token, int64_t *result) {
-    uint64_t value = 0;
-    const uint64_t limit = (uint64_t)INT64_MAX;
-    size_t i;
-    for (i = 0; i < token->len; ++i) {
-        uint64_t digit = (uint64_t)(token->start[i] - '0');
-        if (value > (limit - digit) / 10u) return 0;
-        value = value * 10u + digit;
-    }
-    *result = (int64_t)value;
-    return 1;
-}
-
-static int scope_find(Scope *scope, const char *name, size_t len) {
+int scope_find(Scope *scope, const char *name, size_t len) {
     int i;
     for (i = 0; i < scope->len; ++i)
         if (strlen(scope->vars[i].name) == len && memcmp(scope->vars[i].name, name, len) == 0)
@@ -212,17 +72,18 @@ static int scope_find(Scope *scope, const char *name, size_t len) {
     return -1;
 }
 
-static int scope_slot(Scope *scope, const char *name, size_t len, int create) {
+int scope_slot(Scope *scope, const char *name, size_t len, int create) {
     int slot = scope_find(scope, name, len);
     if (slot >= 0 || !create || scope->len >= 256) return slot;
     slot = scope->len;
     snprintf(scope->vars[scope->len].name, sizeof(scope->vars[scope->len].name), "%.*s", (int)len, name);
     scope->vars[scope->len].slot = slot;
+    scope->is_i64[scope->len] = 0;
     scope->len++;
     return slot;
 }
 
-static Function *find_function(Compiler *c, const char *name, size_t len) {
+Function *find_function(Compiler *c, const char *name, size_t len) {
     int i;
     for (i = 0; i < c->func_count; ++i)
         if (strlen(c->funcs[i].name) == len && memcmp(c->funcs[i].name, name, len) == 0)
@@ -230,190 +91,222 @@ static Function *find_function(Compiler *c, const char *name, size_t len) {
     return NULL;
 }
 
-static int builtin_id(const char *name, size_t len) {
-    static const struct { const char *name; int id; } builtins[] = {
-        {"print",1},{"len",2},{"clock_ms",3},{"getenv",4},{"str",5},{"type",6},
-        {"abs",7},{"floor",8},{"ceil",9},{"sqrt",10},{"min",11},{"max",12},{"range",20}
-    };
-    size_t i;
-    for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)
-        if (strlen(builtins[i].name)==len && memcmp(name,builtins[i].name,len)==0) return builtins[i].id;
-    return 0;
-}
-
-static int parse_expression(Expr *e, int min_prec);
-
-static int expect(Expr *e, TokenKind kind, const char *message) {
-    if (e->lexer.token.kind != kind) {
-        set_error(e->compiler, message);
-        return 0;
-    }
-    lex_next(&e->lexer);
-    return 1;
-}
-
-static int parse_primary(Expr *e) {
-    Compiler *c = e->compiler;
-    Token token = e->lexer.token;
-    int slot;
-    if (token.kind == TK_NUM) {
-        int ci;
-        MValue value;
-        if (token.is_float) {
-            if (!isfinite(token.number)) {
-                set_error(c, "numeric literal is not finite");
-                return 0;
-            }
-            value = mval_f64(token.number);
-        } else {
-            int64_t integer;
-            if (!parse_integer_literal(&token, &integer)) {
-                set_error(c, "integer literal is outside the signed 64-bit range");
-                return 0;
-            }
-            value = mval_i64(integer);
-        }
-        ci = add_const(c, value);
-        lex_next(&e->lexer);
-        return ci >= 0 && emit(c, MOP_PUSH_CONST, ci, 0, 0) >= 0;
-    }
-    if (token.kind == TK_STR) {
-        int ci = add_const(c, owned_string(token.start, token.len));
-        lex_next(&e->lexer);
-        return ci >= 0 && emit(c, MOP_PUSH_CONST, ci, 0, 0) >= 0;
-    }
-    if (token_is(&token, "true") || token_is(&token, "false") || token_is(&token, "none")) {
-        MValue v = token_is(&token, "none") ? mval_none() : mval_bool(token_is(&token, "true"));
-        int ci = add_const(c, v);
-        lex_next(&e->lexer);
-        return ci >= 0 && emit(c, MOP_PUSH_CONST, ci, 0, 0) >= 0;
-    }
-    if (token.kind == TK_MINUS || token_is(&token, "not")) {
-        int is_not = token_is(&token, "not");
-        lex_next(&e->lexer);
-        if (is_not) return parse_primary(e) && emit(c, MOP_BOOL_NOT, 0, 0, 0) >= 0;
-        {
-            int zero = add_const(c, mval_i64(0));
-            if (emit(c, MOP_PUSH_CONST, zero, 0, 0) < 0 || !parse_primary(e)) return 0;
-            return emit(c, MOP_SUB, 0, 0, 0) >= 0;
-        }
-    }
-    if (token.kind == TK_LP) {
-        lex_next(&e->lexer);
-        if (!parse_expression(e, 0)) return 0;
-        return expect(e, TK_RP, "expected ')'");
-    }
-    if (token.kind == TK_LB) {
-        int count = 0;
-        lex_next(&e->lexer);
-        while (e->lexer.token.kind != TK_RB && e->lexer.token.kind != TK_EOF) {
-            if (!parse_expression(e, 0)) return 0;
-            count++;
-            if (e->lexer.token.kind != TK_COMMA) break;
-            lex_next(&e->lexer);
-        }
-        if (!expect(e, TK_RB, "expected ']'")) return 0;
-        return emit(c, MOP_BUILD_LIST, count, 0, 0) >= 0;
-    }
-    if (token.kind == TK_LC) {
-        int count = 0;
-        lex_next(&e->lexer);
-        while (e->lexer.token.kind != TK_RC && e->lexer.token.kind != TK_EOF) {
-            if (!parse_expression(e, 0) || !expect(e, TK_COLON, "expected ':' in map") ||
-                !parse_expression(e, 0)) return 0;
-            count++;
-            if (e->lexer.token.kind != TK_COMMA) break;
-            lex_next(&e->lexer);
-        }
-        if (!expect(e, TK_RC, "expected '}'")) return 0;
-        return emit(c, MOP_BUILD_MAP, count, 0, 0) >= 0;
-    }
-    if (token.kind == TK_ID) {
-        lex_next(&e->lexer);
-        if (e->lexer.token.kind == TK_LP) {
-            int argc = 0, id = builtin_id(token.start, token.len);
-            Function *fn = find_function(c, token.start, token.len);
-            lex_next(&e->lexer);
-            while (e->lexer.token.kind != TK_RP && e->lexer.token.kind != TK_EOF) {
-                if (!parse_expression(e, 0)) return 0;
-                argc++;
-                if (e->lexer.token.kind != TK_COMMA) break;
-                lex_next(&e->lexer);
-            }
-            if (!expect(e, TK_RP, "expected ')' after arguments")) return 0;
-            if (id) return emit(c, MOP_SYSCALL, id, argc, id == 1 ? 0 : 1) >= 0;
-            if (!fn) { set_error(c, "unknown function"); return 0; }
-            if (emit(c, MOP_PUSH_CONST, fn->const_slot, 0, 0) < 0) return 0;
-            return emit(c, MOP_CALL, argc, 0, 0) >= 0;
-        }
-        slot = scope_find(c->scope, token.start, token.len);
-        if (slot < 0 && c->scope != &c->globals) slot = scope_find(&c->globals, token.start, token.len);
-        if (slot < 0) { set_error(c, "unknown variable"); return 0; }
-        if (emit(c, MOP_LOAD_LOCAL, slot, 0, 0) < 0) return 0;
-        while (e->lexer.token.kind == TK_LB) {
-            lex_next(&e->lexer);
-            if (!parse_expression(e, 0) || !expect(e, TK_RB, "expected ']' after index")) return 0;
-            if (emit(c, MOP_GETITEM, 0, 0, 0) < 0) return 0;
-        }
-        return 1;
-    }
-    set_error(c, "expected expression");
-    return 0;
-}
-
-static int precedence(Token *t) {
-    if (token_is(t, "or")) return 1;
-    if (token_is(t, "and")) return 2;
-    if (t->kind==TK_EQ||t->kind==TK_NE||t->kind==TK_LT||t->kind==TK_LE||t->kind==TK_GT||t->kind==TK_GE) return 3;
-    if (t->kind==TK_PLUS||t->kind==TK_MINUS) return 4;
-    if (t->kind==TK_STAR||t->kind==TK_SLASH||t->kind==TK_PERCENT) return 5;
-    return -1;
-}
-
-static int parse_expression(Expr *e, int min_prec) {
-    Compiler *c = e->compiler;
-    if (!parse_primary(e)) return 0;
-    for (;;) {
-        Token op = e->lexer.token;
-        int prec = precedence(&op), opcode = -1, cmp = 0;
-        if (prec < min_prec) break;
-        lex_next(&e->lexer);
-        if (!parse_expression(e, prec + 1)) return 0;
-        if (op.kind==TK_PLUS) opcode=MOP_ADD; else if(op.kind==TK_MINUS) opcode=MOP_SUB;
-        else if(op.kind==TK_STAR) opcode=MOP_MUL; else if(op.kind==TK_SLASH) opcode=MOP_DIV;
-        else if(op.kind==TK_PERCENT) opcode=MOP_MOD; else if(token_is(&op,"and")) opcode=MOP_BOOL_AND;
-        else if(token_is(&op,"or")) opcode=MOP_BOOL_OR;
-        else {
-            opcode=MOP_COMPARE;
-            if(op.kind==TK_EQ)cmp=MCMP_EQ; else if(op.kind==TK_NE)cmp=MCMP_NE;
-            else if(op.kind==TK_LT)cmp=MCMP_LT; else if(op.kind==TK_LE)cmp=MCMP_LE;
-            else if(op.kind==TK_GT)cmp=MCMP_GT; else cmp=MCMP_GE;
-        }
-        if (emit(c, opcode, cmp, 0, 0) < 0) return 0;
-    }
-    return 1;
-}
-
-static int compile_expr(Compiler *c, const char *text) {
-    Expr e;
-    e.compiler = c;
-    e.lexer.cur = text;
-    e.lexer.line = c->current_line;
-    lex_next(&e.lexer);
-    return parse_expression(&e, 0);
-}
-
-static const char *trim(char *text) {
+const char *trim(char *text) {
     while (*text && isspace((unsigned char)*text)) text++;
     return text;
 }
 
-static int starts(const char *text, const char *prefix) {
+void strip_inline_comment(char *text) {
+    int quote = 0;
+    int escaped = 0;
+    int depth = 0;
+    size_t i;
+    for (i = 0; text[i]; ++i) {
+        char ch = text[i];
+        if (escaped) { escaped = 0; continue; }
+        if (quote) {
+            if (ch == '\\') escaped = 1;
+            else if (ch == quote) quote = 0;
+            continue;
+        }
+        if (ch == '"' || ch == '\'') { quote = ch; continue; }
+        if (ch == '(' || ch == '[' || ch == '{') depth++;
+        else if ((ch == ')' || ch == ']' || ch == '}') && depth > 0) depth--;
+        else if (depth == 0 && ch == '#') { text[i] = '\0'; break; }
+        else if (depth == 0 && ch == '/' && text[i + 1] == '/') { text[i] = '\0'; break; }
+    }
+    while (i > 0 && isspace((unsigned char)text[i - 1])) text[--i] = '\0';
+}
+
+int starts(const char *text, const char *prefix) {
     size_t n = strlen(prefix);
     return strncmp(text, prefix, n) == 0;
 }
 
-static int find_assignment(const char *text) {
+static int ident_len_at(const char *text) {
+    int n = 0;
+    if (!text || !(isalpha((unsigned char)text[0]) || text[0] == '_')) return 0;
+    while (isalnum((unsigned char)text[n]) || text[n] == '_') n++;
+    return n;
+}
+
+static const char *skip_spaces(const char *text) {
+    while (*text && isspace((unsigned char)*text)) text++;
+    return text;
+}
+
+static int expr_is_i64_literal(const char *expr) {
+    char *endp = NULL;
+    const char *p = skip_spaces(expr);
+    (void)strtoll(p, &endp, 10);
+    return endp != p && *skip_spaces(endp) == '\0';
+}
+
+static int parse_i64_lt_condition(Compiler *c, const char *condition, int *left_slot_out, int *right_slot_out) {
+    const char *p = skip_spaces(condition);
+    int left_len = ident_len_at(p);
+    char left[64], right[64];
+    int right_len, left_slot, right_slot;
+    if (!left_len || left_len >= (int)sizeof(left)) return 0;
+    memcpy(left, p, (size_t)left_len); left[left_len] = '\0';
+    p = skip_spaces(p + left_len);
+    if (*p != '<' || p[1] == '=') return 0;
+    p = skip_spaces(p + 1);
+    right_len = ident_len_at(p);
+    if (!right_len || right_len >= (int)sizeof(right)) return 0;
+    memcpy(right, p, (size_t)right_len); right[right_len] = '\0';
+    p = skip_spaces(p + right_len);
+    if (*p) return 0;
+    left_slot = scope_find(c->scope, left, strlen(left));
+    right_slot = scope_find(c->scope, right, strlen(right));
+    if (left_slot < 0 || right_slot < 0) return 0;
+    if (!c->scope->is_i64[left_slot] || !c->scope->is_i64[right_slot]) return 0;
+    *left_slot_out = left_slot;
+    *right_slot_out = right_slot;
+    return 1;
+}
+
+static int emit_fast_i64_lt_jump(Compiler *c, const char *condition, int *jump_index) {
+    int left_slot, right_slot;
+    if (!parse_i64_lt_condition(c, condition, &left_slot, &right_slot)) return 0;
+    *jump_index = emit(c, MOP_JUMP_IF_LOCAL_I64_LT_FALSE, left_slot, right_slot, 0);
+    return *jump_index >= 0 ? 1 : -1;
+}
+
+static int emit_fast_i64_add_assignment(Compiler *c, const char *lhs, const char *expr) {
+    const char *p = skip_spaces(expr);
+    int left_len = ident_len_at(p);
+    char left[64], rhs_name[64];
+    int lhs_slot, rhs_slot, rhs_len;
+    char *endp = NULL;
+    long long delta;
+    if (!left_len || left_len >= (int)sizeof(left)) return 0;
+    memcpy(left, p, (size_t)left_len); left[left_len] = '\0';
+    p = skip_spaces(p + left_len);
+    if (*p != '+') return 0;
+    p = skip_spaces(p + 1);
+    if (strcmp(lhs, left) != 0) return 0;
+    lhs_slot = scope_find(c->scope, lhs, strlen(lhs));
+    if (lhs_slot < 0) return 0;
+    if (!c->scope->is_i64[lhs_slot]) return 0;
+
+    rhs_len = ident_len_at(p);
+    if (rhs_len > 0) {
+        if (rhs_len >= (int)sizeof(rhs_name)) return 0;
+        memcpy(rhs_name, p, (size_t)rhs_len); rhs_name[rhs_len] = '\0';
+        p = skip_spaces(p + rhs_len);
+        if (*p) return 0;
+        rhs_slot = scope_find(c->scope, rhs_name, strlen(rhs_name));
+        if (rhs_slot < 0) return 0;
+        if (!c->scope->is_i64[rhs_slot]) return 0;
+        return emit(c, MOP_I64_ADD_LOCAL_LOCAL, lhs_slot, rhs_slot, 0) >= 0 ? 1 : -1;
+    }
+
+    delta = strtoll(p, &endp, 10);
+    if (endp == p || *skip_spaces(endp) || delta < INT_MIN || delta > INT_MAX) return 0;
+    return emit(c, MOP_I64_ADD_LOCAL_CONST, lhs_slot, (int)delta, 0) >= 0 ? 1 : -1;
+}
+
+static char *normalized_line_copy(SourceLine *line) {
+    char *copy = copy_text(line->text, strlen(line->text));
+    char *trimmed;
+    if (!copy) return NULL;
+    strip_inline_comment(copy);
+    trimmed = (char *)trim(copy);
+    if (trimmed != copy) memmove(copy, trimmed, strlen(trimmed) + 1);
+    return copy;
+}
+
+static int parse_assignment_parts(const char *text, char *lhs, size_t lhs_cap, const char **expr_out) {
+    int assign = find_assignment(text);
+    size_t n;
+    if (assign < 0) return 0;
+    n = (size_t)assign;
+    while (n && isspace((unsigned char)text[n-1])) n--;
+    if (!n || n >= lhs_cap) return 0;
+    memcpy(lhs, text, n);
+    lhs[n] = '\0';
+    *expr_out = trim((char *)text + assign + 1);
+    return 1;
+}
+
+static int parse_self_plus_ident(const char *lhs, const char *expr, char *rhs, size_t rhs_cap) {
+    const char *p = skip_spaces(expr);
+    int left_len = ident_len_at(p), rhs_len;
+    if (!left_len || strlen(lhs) != (size_t)left_len || memcmp(lhs, p, (size_t)left_len) != 0) return 0;
+    p = skip_spaces(p + left_len);
+    if (*p != '+') return 0;
+    p = skip_spaces(p + 1);
+    rhs_len = ident_len_at(p);
+    if (!rhs_len || rhs_len >= (int)rhs_cap) return 0;
+    memcpy(rhs, p, (size_t)rhs_len);
+    rhs[rhs_len] = '\0';
+    p = skip_spaces(p + rhs_len);
+    return *p == '\0';
+}
+
+static int parse_self_plus_one(const char *lhs, const char *expr) {
+    const char *p = skip_spaces(expr);
+    int left_len = ident_len_at(p);
+    char *endp = NULL;
+    long long delta;
+    if (!left_len || strlen(lhs) != (size_t)left_len || memcmp(lhs, p, (size_t)left_len) != 0) return 0;
+    p = skip_spaces(p + left_len);
+    if (*p != '+') return 0;
+    p = skip_spaces(p + 1);
+    delta = strtoll(p, &endp, 10);
+    return endp != p && *skip_spaces(endp) == '\0' && delta == 1;
+}
+
+static int emit_fast_i64_sum_loop(Compiler *c, int *position, int end, int indent, const char *condition) {
+    int idx_slot, limit_slot, body_start, body_end, count = 0;
+    int body_indices[2];
+    char *line0 = NULL, *line1 = NULL;
+    char lhs0[64], lhs1[64], rhs0[64];
+    const char *expr0, *expr1;
+    int acc_slot;
+
+    if (!parse_i64_lt_condition(c, condition, &idx_slot, &limit_slot)) return 0;
+    body_start = *position + 1;
+    body_end = body_start;
+    while (body_end < end && c->lines[body_end].indent > indent) body_end++;
+    for (int i = body_start; i < body_end; ++i) {
+        char *copy;
+        if (c->lines[i].indent != indent + 4) return 0;
+        copy = normalized_line_copy(&c->lines[i]);
+        if (!copy) return -1;
+        if (*copy) {
+            if (count >= 2) { free(copy); return 0; }
+            body_indices[count++] = i;
+        }
+        free(copy);
+    }
+    if (count != 2) return 0;
+
+    line0 = normalized_line_copy(&c->lines[body_indices[0]]);
+    line1 = normalized_line_copy(&c->lines[body_indices[1]]);
+    if (!line0 || !line1) { free(line0); free(line1); return -1; }
+    if (!parse_assignment_parts(line0, lhs0, sizeof(lhs0), &expr0) ||
+        !parse_assignment_parts(line1, lhs1, sizeof(lhs1), &expr1) ||
+        !parse_self_plus_ident(lhs0, expr0, rhs0, sizeof(rhs0)) ||
+        !parse_self_plus_one(lhs1, expr1)) {
+        free(line0); free(line1); return 0;
+    }
+    if (scope_find(c->scope, lhs1, strlen(lhs1)) != idx_slot ||
+        scope_find(c->scope, rhs0, strlen(rhs0)) != idx_slot) {
+        free(line0); free(line1); return 0;
+    }
+    acc_slot = scope_find(c->scope, lhs0, strlen(lhs0));
+    if (acc_slot < 0 || !c->scope->is_i64[acc_slot]) {
+        free(line0); free(line1); return 0;
+    }
+    free(line0); free(line1);
+    if (emit(c, MOP_I64_SUM_RANGE_STEP1, acc_slot, idx_slot, limit_slot) < 0) return -1;
+    *position = body_end;
+    return 1;
+}
+
+int find_assignment(const char *text) {
     int depth=0, quote=0, i;
     for(i=0;text[i];++i) {
         char ch=text[i];
@@ -434,7 +327,14 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
     char *text=(char*)trim(line->text);
     int assign;
     c->current_line=line->number;
+    strip_inline_comment(text);
+    text=(char*)trim(text);
     if (!*text || starts(text,"//") || *text=='#') { (*position)++; return 1; }
+    {
+        int import_result = parse_import_statement(c, text);
+        if (import_result < 0) return 0;
+        if (import_result > 0) { (*position)++; return 1; }
+    }
     if (starts(text,"def ")) {
         Function *fn=NULL; int i;
         for(i=0;i<c->func_count;++i)if(c->funcs[i].line_start==*position){fn=&c->funcs[i];break;}
@@ -442,37 +342,90 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         return 1;
     }
     if (starts(text,"if ") && text[strlen(text)-1]==':') {
-        int jump_false, jump_end=-1;
+        int jump_false;
+        int end_jumps[32];
+        int end_count=0;
         text[strlen(text)-1]='\0';
         if(!compile_expr(c,text+3))return 0;
         jump_false=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
         (*position)++;
         if(!compile_block(c,position,end,indent+4))return 0;
-        if(*position<end && c->lines[*position].indent==indent && starts(trim(c->lines[*position].text),"else:")){
-            jump_end=emit(c,MOP_JUMP,0,0,0);
-            c->code[jump_false].a=(int32_t)c->code_len;
-            (*position)++;
-            if(!compile_block(c,position,end,indent+4))return 0;
-            c->code[jump_end].a=(int32_t)c->code_len;
-        } else c->code[jump_false].a=(int32_t)c->code_len;
+        while(*position<end && c->lines[*position].indent==indent){
+            char *next=(char*)trim(c->lines[*position].text);
+            strip_inline_comment(next);
+            next=(char*)trim(next);
+            if(starts(next,"elif ") && next[strlen(next)-1]==':'){
+                if(end_count<32)end_jumps[end_count++]=emit(c,MOP_JUMP,0,0,0);
+                c->code[jump_false].a=(int32_t)c->code_len;
+                next[strlen(next)-1]='\0';
+                c->current_line=c->lines[*position].number;
+                if(!compile_expr(c,next+5))return 0;
+                jump_false=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
+                (*position)++;
+                if(!compile_block(c,position,end,indent+4))return 0;
+                continue;
+            }
+            if(starts(next,"else:")){
+                if(end_count<32)end_jumps[end_count++]=emit(c,MOP_JUMP,0,0,0);
+                c->code[jump_false].a=(int32_t)c->code_len;
+                c->current_line=c->lines[*position].number;
+                (*position)++;
+                if(!compile_block(c,position,end,indent+4))return 0;
+                jump_false=-1;
+            }
+            break;
+        }
+        if(jump_false>=0)c->code[jump_false].a=(int32_t)c->code_len;
+        for(int j=0;j<end_count;++j)c->code[end_jumps[j]].a=(int32_t)c->code_len;
         return 1;
     }
+    if (starts(text,"stop")) {
+        emit(c,MOP_STOP,0,0,0);(*position)++;return 1;
+    }
+    if (starts(text,"show ")) {
+        if(!compile_expr(c,trim(text+5)))return 0;
+        emit(c,MOP_SYSCALL,1,1,0);
+        (*position)++;return 1;
+    }
     if (starts(text,"while ") && text[strlen(text)-1]==':') {
-        int loop=(int)c->code_len, jf;
+        int loop, jf, depth, fast_loop;
         text[strlen(text)-1]='\0';
-        if(!compile_expr(c,text+6))return 0;
-        jf=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
+        fast_loop = emit_fast_i64_sum_loop(c, position, end, indent, trim(text+6));
+        if (fast_loop < 0) return 0;
+        if (fast_loop) return 1;
+        loop=(int)c->code_len;
+        depth=c->loop_depth++;
+        c->loop_break_count[depth]=0;
+        c->loop_continue_count[depth]=0;
+        {
+            int fast_condition = emit_fast_i64_lt_jump(c, trim(text+6), &jf);
+            if (fast_condition < 0) return 0;
+            if (!fast_condition) {
+                if(!compile_expr(c,text+6))return 0;
+                jf=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
+            }
+        }
         (*position)++;
         if(!compile_block(c,position,end,indent+4))return 0;
+        for(int j=0;j<c->loop_continue_count[depth];++j)c->code[c->loop_continues[depth][j]].a=loop;
         emit(c,MOP_JUMP,loop,0,0);
-        c->code[jf].a=(int32_t)c->code_len;
+        if (c->code[jf].opcode == MOP_JUMP_IF_LOCAL_I64_LT_FALSE) c->code[jf].c=(int32_t)c->code_len;
+        else c->code[jf].a=(int32_t)c->code_len;
+        for(int j=0;j<c->loop_break_count[depth];++j)c->code[c->loop_breaks[depth][j]].a=(int32_t)c->code_len;
+        c->loop_depth--;
         return 1;
     }
     if (starts(text,"for ") && text[strlen(text)-1]==':') {
         char name[64], start_expr[256], stop_expr[256];
         int slot, stop_slot, loop, jf;
+        int depth=c->loop_depth++;
+        c->loop_break_count[depth]=0;
+        c->loop_continue_count[depth]=0;
         if(sscanf(text,"for %63s in range(%255[^,],%255[^)]):",name,start_expr,stop_expr)!=3){
-            set_error(c,"expected for name in range(start, stop):");return 0;
+            if(sscanf(text,"for %63s in range(%255[^)]):",name,stop_expr)!=2){
+                set_error(c,"expected for name in range(start, stop):");return 0;
+            }
+            snprintf(start_expr,sizeof(start_expr),"0");
         }
         slot=scope_slot(c->scope,name,strlen(name),1);
         snprintf(name,sizeof(name),"__stop_%d",line->number);
@@ -484,11 +437,43 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         jf=emit(c,MOP_JUMP_IF_FALSE,0,0,0);
         (*position)++;
         if(!compile_block(c,position,end,indent+4))return 0;
+        for(int j=0;j<c->loop_continue_count[depth];++j)c->code[c->loop_continues[depth][j]].a=(int32_t)c->code_len;
         emit(c,MOP_LOAD_LOCAL,slot,0,0);
         {int one=add_const(c,mval_i64(1));emit(c,MOP_PUSH_CONST,one,0,0);}
         emit(c,MOP_ADD,0,0,0);emit(c,MOP_STORE_LOCAL,slot,0,0);emit(c,MOP_JUMP,loop,0,0);
         c->code[jf].a=(int32_t)c->code_len;
+        for(int j=0;j<c->loop_break_count[depth];++j)c->code[c->loop_breaks[depth][j]].a=(int32_t)c->code_len;
+        c->loop_depth--;
         return 1;
+    }
+    if (starts(text,"break")) {
+        int depth=c->loop_depth-1;
+        int jump;
+        if(depth<0){set_error(c,"break outside loop");return 0;}
+        jump=emit(c,MOP_JUMP,0,0,0);
+        if(c->loop_break_count[depth]<64)c->loop_breaks[depth][c->loop_break_count[depth]++]=jump;
+        (*position)++;return 1;
+    }
+    if (starts(text,"continue")) {
+        int depth=c->loop_depth-1;
+        int jump;
+        if(depth<0){set_error(c,"continue outside loop");return 0;}
+        jump=emit(c,MOP_JUMP,0,0,0);
+        if(c->loop_continue_count[depth]<64)c->loop_continues[depth][c->loop_continue_count[depth]++]=jump;
+        (*position)++;return 1;
+    }
+    if (starts(text,"wait ")) {
+        char *expr=(char*)trim(text+5);
+        char *endp=NULL;
+        double seconds=strtod(expr,&endp);
+        if(endp&&*trim(endp)=='\0'){
+            int ci=add_const(c,mval_i64((int64_t)(seconds*1000.0)));
+            if(ci<0||emit(c,MOP_PUSH_CONST,ci,0,0)<0)return 0;
+        } else {
+            if(!compile_expr(c,expr))return 0;
+        }
+        emit(c,MOP_SYSCALL,18,1,0);
+        (*position)++;return 1;
     }
     if (starts(text,"return")) {
         const char *expr=trim(text+6);
@@ -501,6 +486,7 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         (*position)++;return 1;
     }
     if(starts(text,"let "))text=(char*)trim(text+4);
+    else if(starts(text,"var "))text=(char*)trim(text+4);
     else if(starts(text,"keep "))text=(char*)trim(text+5);
     assign=find_assignment(text);
     if(assign>=0){
@@ -509,10 +495,19 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
         while(n&&isspace((unsigned char)text[n-1]))n--;
         snprintf(name,sizeof(name),"%.*s",(int)n,text);
         expr=trim(text+assign+1);
-        if(!compile_expr(c,expr))return 0;
         {
-            int slot=scope_slot(c->scope,name,strlen(name),1);
-            if(slot<0||emit(c,MOP_STORE_LOCAL,slot,0,0)<0)return 0;
+            int fast_assign = emit_fast_i64_add_assignment(c, name, expr);
+            if (fast_assign < 0) return 0;
+            if (fast_assign) {
+                int slot = scope_find(c->scope, name, strlen(name));
+                if (slot >= 0) c->scope->is_i64[slot] = 1;
+            } else {
+                int slot;
+                if(!compile_expr(c,expr))return 0;
+                slot=scope_slot(c->scope,name,strlen(name),1);
+                if(slot<0||emit(c,MOP_STORE_LOCAL,slot,0,0)<0)return 0;
+                c->scope->is_i64[slot] = (unsigned char)expr_is_i64_literal(expr);
+            }
         }
         (*position)++;return 1;
     }
@@ -524,6 +519,8 @@ static int compile_block(Compiler *c, int *position, int end, int indent) {
     while(*position<end){
         SourceLine *line=&c->lines[*position];
         char *text=(char*)trim(line->text);
+        strip_inline_comment(text);
+        text=(char*)trim(text);
         if(!*text||starts(text,"//")||*text=='#'){(*position)++;continue;}
         if(line->indent<indent)return 1;
         if(line->indent>indent){set_error(c,"unexpected indentation");return 0;}

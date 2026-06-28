@@ -45,11 +45,9 @@ def test_money_module_is_allowlisted_for_get_calls():
     assert out.strip() == "USD 12.36"
 
 
-def test_finance_sandbox_profile_blocks_storage():
-    root = Path.cwd() / ".tmp_money_finance_test"
-    if root.exists():
-        shutil.rmtree(root, ignore_errors=True)
-    root.mkdir(exist_ok=True)
+def test_finance_sandbox_profile_blocks_storage(tmp_path: Path):
+    root = tmp_path / "finance-project"
+    root.mkdir()
     script = root / "finance.mellow"
     script.write_text(
         textwrap.dedent(
@@ -62,7 +60,7 @@ def test_finance_sandbox_profile_blocks_storage():
     out = io.StringIO()
     err = io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = cli_main(["run", str(script), "--sandbox=finance", "--no-resolve"])
+        code = cli_main(["run", str(script), "--engine=py", "--sandbox=finance", "--no-resolve"])
     try:
         assert code == 1
         assert "storage is disabled" in out.getvalue() or "storage is disabled" in err.getvalue()

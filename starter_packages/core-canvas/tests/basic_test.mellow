@@ -1,0 +1,6 @@
+use canvas as c
+
+img = c.create(16, 16)
+c.clear(img, "black")
+c.pixel(img, 8, 8, "white")
+print(c.save(img, "basic.ppm"))

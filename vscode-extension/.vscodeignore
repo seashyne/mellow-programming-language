@@ -1,0 +1,9 @@
+.git/**
+.vscode/**
+*.vsix
+node_modules/.cache/**
+npm-debug.log
+package-lock.json
+src/**
+test/**
+tests/**

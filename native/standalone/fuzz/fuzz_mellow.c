@@ -51,8 +51,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
         vm.syscall.fn = fuzz_syscall;
         (void)mvm_run(&vm, &program, &result);
         mvm_free(&vm);
-        mellow_native_program_free(&native);
     }
+    mellow_native_program_free(&native);
     free(source);
     return 0;
 }

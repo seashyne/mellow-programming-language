@@ -1,0 +1,14 @@
+# core-canvas
+#
+# Runtime surface:
+#   use canvas as c
+#   img = c.create(160, 120)
+#   c.clear(img, "white")
+#   c.circle(img, 80, 60, 42, "#33ccff")
+#   c.save(img, "circle.ppm")
+#
+# The implementation lives in the native C runtime so package users do not
+# need Python or Node for drawing.
+
+version = "0.1.0"
+backend = "native-canvas-ppm"

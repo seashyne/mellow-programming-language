@@ -36,16 +36,18 @@ These are the default starter set for `mellow new`.
 - `core-ai` — AI runtime wrappers
 - `mellow-sdk` — OpenAI-compatible chat SDK (OpenAI, DeepSeek, compatible APIs)
 - `core-gamekit` — game helpers
+- `core-canvas` — native headless canvas drawing declarations
 - `core-window` — desktop window declarations
 - `core-mmg` — Mellow Magic Graphics declarations
+- `core-melv` — dependency-free MELV2 video container declarations
 
-`core-sm` and `core-melv` currently have source stubs and local-registry
-packages, but are not included by `seed-core` until their starter manifests
-are complete.
+`core-sm` currently has source stubs and local-registry packages, but is not
+included by `seed-core` until its starter manifest is complete.
 
 ## Local source
 ```bash
 starter_packages/<package>/src/main.mel
+starter_packages/<package>/src/main.mellow
 ```
 
 ## Generate again

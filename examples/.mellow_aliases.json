@@ -5,7 +5,9 @@
     "core_strings": "core-strings",
     "core_math": "core-math",
     "core_workflow": "core-workflow",
-    "core_window": "core-window"
+    "core_window": "core-window",
+    "core_json": "core-json",
+    "mellow_sdk": "mellow-sdk"
   },
   "packages": {
     "core-mmg": "core_mmg",
@@ -13,6 +15,8 @@
     "core-strings": "core_strings",
     "core-math": "core_math",
     "core-workflow": "core_workflow",
-    "core-window": "core_window"
+    "core-window": "core_window",
+    "core-json": "core_json",
+    "mellow-sdk": "mellow_sdk"
   }
 }

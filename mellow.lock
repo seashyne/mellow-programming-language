@@ -1,0 +1,202 @@
+{
+  "lockfile_version": 1,
+  "registry": "local",
+  "packages": {
+    "core-money": {
+      "version": "0.1.0",
+      "entry": "src/main.mel",
+      "dependencies": {
+        "money": "host"
+      },
+      "sha256": "adfefad83646484245bc3c860e1bbca20e0392fe9b9dc8f865d5d8e11889dba7"
+    },
+    "core-json": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "json": "host"
+      },
+      "sha256": null
+    },
+    "core-print": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {},
+      "sha256": "9f29af0eea144f65da250958f6fc2a61d1d3fb3b6100342cde1a42310e79e1bc"
+    },
+    "core-mmg": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {},
+      "sha256": null
+    },
+    "core-workflow": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "time": "host",
+        "json": "host"
+      },
+      "sha256": null
+    },
+    "core-window": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {},
+      "sha256": null
+    },
+    "core-time": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "time": "host"
+      },
+      "sha256": null
+    },
+    "core-strings": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "string": "host"
+      },
+      "sha256": null
+    },
+    "core-save": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {},
+      "sha256": null
+    },
+    "core-math": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "math": "host"
+      },
+      "sha256": null
+    },
+    "core-gamekit": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "game": "host",
+        "math": "host",
+        "json": "host"
+      },
+      "sha256": null
+    },
+    "core-collections": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "list": "host",
+        "map": "host"
+      },
+      "sha256": null
+    },
+    "core-ai": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "ai": "host"
+      },
+      "sha256": null
+    },
+    "mellow-web": {
+      "version": "0.1.0",
+      "entry": "src/main.mellow",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {},
+      "sha256": null
+    }
+  },
+  "root": {
+    "dependencies": {
+      "core-money": "0.1.0",
+      "core-json": "0.2.1",
+      "core-print": "0.2.1",
+      "core-mmg": "0.2.1",
+      "core-workflow": "0.2.1",
+      "core-window": "0.2.1",
+      "core-time": "0.2.1",
+      "core-strings": "0.2.1",
+      "core-save": "0.2.1",
+      "core-math": "0.2.1",
+      "core-gamekit": "0.2.1",
+      "core-collections": "0.2.1",
+      "core-ai": "0.2.1",
+      "mellow-web": "0.1.0"
+    },
+    "imports": [
+      "core-json",
+      "core-print",
+      "math",
+      "ai",
+      "@mellow/std-game",
+      "@mellow/std-http",
+      "@mellow/std-storage",
+      "@mellow/std-ai",
+      "core-mmg",
+      "core-workflow",
+      "core-window",
+      "core-time",
+      "core-strings",
+      "core-save",
+      "core-math",
+      "core-gamekit",
+      "core-collections",
+      "core-ai"
+    ]
+  }
+}

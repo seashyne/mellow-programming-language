@@ -1,0 +1,268 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without the v prefix, for example 2.9.7"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  native:
+    name: native-${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-x64
+            os: windows-latest
+          - target: linux-x64
+            os: ubuntu-latest
+          - target: macos-x64
+            os: macos-13
+          - target: macos-arm64
+            os: macos-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Configure native runtime
+        run: cmake -S native/standalone -B build/standalone-release -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build native runtime
+        run: cmake --build build/standalone-release --config Release --parallel 2
+
+      - name: Smoke test native runtime on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\build\standalone-release\Release\mellow.exe doctor
+          .\build\standalone-release\Release\mellow.exe check examples\hello.mellow
+          .\build\standalone-release\Release\mellow.exe run examples\hello.mellow
+
+      - name: Smoke test native runtime on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          build/standalone-release/mellow doctor
+          build/standalone-release/mellow check examples/hello.mellow
+          build/standalone-release/mellow run examples/hello.mellow
+
+      - name: Stage native package on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $pkg = "mellow-$env:VERSION-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path "dist/$pkg/bin" | Out-Null
+          Copy-Item build/standalone-release/Release/mellow.exe "dist/$pkg/bin/mellow.exe"
+          Copy-Item build/standalone-release/Release/mellowrt.exe "dist/$pkg/bin/mellowrt.exe"
+          Copy-Item LICENSE "dist/$pkg/LICENSE"
+          Copy-Item NOTICE.md "dist/$pkg/NOTICE.md"
+          Copy-Item README.md "dist/$pkg/README.md"
+          Copy-Item docs/INSTALL.md "dist/$pkg/INSTALL.md"
+          Copy-Item scripts/install-native.ps1 "dist/$pkg/install-native.ps1"
+          Compress-Archive -Path "dist/$pkg/*" -DestinationPath "dist/$pkg.zip" -Force
+
+      - name: Stage native package on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          pkg="mellow-$VERSION-${{ matrix.target }}"
+          mkdir -p "dist/$pkg/bin"
+          cp build/standalone-release/mellow "dist/$pkg/bin/mellow"
+          cp build/standalone-release/mellowrt "dist/$pkg/bin/mellowrt"
+          chmod +x "dist/$pkg/bin/mellow" "dist/$pkg/bin/mellowrt"
+          cp LICENSE "dist/$pkg/LICENSE"
+          cp NOTICE.md "dist/$pkg/NOTICE.md"
+          cp README.md "dist/$pkg/README.md"
+          cp docs/INSTALL.md "dist/$pkg/INSTALL.md"
+          cp scripts/install-native.sh "dist/$pkg/install-native.sh"
+          tar -C dist -czf "dist/$pkg.tar.gz" "$pkg"
+
+      - name: Upload native archive
+        uses: actions/upload-artifact@v6
+        with:
+          name: mellow-${{ env.VERSION }}-${{ matrix.target }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  vscode:
+    name: vscode-extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Package VS Code extension
+        working-directory: vscode-extension
+        run: |
+          npm install
+          npx --yes @vscode/vsce package --allow-missing-repository --out "../dist/mellowlang-$VERSION.vsix"
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v6
+        with:
+          name: mellowlang-vscode-${{ env.VERSION }}
+          path: dist/*.vsix
+          if-no-files-found: error
+
+  npm-package:
+    name: npm-package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Pack npm installer
+        working-directory: packages/npm/mellowlang
+        run: |
+          npm pack --pack-destination ../../..
+          mkdir -p ../../../dist
+          mv ../../../mellowlang-*.tgz ../../../dist/
+
+      - name: Upload npm tarball
+        uses: actions/upload-artifact@v6
+        with:
+          name: mellowlang-npm-${{ env.VERSION }}
+          path: dist/mellowlang-*.tgz
+          if-no-files-found: error
+
+  native-safety:
+    name: native-safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure ASan, UBSan, and libFuzzer
+        env:
+          CC: clang
+        run: |
+          cmake -S native/standalone -B build/standalone-safety \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DMELLOW_ENABLE_SANITIZERS=ON \
+            -DMELLOW_BUILD_FUZZER=ON
+          cmake --build build/standalone-safety --parallel 2
+
+      - name: Run sanitizer-backed native runtime tests
+        env:
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:strict_string_checks=1
+          LSAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          set +e
+          ctest --test-dir build/standalone-safety --output-on-failure 2>&1 | tee native-ctest.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            tail -n 80 native-ctest.log >> "$GITHUB_STEP_SUMMARY"
+            detail=$(tail -n 120 native-ctest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error file=native/standalone/CMakeLists.txt::$detail"
+          fi
+          exit "$status"
+
+      - name: Fuzz compiler and runtime ownership paths
+        env:
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
+          LSAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          build/standalone-safety/mellow_fuzz \
+            native/standalone/fuzz/corpus \
+            -runs=5000 \
+            -timeout=5 \
+            -max_len=65536
+
+  github-release:
+    name: github-release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - native
+      - native-safety
+      - vscode
+      - npm-package
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "NOTES_VERSION=${VERSION//./_}" >> "$GITHUB_ENV"
+
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          notes="docs/releases/RELEASE_NOTES_v${NOTES_VERSION}.md"
+          if [ -f "$notes" ]; then
+            cp "$notes" release-notes.md
+          else
+            {
+              echo "# MellowLang $GITHUB_REF_NAME"
+              echo
+              echo "Native-first release artifacts are attached below."
+              echo
+              echo "See README.md and docs/INSTALL.md for installation instructions."
+            } > release-notes.md
+          fi
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MellowLang ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: release-assets/*
+          fail_on_unmatched_files: true

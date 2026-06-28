@@ -1,4 +1,6 @@
 # core-melv
-keep version = "0.1.0"
-keep host = "mellow-video"
-keep supports = ["encode", "decode", "inspect", "extract-frames", "melv"]
+keep version = "0.2.0"
+keep host = "mellow-video-native"
+keep codec = "mellow-rgb-rle"
+keep format = "MELV2"
+keep supports = ["pack-frames", "inspect", "validate", "extract-native", "melv2", "import-video", "export-video", "legacy-bridge"]

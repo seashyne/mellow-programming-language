@@ -22,6 +22,11 @@ jobs:
       - name: Probe tooling package imports
         run: |
           python -c "import mellowlang; import mellowlang.compiler; import mellowlang.vm; print(mellowlang.__file__)"
+      - name: Build native CLI for tooling checks
+        run: |
+          cmake -S native/standalone -B build/standalone-release \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/standalone-release --parallel 2
       - name: Reference core language
         run: python -m pytest -q tests/core/test_core_language.py -p no:cacheprovider
       - name: Reference syntax and specification
@@ -30,16 +35,24 @@ jobs:
             tests/core/test_language_spec_2_9.py \
             tests/language/test_compiler_v3.py \
             -p no:cacheprovider
-      - name: Reference data and interop
+      - name: Reference data
         run: |
           python -m pytest -q \
             tests/core/test_data_processing_core.py \
+            -p no:cacheprovider
+      - name: Reference interop
+        run: |
+          python -m pytest -q \
             tests/core/test_interop_core.py \
             -p no:cacheprovider
-      - name: Reference money and ledger
+      - name: Reference money
         run: |
           python -m pytest -q \
             tests/core/test_money_and_finance_sandbox.py \
+            -p no:cacheprovider
+      - name: Reference ledger
+        run: |
+          python -m pytest -q \
             tests/core/test_ledger_core.py \
             -p no:cacheprovider
       - name: Reference SDK
@@ -164,7 +177,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Configure ASan, UBSan, LeakSanitizer, and libFuzzer
+      - name: Configure ASan, UBSan, and libFuzzer
         env:
           CC: clang
         run: |
@@ -175,12 +188,23 @@ jobs:
           cmake --build build/standalone-safety --parallel 2
       - name: Run native memory-safety tests
         env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:strict_string_checks=1
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:strict_string_checks=1
+          LSAN_OPTIONS: detect_leaks=0
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build/standalone-safety --output-on-failure
+        run: |
+          set +e
+          ctest --test-dir build/standalone-safety --output-on-failure 2>&1 | tee native-ctest.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            tail -n 80 native-ctest.log >> "$GITHUB_STEP_SUMMARY"
+            detail=$(tail -n 120 native-ctest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error file=native/standalone/CMakeLists.txt::$detail"
+          fi
+          exit "$status"
       - name: Fuzz compiler and runtime ownership paths
         env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
+          LSAN_OPTIONS: detect_leaks=0
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
           set +e

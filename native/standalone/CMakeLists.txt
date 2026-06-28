@@ -37,7 +37,14 @@ add_library(mellowrt_core STATIC
   src/mellowrt_core.c
   src/mellowrt_debug.c
   src/mellowrt_platform.c
+  src/mellowrt_packages.c
+  src/mellowrt_scheduler.c
+  src/mellowrt_syscalls.c
+  src/mellow_runtime.c
   src/mellowc.c
+  src/mellowc_lexer.c
+  src/mellowc_modules.c
+  src/mellowc_parser.c
 )
 target_include_directories(mellowrt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 # MSVC exposes math through its C runtime and has no separate libm.

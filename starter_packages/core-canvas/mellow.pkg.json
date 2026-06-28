@@ -1,0 +1,24 @@
+{
+  "name": "core-canvas",
+  "version": "0.1.0",
+  "entry": "src/main.mellow",
+  "description": "Native headless canvas drawing package for Mellow C runtime.",
+  "visibility": "public",
+  "dependencies": {},
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "core",
+    "canvas",
+    "graphics",
+    "native",
+    "starter"
+  ],
+  "badges": [
+    "official",
+    "native"
+  ],
+  "official": true
+}

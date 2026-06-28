@@ -1,0 +1,4 @@
+# mellow-web package marker
+keep version = "0.1.0"
+keep target = "react-tsx"
+keep supports = ["page", "component", "state", "view", "Stack", "Row", "Card", "Title", "Subtitle", "Text", "Button"]

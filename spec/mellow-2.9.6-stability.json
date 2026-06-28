@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "language": "Mellow Programming Language",
+  "version": "2.9.6",
+  "profile": "core",
+  "status": "released",
+  "goal": "Native built-ins, builtin module aliases, and GC/concurrency foundation",
+  "baseline": {
+    "version": "2.9",
+    "manifest": "spec/mellow-2.9-core.json",
+    "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
+  },
+  "entrypoint": "SPEC.md",
+  "stable_core": "docs/STABLE_CORE.md",
+  "experimental_index": "docs/experimental/README.md",
+  "v3_track": "spec/mellow-3.0-stability.json",
+  "required_gates": [
+    "tests/core",
+    "tests/language",
+    "tests/native",
+    "package-registry-smoke",
+    "native-arm64-ci",
+    "release-gate"
+  ],
+  "release_commands": [
+    "powershell -File scripts/test-v294-stability.ps1"
+  ],
+  "new_in_2_9_6": [
+    "native terminal I/O built-ins: println, write, input, readline, read_line, ask",
+    "native system built-ins: args, argv, cwd, sleep_ms, exit",
+    "native syscall implementation split into mellowrt_syscalls.c/.h",
+    "builtin module alias imports for io, sys, math, time, gc, thread, and chan",
+    "native mark/sweep GC for runtime-owned channel handles via gc_collect and gc_stats",
+    "green-thread foundation built-ins: spawn and yield",
+    "native FIFO channel foundation built-ins: channel, send, and recv",
+    "native runtime syscall IDs and documentation kept aligned with the v2.9.6 foundation APIs"
+  ],
+  "runtime_notes": [
+    "gc_stats()[\"mode\"] reports mark-sweep-native-handles in v2.9.6",
+    "channels are native FIFO handles in the C runtime",
+    "spawn/yield expose cooperative scheduling API shape but do not yet implement full M:N stack switching"
+  ],
+  "runtime_policy": [
+    "Native C is the release-authoritative runtime for v2.9.6 core work",
+    "default C execution must fail fast when native support is missing",
+    "release and CI validation should run native-only execution"
+  ]
+}

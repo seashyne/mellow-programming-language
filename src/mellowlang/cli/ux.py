@@ -19,7 +19,7 @@ CLI_ALIASES = {
     "cfg": "config",
 }
 
-MODERN_CMDS = {"agent", "ask", "author", "bench", "check", "compile", "completion", "config", "doctor", "explain", "fmt", "guide", "help", "init", "new", "install", "info", "login", "logout", "lsp", "modules", "native", "record", "release-gate", "security", "standalone", "status", "pack", "pkg", "profile", "publish", "registry", "run", "search", "seed-core", "signature", "sync-imports", "resolve-runtime", "trust", "uninstall", "update", "verify", "test", "replay", "diff", "assistant", "whoami", "add", "remove", "diagnose-imports", "playground", "desktop", "mmg", "sm", "melv"}
+MODERN_CMDS = {"agent", "ask", "author", "bench", "check", "compile", "completion", "config", "doctor", "explain", "fmt", "guide", "help", "init", "new", "install", "info", "login", "logout", "lsp", "modules", "native", "record", "release-gate", "security", "standalone", "status", "pack", "pkg", "profile", "publish", "registry", "run", "search", "seed-core", "signature", "sync-imports", "resolve-runtime", "trust", "uninstall", "update", "verify", "test", "replay", "diff", "assistant", "whoami", "add", "remove", "diagnose-imports", "playground", "desktop", "web", "mmg", "sm", "melv"}
 MODERN_CMDS |= set(CLI_ALIASES)
 MODERN_CMDS |= {"doctor", "pack", "explain"}
 
@@ -29,7 +29,7 @@ CLI_GUIDES: dict[str, dict[str, Any]] = {
         "title": "Run a script",
         "use": "Use this when you just want to execute a .mellow file.",
         "commands": ["mellow run app.mellow", "mellow r app.mellow", "mellow app.mellow"],
-        "tips": ["Use `mellow check app.mellow` before running in CI.", "Use `--engine py` only when debugging Python fallback behavior."],
+        "tips": ["Use `mellow check app.mellow` before running in CI.", "Default `mellow run` uses the C runtime and fails fast when native execution is unavailable."],
     },
     "check": {
         "title": "Check syntax and lint",
@@ -187,6 +187,7 @@ Common:
 
 Build and debug:
   {prog} compile <file>        Compile or inspect IR
+  {prog} web dev <file>        Run mellow-web as a React/Vite app
   {prog} bench                 Run performance smoke benchmarks (alias: b)
   {prog} release-gate          Run benchmark + sandbox + package integrity gates (alias: rg)
   {prog} record <file> <log>   Record deterministic replay (alias: rec)

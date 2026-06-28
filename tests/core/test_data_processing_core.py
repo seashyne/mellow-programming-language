@@ -34,11 +34,11 @@ def test_jsonl_streaming_is_bounded():
         print(len(second))
         print(data_sum(second, "amount"))
         """,
-        engine="auto",
+        engine="py",
         data_max_batch_size=2,
     )
     assert out.splitlines() == ["2", "10", "2", "12"]
-    assert vm.last_engine in {"c", "py"}
+    assert vm.last_engine == "py"
 
 
 def test_csv_streaming_and_projection():

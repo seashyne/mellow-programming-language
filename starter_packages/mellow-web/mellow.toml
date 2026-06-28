@@ -1,0 +1,11 @@
+name = "mellow-web"
+version = "0.1.0"
+entry = "src/main.mellow"
+description = "React TSX web UI target for Mellow projects."
+visibility = "public"
+dependencies = {}
+authors = ["Mellow Code Team"]
+license = "MIT"
+keywords = ["web", "react", "tsx", "ui", "starter"]
+badges = ["official"]
+official = true

@@ -179,6 +179,13 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
                 # keep is best-effort; never break sandbox on load
                 self._keep_values = {}
 
+        self._native_foundation_stats = {
+            "collections": 0,
+            "spawned": 0,
+            "yielded": 0,
+            "channels": 0,
+        }
+
     def _tick(self):
         self._steps += 1
         if self._steps > int(self.config.get("max_steps", 200_000)):
@@ -239,6 +246,88 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
     def _syscall(self, name: str, args: list):
         if not isinstance(name, str):
             self._raise_sandbox("syscall name must be string")
+
+        if name in ("std.io.println", "std.print"):
+            print(" ".join(self.format_value(arg) for arg in args))
+            return None
+
+        if name == "std.io.write":
+            import sys as _sys
+            _sys.stdout.write(" ".join(self.format_value(arg) for arg in args))
+            _sys.stdout.flush()
+            return None
+
+        if name == "std.io.input":
+            if not self.config.get("allow_ask", False):
+                self._raise_sandbox("input() is disabled")
+            prompt = "" if not args else self.format_value(args[0])
+            raw = input(prompt)
+            self._enforce_value_limits(raw)
+            return raw
+
+        if name == "std.sys.args":
+            return list(self.config.get("argv", []))
+
+        if name == "std.sys.cwd":
+            import os as _os
+            return _os.getcwd()
+
+        if name == "std.sys.sleep_ms":
+            if not self.config.get("allow_wait", True):
+                self._raise_sandbox("sleep_ms() is disabled")
+            import time as _time
+            _time.sleep(float(args[0]) / 1000.0 if args else 0.0)
+            return None
+
+        if name == "std.sys.exit":
+            code = int(args[0]) if args else 0
+            raise SystemExit(code)
+
+        if name == "std.gc.collect":
+            if args:
+                self._raise_runtime("gc_collect expects no arguments")
+            self._native_foundation_stats["collections"] += 1
+            return 0
+
+        if name == "std.gc.stats":
+            if args:
+                self._raise_runtime("gc_stats expects no arguments")
+            stats = dict(self._native_foundation_stats)
+            stats["mode"] = "python-nonrelease-runtime"
+            return stats
+
+        if name == "std.thread.spawn":
+            if len(args) != 1:
+                self._raise_runtime("spawn expects one function argument")
+            self._native_foundation_stats["spawned"] += 1
+            return self._native_foundation_stats["spawned"]
+
+        if name == "std.thread.yield":
+            if args:
+                self._raise_runtime("yield expects no arguments")
+            self._native_foundation_stats["yielded"] += 1
+            return None
+
+        if name == "std.chan.channel":
+            if args:
+                self._raise_runtime("channel expects no arguments")
+            self._native_foundation_stats["channels"] += 1
+            return {"type": "channel", "queue": []}
+
+        if name == "std.chan.send":
+            if len(args) != 2 or not isinstance(args[0], dict) or args[0].get("type") != "channel":
+                self._raise_runtime("send expects channel and value")
+            args[0].setdefault("queue", []).append(args[1])
+            return True
+
+        if name == "std.chan.recv":
+            if len(args) != 1 or not isinstance(args[0], dict) or args[0].get("type") != "channel":
+                self._raise_runtime("recv expects channel")
+            queue = args[0].setdefault("queue", [])
+            if not queue:
+                self._native_foundation_stats["yielded"] += 1
+                return None
+            return queue.pop(0)
 
         if name.startswith("std.data."):
             try:

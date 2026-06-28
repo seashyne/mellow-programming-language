@@ -3,15 +3,62 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 from ...compiler import Compiler
+from ...standalone_runtime import standalone_runtime_status
 from ...vm import MellowVM, RunConfig
 from ..common import _cli_line, _find_project_root, _json_print, _lazy_attr, _print_pretty_error, _read_text
 
 pkg_auto_fetch_for_run = _lazy_attr("mellowlang.package_manager", "auto_fetch_for_run")
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _standalone_mellow_binary() -> Path | None:
+    status = standalone_runtime_status()
+    path = Path(str(status.get("binary_path") or ""))
+    if status.get("binary_exists") and path.exists():
+        return path
+    return None
+
+
+def _can_use_standalone_native(
+    *,
+    engine: str,
+    json_out: bool,
+    record_path: str | None,
+    replay_path: str | None,
+    profile: bool,
+    trace: bool,
+    step: bool,
+    break_lines: str | None,
+    watch: str | None,
+    ai_timeline: str | None,
+    sandbox_profile: str,
+    allow_data_write: bool,
+    project_mode: bool,
+) -> bool:
+    return (
+        str(engine).lower().strip() == "c"
+        and not json_out
+        and not record_path
+        and not replay_path
+        and not profile
+        and not trace
+        and not step
+        and not break_lines
+        and not watch
+        and not ai_timeline
+        and str(sandbox_profile or "default").lower() == "default"
+        and not allow_data_write
+        and not project_mode
+    )
 
 def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None, replay_path: str | None,
              seed: int | None, global_seed: int | None, allow_ask: bool, no_wait: bool,
@@ -137,6 +184,31 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             print(f"error: {err['error']}")
         return 2
 
+    if _can_use_standalone_native(
+        engine=engine,
+        json_out=json_out,
+        record_path=record_path,
+        replay_path=replay_path,
+        profile=profile,
+        trace=trace,
+        step=step,
+        break_lines=break_lines,
+        watch=watch,
+        ai_timeline=ai_timeline,
+        sandbox_profile=sandbox_profile,
+        allow_data_write=allow_data_write,
+        project_mode=project_mode,
+    ):
+        native_binary = _standalone_mellow_binary()
+        if native_binary is not None:
+            completed = subprocess.run([str(native_binary), str(p)], check=False)
+            return int(completed.returncode)
+        message = "standalone native mellow binary not found; build with `cmake -S native/standalone -B build/standalone-release -DCMAKE_BUILD_TYPE=Release && cmake --build build/standalone-release --config Release`"
+        if json_out:
+            _json_print({"ok": False, "error": message})
+        else:
+            print(f"error: {message}", file=sys.stderr)
+        return 1
 
     src = _read_text(p)
 
@@ -306,8 +378,8 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
             record_path=record_path,
             replay_path=replay_path,
             engine=str(engine),
-            native_allow_fallback=not bool(native_required),
-            native_require=bool(native_required),
+            native_allow_fallback=False,
+            native_require=(str(engine).lower().strip() == "c" or bool(native_required)),
             allow_ask=allow_ask,
             allow_wait=not no_wait,
             allow_storage=allow_storage,
@@ -373,8 +445,8 @@ def _run_one_script(path: Path, *, engine: str, native_required: bool = False) -
     vm = MellowVM()
     cfg = RunConfig(
         engine=engine,
-        native_allow_fallback=not bool(native_required),
-        native_require=bool(native_required),
+        native_allow_fallback=False,
+        native_require=(str(engine).lower().strip() == "c" or bool(native_required)),
     )
 
     buf_out = io.StringIO()

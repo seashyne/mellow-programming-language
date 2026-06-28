@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "language": "Mellow Programming Language",
+  "version": "2.9.7",
+  "profile": "core",
+  "status": "in-development",
+  "goal": "Native scheduler hardening, real cooperative green threads, channel yield semantics, and stronger GC ownership validation",
+  "baseline": {
+    "version": "2.9",
+    "manifest": "spec/mellow-2.9-core.json",
+    "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
+  },
+  "entrypoint": "SPEC.md",
+  "stable_core": "docs/STABLE_CORE.md",
+  "experimental_index": "docs/experimental/README.md",
+  "v3_track": "spec/mellow-3.0-stability.json",
+  "required_gates": [
+    "tests/core",
+    "tests/language",
+    "tests/native",
+    "native-safety",
+    "native-fuzzer",
+    "package-registry-smoke",
+    "native-arm64-ci",
+    "release-gate"
+  ],
+  "release_commands": [
+    "powershell -File scripts/test-v294-stability.ps1",
+    "cmake -S native/standalone -B build/standalone-safety -DCMAKE_BUILD_TYPE=Debug -DMELLOW_ENABLE_SANITIZERS=ON -DMELLOW_BUILD_FUZZER=ON",
+    "ctest --test-dir build/standalone-safety --output-on-failure"
+  ],
+  "new_in_2_9_7": [
+    "spawn(fn) creates real cooperative native tasks instead of only returning a counter",
+    "yield() saves the current task and round-robin switches to the next runnable task",
+    "recv(ch) on an empty channel implicitly yields when another runnable task exists",
+    "native scheduler implementation split into mellowrt_scheduler.c/.h",
+    "GC stats now expose heap_bytes, heap_blocks, last_freed_blocks, and last_freed_bytes",
+    "channel queue values clone through the VM heap ownership path",
+    "native tests cover task interleaving, implicit channel yield, nested ownership invariants, and repeated GC stress"
+  ],
+  "runtime_notes": [
+    "gc_stats()[\"mode\"] remains mark-sweep-native-handles while heap value ownership is hardened",
+    "green threads are cooperative and explicit-yield based in v2.9.7",
+    "full preemptive or OS-backed M:N scheduling is still future runtime-engine work"
+  ],
+  "runtime_policy": [
+    "Native C is the release-authoritative runtime for v2.9.7 core work",
+    "default C execution must fail fast when native support is missing",
+    "release and CI validation should include native-only execution plus sanitizer/fuzzer gates"
+  ]
+}

@@ -1089,6 +1089,33 @@ def _parse_block(lines: List[str], start: int, base_indent: int, filename: str |
             i = next_i
             continue
 
+        # println (explicit newline output; function-style and statement-style)
+        if line.startswith("println"):
+            arg_str = line[len("println"):].strip()
+            if arg_str.startswith("(") and arg_str.endswith(")"):
+                arg_str = arg_str[1:-1].strip()
+            parts = _split_top_level_commas(arg_str) if arg_str else [""]
+            exprs = [parse_expr(p.strip(), filename=filename, line=i+1, base_col=_expr_col(raw_nc, p, ind+1)) for p in parts if p.strip()]
+            if not exprs:
+                exprs = [Literal(None)]
+            _push(ShowStmt(exprs))
+            i += 1
+            continue
+
+        # write (no trailing newline)
+        if line.startswith("write"):
+            arg_str = line[len("write"):].strip()
+            if arg_str.startswith("(") and arg_str.endswith(")"):
+                arg_str = arg_str[1:-1].strip()
+            args = [
+                parse_expr(p.strip(), filename=filename, line=i+1, base_col=_expr_col(raw_nc, p, ind+1))
+                for p in (_split_top_level_commas(arg_str) if arg_str else [])
+                if p.strip()
+            ]
+            _push(ExprStmt(Call("write", args)))
+            i += 1
+            continue
+
         # show
         # print (alias of show)
         # v1.2.5: support multi-value printing like Python: print(a, b, c)

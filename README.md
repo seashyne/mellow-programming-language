@@ -1,4 +1,8 @@
-# Mellow Programming Language 2.9.4
+<p align="center">
+  <img src="docs/assets/mellow-logo.png" alt="Mellow logo" width="96">
+</p>
+
+# Mellow Programming Language 2.9.7
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -12,25 +16,79 @@ This release treats the language core as the stable surface:
 - string/math/list/map/json/money/data/ledger helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but are documented as **experimental** under [`docs/experimental/README.md`](docs/experimental/README.md). In v2.9.4 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, and core built-ins. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but are documented as **experimental** under [`docs/experimental/README.md`](docs/experimental/README.md). In v2.9.7 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, native terminal/system built-ins, builtin module aliases, real cooperative green-thread task switching, channel yield semantics, and stronger GC ownership stats. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
 
 ## Quick Start
 
-From a source checkout:
+Fresh Windows install from Git:
 
 ```powershell
-python -m pip install -e .[dev]
-mellow --version
+git clone https://github.com/seashyne/mellow-programming-language.git
+cd mellow-programming-language
+.\scripts\install-native.ps1
+mellow doctor
 mellow run examples\hello.mellow
 mellow check examples\hello.mellow
+```
+
+Fresh Linux/macOS install from Git:
+
+```bash
+git clone https://github.com/seashyne/mellow-programming-language.git
+cd mellow-programming-language
+sh scripts/install-native.sh --add-path
+export PATH="$HOME/.local/bin:$PATH"
+mellow doctor
+mellow run examples/hello.mellow
+mellow check examples/hello.mellow
+```
+
+From an existing source checkout, install the native C CLI first:
+
+```powershell
+.\scripts\install-native.ps1
+mellow doctor
+mellow run examples\hello.mellow
+mellow check examples\hello.mellow
+```
+
+On Linux/macOS:
+
+```bash
+sh scripts/install-native.sh --add-path
+mellow doctor
+mellow run examples/hello.mellow
+mellow check examples/hello.mellow
+```
+
+If you prefer npm after cloning the repository:
+
+```bash
+npm install -g ./packages/npm/mellowlang
 mellow doctor
 ```
 
-Native C is the default execution engine. Mellow falls back to the Python VM
-when a script requests debugger, event, or record/replay features that do not
-yet have native parity. Use `--engine=py` to force Python.
+Native C is the default execution engine. The native `mellow` executable runs
+without Python and reports `Python: not required` in `mellow doctor`. New runtime
+work should land in `native/standalone` first.
 
-Without installing:
+The native runtime is also starting to expose an experimental embeddable C API.
+For now, standalone C remains the main supported path; `mellow_runtime.h` is a
+provisional wrapper for trying host embedding before the runtime ABI is marked
+stable.
+
+Without installing the Python package, build and run the standalone native
+runtime from the same output layout used by CI:
+
+```powershell
+cmake -S native\standalone -B build\standalone-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build\standalone-release --config Release
+build\standalone-release\Release\mellow.exe run examples\hello.mellow
+```
+
+Full install guide: [`docs/INSTALL.md`](docs/INSTALL.md)
+
+Python module entry points remain available for development tooling:
 
 ```powershell
 $env:PYTHONPATH = "src"
@@ -101,7 +159,29 @@ while len(batch) > 0:
 Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
 
 Finance and data sandbox profiles, plus Ledger Core, run on the default C engine
-in v2.9.4. Native parity tests run with Python fallback disabled.
+in v2.9.7. Native parity tests run in native-only mode.
+
+Native runtime foundation APIs:
+
+```mellow
+gc_collect()
+let stats = gc_stats()
+
+def worker():
+    return 1
+
+let task = spawn(worker)
+yield()
+
+let ch = channel()
+send(ch, "hello")
+print(recv(ch))
+```
+
+These APIs are native C built-ins in v2.9.7. They provide real cooperative task
+creation, round-robin `yield()` switching, FIFO channels, implicit channel-yield
+on empty `recv(ch)`, and GC accounting for VM heap plus native handles. Full
+preemptive or OS-backed M:N scheduling remains future runtime-engine work.
 
 Build an immutable, balanced ledger:
 
@@ -125,27 +205,38 @@ Ledger Core is intended for deterministic business rules and audit-friendly prot
 ## Stable CLI
 
 ```bash
+mellow help
 mellow run <file>
 mellow check <file-or-dir>
-mellow fmt <files...>
-mellow modules --json
 mellow doctor
+mellow status
+mellow --runtime-info
+mellow --version
 ```
 
 Direct script invocation has been removed. Use explicit commands such as
 `mellow run <file>` and `mellow check <file-or-dir>`.
 
+Commands such as formatting, package/module registry helpers, LSP, media
+bridges, and agent tooling still live in the optional Python tooling layer while
+the native C CLI is being expanded. Keep new language/runtime behavior in the
+native path first, then expose tooling around it.
+
 ## Optional Features
 
-The default install keeps core Mellow lightweight. Install extras only when you need them:
+The default install keeps core Mellow lightweight. Python is optional tooling,
+not the primary runtime. Install Python extras only when you need them:
 
 ```powershell
 python -m pip install -e .[lsp]       # language server
 python -m pip install -e .[net]       # websocket/network helpers
 python -m pip install -e .[security]  # signing and secure-save helpers
-python -m pip install -e .[video]     # MELV video encode/decode
+python -m pip install -e .[video]     # optional MELV common-video bridge
 python -m pip install -e .[all]       # all optional features
 ```
+
+Native MELV2 pack/inspect/validate/extract is dependency-free. The `video` extra
+is only for bridge commands that import/export common video files.
 
 `mellow doctor` reports which optional features are available in the current Python environment.
 
@@ -163,8 +254,9 @@ python -m pytest -q tests\native -p no:cacheprovider
 Native core parity gate:
 
 ```powershell
-python setup.py build_ext --inplace
-python -m pytest -q tests\native -p no:cacheprovider
+cmake -S native\standalone -B build\standalone-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build\standalone-release --config Release
+python -m pytest -q tests\core\test_core_language.py -p no:cacheprovider
 ```
 
 Full suite:
@@ -177,15 +269,37 @@ The full suite includes extended and experimental coverage. Use `tests/core`
 plus `tests/native` as the release gate for stable language core and native C
 parity.
 
+For C-first release confidence, always include the standalone native binary gate
+or the native pytest gate in native-only mode.
+
 ## Release Process
+
+Mellow 2.9.7 uses a native-first release pipeline. Pushing a tag named `v*`
+starts `.github/workflows/release.yml`, builds standalone C CLI artifacts for
+Windows, Linux, and macOS, and packages the editor/npm delivery artifacts.
+
+```bash
+git tag v2.9.7
+git push origin v2.9.7
+```
+
+Expected release assets:
+
+- `mellow-<version>-windows-x64.zip`
+- `mellow-<version>-linux-x64.tar.gz`
+- `mellow-<version>-macos-x64.tar.gz`
+- `mellow-<version>-macos-arm64.tar.gz`
+- `mellowlang-<version>.vsix`
+- `mellowlang-<version>.tgz`
 
 - Stable core definition: `docs/STABLE_CORE.md`
 - Core docs index: `docs/CORE_DOCS.md`
 - Experimental docs: `docs/experimental/README.md`
-- 2.9.4 stability gates: `scripts/test-v294-stability.ps1`
+- 2.9.7 stability manifest: `spec/mellow-2.9.7-stability.json`
+- 2.9.x stability gates: `scripts/test-v294-stability.ps1`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Changelog: `CHANGELOG.md`
-- Windows native build helper: `scripts/build-native-windows.ps1`
+- Native install guide: `docs/INSTALL.md`
 
 ## Frameworks
 
@@ -215,4 +329,7 @@ benchmark workspaces are ignored. Preview or remove them with
 
 ## License
 
-MIT. See `LICENSE`.
+MellowLang is released under the MIT License.
+
+- Full legal text: [`LICENSE`](LICENSE)
+- Plain-language usage and redistribution notes: [`NOTICE.md`](NOTICE.md)

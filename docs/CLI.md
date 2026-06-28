@@ -1,4 +1,4 @@
-# MellowLang CLI (v2.9.4)
+# MellowLang CLI (v2.9.6)
 
 MellowLang ใช้ CLI แบบ subcommand เท่านั้น เพื่อให้คำสั่งชัดเจนและเหมาะกับ
 terminal, editor และ CI

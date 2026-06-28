@@ -1,9 +1,148 @@
 #include "mellowrt.h"
+#include "mellowrt_syscalls.h"
+#include "mellowrt_scheduler.h"
 
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+typedef enum {
+    MHEAP_STR = 1,
+    MHEAP_LIST_ITEMS = 2,
+    MHEAP_MAP_KEYS = 3,
+    MHEAP_MAP_VALUES = 4
+} MHeapKind;
+
+typedef struct MHeapBlock {
+    void *ptr;
+    size_t bytes;
+    MHeapKind kind;
+    int marked;
+    MVM *owner;
+    struct MHeapBlock *next;
+} MHeapBlock;
+
+static MHeapBlock *g_heap_blocks = NULL;
+
+static MHeapBlock *heap_find(const void *ptr) {
+    MHeapBlock *block;
+    if (!ptr) return NULL;
+    for (block = g_heap_blocks; block; block = block->next)
+        if (block->ptr == ptr) return block;
+    return NULL;
+}
+
+static void *heap_alloc(MVM *vm, size_t count, size_t item_size, MHeapKind kind) {
+    size_t bytes = count * item_size;
+    void *ptr;
+    MHeapBlock *block;
+    if (!vm) return calloc(count ? count : 1, item_size ? item_size : 1);
+    ptr = calloc(count ? count : 1, item_size ? item_size : 1);
+    if (!ptr) return NULL;
+    block = (MHeapBlock *)calloc(1, sizeof(MHeapBlock));
+    if (!block) { free(ptr); return NULL; }
+    block->ptr = ptr;
+    block->bytes = bytes;
+    block->kind = kind;
+    block->owner = vm;
+    block->next = g_heap_blocks;
+    g_heap_blocks = block;
+    vm->heap_allocated++;
+    vm->heap_live++;
+    vm->heap_blocks++;
+    vm->heap_bytes += bytes;
+    return ptr;
+}
+
+static void heap_mark_value(MVM *vm, const MValue *value);
+
+static void heap_mark_ptr(MVM *vm, const void *ptr) {
+    MHeapBlock *block = heap_find(ptr);
+    if (!block || block->owner != vm || block->marked) return;
+    block->marked = 1;
+}
+
+static void heap_mark_value(MVM *vm, const MValue *value) {
+    size_t i;
+    if (!vm || !value) return;
+    switch (value->tag) {
+    case MVAL_STR:
+        heap_mark_ptr(vm, value->as.str.ptr);
+        break;
+    case MVAL_LIST:
+        heap_mark_ptr(vm, value->as.list.items);
+        for (i = 0; i < value->as.list.len; ++i)
+            heap_mark_value(vm, &value->as.list.items[i]);
+        break;
+    case MVAL_MAP:
+        heap_mark_ptr(vm, value->as.map.keys);
+        heap_mark_ptr(vm, value->as.map.values);
+        for (i = 0; i < value->as.map.len; ++i) {
+            heap_mark_value(vm, &value->as.map.keys[i]);
+            heap_mark_value(vm, &value->as.map.values[i]);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+void mvm_gc_mark_value(MVM *vm, const MValue *value) {
+    heap_mark_value(vm, value);
+}
+
+uint64_t mvm_gc_collect_with_marker(MVM *vm, void (*marker)(void *user, MVM *vm), void *user) {
+    MHeapBlock *block;
+    MHeapBlock *prev = NULL;
+    MHeapBlock *next;
+    uint64_t freed = 0;
+    uint64_t freed_bytes = 0;
+    size_t i;
+    if (!vm) return 0;
+    for (block = g_heap_blocks; block; block = block->next)
+        if (block->owner == vm) block->marked = 0;
+    for (i = 0; i < vm->stack_len; ++i) heap_mark_value(vm, &vm->stack[i]);
+    for (i = 0; i < vm->locals_len; ++i) heap_mark_value(vm, &vm->locals[i]);
+    for (i = 0; i < vm->task_len; ++i) {
+        MTask *task = &vm->tasks[i];
+        size_t j;
+        if (!task->active || task->finished || i == vm->current_task) continue;
+        for (j = 0; j < task->stack_len; ++j) heap_mark_value(vm, &task->stack[j]);
+        for (j = 0; j < task->locals_len; ++j) heap_mark_value(vm, &task->locals[j]);
+    }
+    if (marker) marker(user, vm);
+    block = g_heap_blocks;
+    while (block) {
+        next = block->next;
+        if (block->owner == vm && !block->marked) {
+            {
+                size_t block_bytes = block->bytes;
+                freed_bytes += block_bytes;
+                if (vm->heap_bytes >= block_bytes) vm->heap_bytes -= block_bytes;
+                else vm->heap_bytes = 0;
+            }
+            if (prev) prev->next = next;
+            else g_heap_blocks = next;
+            free(block->ptr);
+            free(block);
+            freed++;
+            vm->heap_freed++;
+            if (vm->heap_live > 0) vm->heap_live--;
+            if (vm->heap_blocks > 0) vm->heap_blocks--;
+        } else {
+            prev = block;
+        }
+        block = next;
+    }
+    vm->heap_last_gc_freed = freed;
+    vm->heap_last_gc_freed_bytes = freed_bytes;
+    return freed;
+}
+
+uint64_t mvm_gc_collect(MVM *vm) {
+    return mvm_gc_collect_with_marker(vm, NULL, NULL);
+}
 
 static int ensure_stack(MVM *vm, size_t cap) {
     if (vm->stack_cap >= cap) return 1;
@@ -34,11 +173,13 @@ void mvm_init(MVM *vm) { memset(vm, 0, sizeof(*vm)); }
 
 static void mlist_free(MList *list) {
     if (!list || !list->items) return;
+    if (heap_find(list->items)) { list->items = NULL; list->len = list->cap = 0; return; }
     for (size_t i = 0; i < list->len; ++i) mvalue_free(&list->items[i]);
     free(list->items); list->items = NULL; list->len = list->cap = 0;
 }
 static void mmap_free(MMap *map) {
     if (!map) return;
+    if (heap_find(map->keys) || heap_find(map->values)) { map->keys = map->values = NULL; map->len = map->cap = 0; return; }
     for (size_t i = 0; i < map->len; ++i) { mvalue_free(&map->keys[i]); mvalue_free(&map->values[i]); }
     free(map->keys); free(map->values); map->keys = map->values = NULL; map->len = map->cap = 0;
 }
@@ -46,13 +187,33 @@ void mvalue_free(MValue *v) {
     if (!v) return;
     if (v->tag == MVAL_LIST) mlist_free(&v->as.list);
     else if (v->tag == MVAL_MAP) mmap_free(&v->as.map);
-    else if (v->tag == MVAL_STR && (v->flags & 1u) && v->as.str.ptr) free((void *)v->as.str.ptr);
+    else if (v->tag == MVAL_STR && (v->flags & 1u) && v->as.str.ptr && !heap_find(v->as.str.ptr)) free((void *)v->as.str.ptr);
     *v = mval_none();
 }
 void mvm_free(MVM *vm) {
+    size_t i;
     if (!vm) return;
+    if (vm->tasks) {
+        if (vm->current_task < vm->task_len) {
+            MTask *task = &vm->tasks[vm->current_task];
+            task->stack = vm->stack; task->stack_len = vm->stack_len; task->stack_cap = vm->stack_cap;
+            task->frames = vm->frames; task->frame_len = vm->frame_len; task->frame_cap = vm->frame_cap;
+            task->locals = vm->locals; task->locals_len = vm->locals_len; task->locals_cap = vm->locals_cap;
+        }
+        for (i = 0; i < vm->task_len; ++i) mellowrt_task_free_values(&vm->tasks[i]);
+        free(vm->tasks);
+        vm->tasks = NULL;
+        vm->task_len = vm->task_cap = 0;
+        vm->current_task = 0;
+        vm->stack = NULL; vm->frames = NULL; vm->locals = NULL;
+        vm->stack_len = vm->frame_len = vm->locals_len = 0;
+        mvm_gc_collect(vm);
+        memset(vm, 0, sizeof(*vm));
+        return;
+    }
     for (size_t i = 0; i < vm->stack_len; ++i) mvalue_free(&vm->stack[i]);
     for (size_t i = 0; i < vm->locals_len; ++i) mvalue_free(&vm->locals[i]);
+    mvm_gc_collect(vm);
     free(vm->stack); free(vm->frames); free(vm->locals); memset(vm, 0, sizeof(*vm));
 }
 int mvm_reserve_stack(MVM *vm, size_t cap)  { return ensure_stack(vm, cap); }
@@ -79,8 +240,8 @@ const char *mvalue_tag_name(MValueTag tag) {
 }
 
 /* ── owned heap string ──────────────────────────────────────────────────── */
-static MValue mval_owned_str(const char *src, size_t len) {
-    char *buf = (char *)calloc(len + 1, 1);
+static MValue mval_owned_str(MVM *vm, const char *src, size_t len) {
+    char *buf = (char *)heap_alloc(vm, len + 1, 1, MHEAP_STR);
     MValue v = mval_none();
     if (!buf) return v;
     if (src && len) memcpy(buf, src, len);
@@ -89,34 +250,34 @@ static MValue mval_owned_str(const char *src, size_t len) {
     return v;
 }
 
-/* Deep-copy a value so every allocation is independently owned. */
-static MValue mvalue_deep_copy(const MValue *src) {
+/* Deep-copy a value so every allocation is independently owned by this VM. */
+MValue mvalue_clone(MVM *vm, const MValue *src) {
     if (!src) return mval_none();
     switch (src->tag) {
     case MVAL_STR:
         if (src->as.str.ptr)
-            return mval_owned_str(src->as.str.ptr, src->as.str.len);
+            return mval_owned_str(vm, src->as.str.ptr, src->as.str.len);
         return mval_none();
     case MVAL_LIST: {
         MValue v = mval_none(); v.tag = MVAL_LIST;
         v.as.list.len = v.as.list.cap = src->as.list.len;
-        v.as.list.items = src->as.list.len ? (MValue*)calloc(src->as.list.len,sizeof(MValue)) : NULL;
+        v.as.list.items = src->as.list.len ? (MValue*)heap_alloc(vm, src->as.list.len, sizeof(MValue), MHEAP_LIST_ITEMS) : NULL;
         if (src->as.list.len && !v.as.list.items) return mval_none();
         for (size_t i=0;i<src->as.list.len;++i)
-            v.as.list.items[i] = mvalue_deep_copy(&src->as.list.items[i]);
+            v.as.list.items[i] = mvalue_clone(vm, &src->as.list.items[i]);
         return v;
     }
     case MVAL_MAP: {
         MValue v = mval_none(); v.tag = MVAL_MAP;
         v.as.map.len = v.as.map.cap = src->as.map.len;
-        v.as.map.keys   = src->as.map.len ? (MValue*)calloc(src->as.map.len,sizeof(MValue)) : NULL;
-        v.as.map.values = src->as.map.len ? (MValue*)calloc(src->as.map.len,sizeof(MValue)) : NULL;
+        v.as.map.keys   = src->as.map.len ? (MValue*)heap_alloc(vm, src->as.map.len, sizeof(MValue), MHEAP_MAP_KEYS) : NULL;
+        v.as.map.values = src->as.map.len ? (MValue*)heap_alloc(vm, src->as.map.len, sizeof(MValue), MHEAP_MAP_VALUES) : NULL;
         if (src->as.map.len && (!v.as.map.keys||!v.as.map.values)) {
-            free(v.as.map.keys); free(v.as.map.values); return mval_none();
+            mvalue_free(&v); return mval_none();
         }
         for (size_t i=0;i<src->as.map.len;++i) {
-            v.as.map.keys[i]   = mvalue_deep_copy(&src->as.map.keys[i]);
-            v.as.map.values[i] = mvalue_deep_copy(&src->as.map.values[i]);
+            v.as.map.keys[i]   = mvalue_clone(vm, &src->as.map.keys[i]);
+            v.as.map.values[i] = mvalue_clone(vm, &src->as.map.values[i]);
         }
         return v;
     }
@@ -131,6 +292,27 @@ static int truthy(MValue v) {
         case MVAL_STR:  return v.as.str.len != 0; case MVAL_LIST: return v.as.list.len != 0;
         case MVAL_MAP:  return v.as.map.len != 0; default: return 1;
     }
+}
+static int mvalue_is_scalar(MValue v) {
+    switch (v.tag) {
+        case MVAL_NONE:
+        case MVAL_BOOL:
+        case MVAL_I64:
+        case MVAL_F64:
+        case MVAL_FUNC:
+        case MVAL_NATIVE:
+            return 1;
+        default:
+            return 0;
+    }
+}
+static void mvalue_release_temp(MValue *v) {
+    if (!v) return;
+    if (mvalue_is_scalar(*v)) {
+        *v = mval_none();
+        return;
+    }
+    mvalue_free(v);
 }
 static int push(MVM *vm, MValue v) {
     if (!ensure_stack(vm, vm->stack_len+1)) return 0;
@@ -194,7 +376,7 @@ static int build_list(MVM *vm, int32_t count) {
     if (count<0||(size_t)count>vm->stack_len) return 0;
     MValue v=mval_none(); v.tag=MVAL_LIST;
     v.as.list.len=v.as.list.cap=(size_t)count;
-    v.as.list.items=count?(MValue*)calloc((size_t)count,sizeof(MValue)):NULL;
+    v.as.list.items=count?(MValue*)heap_alloc(vm,(size_t)count,sizeof(MValue),MHEAP_LIST_ITEMS):NULL;
     if (count&&!v.as.list.items) return 0;
     /* Move values off the stack (not copy) to avoid double-free of owned strings. */
     for (int32_t i=count-1;i>=0;--i) {
@@ -207,9 +389,9 @@ static int build_map(MVM *vm, int32_t pair_count) {
     if (pair_count<0||(size_t)(pair_count*2)>vm->stack_len) return 0;
     MValue v=mval_none(); v.tag=MVAL_MAP;
     v.as.map.len=v.as.map.cap=(size_t)pair_count;
-    v.as.map.keys  =pair_count?(MValue*)calloc((size_t)pair_count,sizeof(MValue)):NULL;
-    v.as.map.values=pair_count?(MValue*)calloc((size_t)pair_count,sizeof(MValue)):NULL;
-    if (pair_count&&(!v.as.map.keys||!v.as.map.values)){free(v.as.map.keys);free(v.as.map.values);return 0;}
+    v.as.map.keys  =pair_count?(MValue*)heap_alloc(vm,(size_t)pair_count,sizeof(MValue),MHEAP_MAP_KEYS):NULL;
+    v.as.map.values=pair_count?(MValue*)heap_alloc(vm,(size_t)pair_count,sizeof(MValue),MHEAP_MAP_VALUES):NULL;
+    if (pair_count&&(!v.as.map.keys||!v.as.map.values)){mvalue_free(&v);return 0;}
     /* Move values off the stack to avoid double-free of owned strings. */
     for (int32_t i=pair_count-1;i>=0;--i){
         v.as.map.values[(size_t)i]=pop(vm);
@@ -236,6 +418,7 @@ static int coerce_str(MValue v, char *buf, size_t bufsz, const char **out_ptr, s
 }
 
 int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
+    size_t next_task;
     if (!vm||!program||!out) return 0;
     memset(out,0,sizeof(*out));
     uint32_t pc=0;
@@ -243,8 +426,14 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
     if (!ensure_frames(vm,1)){set_error(out,"frame_alloc_failed");return 0;}
     vm->frame_len=1;
     vm->frames[0]=(MFrame){.frame_id=0,.return_pc=(uint32_t)program->code_len,.base=0,.local_base=0,.local_count=0,.function={0,0,0,0}};
+    if (!mellowrt_scheduler_bootstrap(vm)){set_error(out,"scheduler_alloc_failed");return 0;}
+    mellowrt_task_save_from_vm(vm, 0, 0);
+    mellowrt_task_load_into_vm(vm, 0);
+    pc = vm->tasks[vm->current_task].pc;
 
-    while (pc<program->code_len) {
+    while (1) {
+        if (pc >= program->code_len) goto finish_current_task;
+        if (vm->current_task >= vm->task_len) { set_error(out,"scheduler_current_task_oob"); return 0; }
         const MInstruction *insn=&program->code[pc];
         const MSourceSpan  *span=(program->span_map&&pc<program->span_len)?&program->span_map[pc]:NULL;
         out->error_pc=pc;
@@ -262,16 +451,16 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         /* control */
         case MOP_HALT:
         case MOP_STOP:
-            out->halted=1; out->result=vm->stack_len?vm->stack[vm->stack_len-1]:mval_none(); return 1;
+            goto finish_current_task;
 
         /* stack */
         case MOP_PUSH_CONST: {
             if ((size_t)insn->a >= program->const_len) { set_error(out,"push_const_oob"); return 0; }
-            MValue cv = mvalue_deep_copy(&program->const_pool[insn->a]);
+            MValue cv = mvalue_clone(vm, &program->const_pool[insn->a]);
             if (!push(vm, cv)) { set_error(out,"push_const_failed"); return 0; }
             pc++; break;
         }
-        case MOP_POP: { MValue discarded=pop(vm); mvalue_free(&discarded); pc++; break; }
+        case MOP_POP: { MValue discarded=pop(vm); mvalue_release_temp(&discarded); pc++; break; }
         case MOP_DUP:
             if (!vm->stack_len||!push(vm,vm->stack[vm->stack_len-1])){set_error(out,"dup_failed");return 0;}
             pc++; break;
@@ -280,9 +469,9 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         case MOP_LOAD_LOCAL: {
             MValue *slot=local_ptr(vm,frame,insn->a);
             if (!slot){set_error(out,"load_local_failed");return 0;}
-            /* Full deep-copy (strings, lists, maps) so mvm_free never
-               double-frees a value that lives in both stack and locals. */
-            MValue cv = mvalue_deep_copy(slot);
+            /* Scalars are immutable/unowned in the VM, so hot loops can copy
+               them directly. Containers/strings still need ownership isolation. */
+            MValue cv = mvalue_is_scalar(*slot) ? *slot : mvalue_clone(vm, slot);
             if (!push(vm, cv)){set_error(out,"load_local_failed");return 0;}
             pc++; break;
         }
@@ -290,38 +479,71 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             size_t base=frame?frame->local_base:0, idx=base+(size_t)insn->a;
             if (!ensure_local_window(vm,idx+1)){set_error(out,"store_local_alloc_failed");return 0;}
             if (frame&&frame->local_count<(uint32_t)(insn->a+1)) frame->local_count=(uint32_t)(insn->a+1);
-            /* Free any existing value in this local slot before overwriting. */
-            mvalue_free(&vm->locals[idx]);
+            /* Release owned values before overwrite; scalar locals are unowned. */
+            mvalue_release_temp(&vm->locals[idx]);
             /* Move (not copy) from stack — pop zeros the stack_len, value ownership
                transfers to locals so mvm_free won't double-free. */
             vm->locals[idx] = pop(vm);
-            /* Zero the now-consumed stack slot for safety. */
-            memset(&vm->stack[vm->stack_len], 0, sizeof(MValue));
+            pc++; break;
+        }
+        case MOP_I64_ADD_LOCAL_CONST: {
+            MValue *slot=local_ptr(vm,frame,insn->a);
+            if (!slot || slot->tag!=MVAL_I64){set_error(out,"i64_add_local_const_requires_i64");return 0;}
+            slot->as.i64 += (int64_t)insn->b;
+            pc++; break;
+        }
+        case MOP_I64_ADD_LOCAL_LOCAL: {
+            MValue *slot=local_ptr(vm,frame,insn->a);
+            MValue *rhs=local_ptr(vm,frame,insn->b);
+            if (!slot || !rhs || slot->tag!=MVAL_I64 || rhs->tag!=MVAL_I64){set_error(out,"i64_add_local_local_requires_i64");return 0;}
+            slot->as.i64 += rhs->as.i64;
+            pc++; break;
+        }
+        case MOP_I64_SUM_RANGE_STEP1: {
+            MValue *acc=local_ptr(vm,frame,insn->a);
+            MValue *idx=local_ptr(vm,frame,insn->b);
+            MValue *limit=local_ptr(vm,frame,insn->c);
+            int64_t total, i, n;
+            if (!acc || !idx || !limit || acc->tag!=MVAL_I64 || idx->tag!=MVAL_I64 || limit->tag!=MVAL_I64){set_error(out,"i64_sum_range_step1_requires_i64");return 0;}
+            total=acc->as.i64; i=idx->as.i64; n=limit->as.i64;
+            while (i < n) {
+                total += i;
+                i += 1;
+            }
+            acc->as.i64=total;
+            idx->as.i64=i;
             pc++; break;
         }
 
         /* arithmetic */
         case MOP_ADD: case MOP_SUB: case MOP_MUL: case MOP_DIV: {
             MValue b=pop(vm), a=pop(vm);
+            if (a.tag==MVAL_I64 && b.tag==MVAL_I64 && insn->opcode!=MOP_DIV) {
+                int64_t r = (insn->opcode==MOP_ADD) ? (a.as.i64 + b.as.i64)
+                          : (insn->opcode==MOP_SUB) ? (a.as.i64 - b.as.i64)
+                          : (a.as.i64 * b.as.i64);
+                if (!push(vm,mval_i64(r))){set_error(out,"numeric_push_failed");return 0;}
+                pc++; break;
+            }
             if (insn->opcode==MOP_ADD&&(a.tag==MVAL_STR||b.tag==MVAL_STR)){
                 char abuf[64],bbuf[64]; const char *ap=NULL,*bp=NULL; size_t alen=0,blen=0;
                 if (!coerce_str(a,abuf,sizeof(abuf),&ap,&alen)||!coerce_str(b,bbuf,sizeof(bbuf),&bp,&blen)){
-                    mvalue_free(&a);mvalue_free(&b);set_error(out,"string_concat_unsupported_type");return 0;
+                    mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"string_concat_unsupported_type");return 0;
                 }
-                MValue sv=mval_owned_str(NULL,alen+blen);
-                if (!sv.as.str.ptr){mvalue_free(&a);mvalue_free(&b);set_error(out,"string_concat_alloc_failed");return 0;}
+                MValue sv=mval_owned_str(vm,NULL,alen+blen);
+                if (!sv.as.str.ptr){mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"string_concat_alloc_failed");return 0;}
                 memcpy((char*)sv.as.str.ptr,ap,alen); memcpy((char*)sv.as.str.ptr+alen,bp,blen);
-                mvalue_free(&a);mvalue_free(&b);
+                mvalue_release_temp(&a);mvalue_release_temp(&b);
                 if (!push(vm,sv)){mvalue_free(&sv);set_error(out,"string_concat_push_failed");return 0;}
                 pc++; break;
             }
-            if ((a.tag!=MVAL_I64&&a.tag!=MVAL_F64)||(b.tag!=MVAL_I64&&b.tag!=MVAL_F64)){mvalue_free(&a);mvalue_free(&b);set_error(out,"numeric_op_requires_numbers");return 0;}
+            if ((a.tag!=MVAL_I64&&a.tag!=MVAL_F64)||(b.tag!=MVAL_I64&&b.tag!=MVAL_F64)){mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"numeric_op_requires_numbers");return 0;}
             int use_f=(a.tag==MVAL_F64||b.tag==MVAL_F64||insn->opcode==MOP_DIV);
             double da=(a.tag==MVAL_F64)?a.as.f64:(double)a.as.i64;
             double db=(b.tag==MVAL_F64)?b.as.f64:(double)b.as.i64;
-            if (insn->opcode==MOP_DIV&&db==0.0){mvalue_free(&a);mvalue_free(&b);set_error(out,"division_by_zero");return 0;}
+            if (insn->opcode==MOP_DIV&&db==0.0){mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"division_by_zero");return 0;}
             double res=(insn->opcode==MOP_ADD)?da+db:(insn->opcode==MOP_SUB)?da-db:(insn->opcode==MOP_MUL)?da*db:da/db;
-            mvalue_free(&a);mvalue_free(&b);
+            mvalue_release_temp(&a);mvalue_release_temp(&b);
             if (!push(vm,use_f?mval_f64(res):mval_i64((int64_t)res))){set_error(out,"numeric_push_failed");return 0;}
             pc++; break;
         }
@@ -330,17 +552,17 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         case MOP_MOD: {
             MValue b=pop(vm), a=pop(vm);
             if (a.tag==MVAL_I64&&b.tag==MVAL_I64){
-                if (b.as.i64==0){mvalue_free(&a);mvalue_free(&b);set_error(out,"modulo_by_zero");return 0;}
+                if (b.as.i64==0){set_error(out,"modulo_by_zero");return 0;}
                 int64_t r=a.as.i64%b.as.i64;
                 if (r!=0&&((r<0)!=(b.as.i64<0))) r+=b.as.i64; /* Python-style sign */
                 if (!push(vm,mval_i64(r))){set_error(out,"mod_push_failed");return 0;}
             } else {
                 double da=(a.tag==MVAL_F64)?a.as.f64:(double)a.as.i64;
                 double db=(b.tag==MVAL_F64)?b.as.f64:(double)b.as.i64;
-                if (db==0.0){mvalue_free(&a);mvalue_free(&b);set_error(out,"modulo_by_zero");return 0;}
+                if (db==0.0){mvalue_release_temp(&a);mvalue_release_temp(&b);set_error(out,"modulo_by_zero");return 0;}
                 if (!push(vm,mval_f64(fmod(da,db)))){set_error(out,"mod_push_failed");return 0;}
             }
-            mvalue_free(&a);mvalue_free(&b);
+            mvalue_release_temp(&a);mvalue_release_temp(&b);
             pc++; break;
         }
 
@@ -356,19 +578,44 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 double exp_v=(b.tag==MVAL_F64)?b.as.f64:(double)b.as.i64;
                 if (!push(vm,mval_f64(pow(base,exp_v)))){set_error(out,"pow_push_failed");return 0;}
             }
-            mvalue_free(&a);mvalue_free(&b);
+            mvalue_release_temp(&a);mvalue_release_temp(&b);
             pc++; break;
         }
 
         /* v2.3.4: boolean ops */
-        case MOP_BOOL_AND: { MValue b=pop(vm),a=pop(vm); int r=truthy(a)&&truthy(b); mvalue_free(&a);mvalue_free(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_and_failed");return 0;} pc++; break; }
-        case MOP_BOOL_OR:  { MValue b=pop(vm),a=pop(vm); int r=truthy(a)||truthy(b); mvalue_free(&a);mvalue_free(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_or_failed"); return 0;} pc++; break; }
-        case MOP_BOOL_NOT: { MValue a=pop(vm); int r=!truthy(a); mvalue_free(&a); if(!push(vm,mval_bool(r))){set_error(out,"bool_not_failed");return 0;} pc++; break; }
+        case MOP_BOOL_AND: { MValue b=pop(vm),a=pop(vm); int r=truthy(a)&&truthy(b); mvalue_release_temp(&a);mvalue_release_temp(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_and_failed");return 0;} pc++; break; }
+        case MOP_BOOL_OR:  { MValue b=pop(vm),a=pop(vm); int r=truthy(a)||truthy(b); mvalue_release_temp(&a);mvalue_release_temp(&b); if(!push(vm,mval_bool(r))){set_error(out,"bool_or_failed"); return 0;} pc++; break; }
+        case MOP_BOOL_NOT: { MValue a=pop(vm); int r=!truthy(a); mvalue_release_temp(&a); if(!push(vm,mval_bool(r))){set_error(out,"bool_not_failed");return 0;} pc++; break; }
 
         /* compare + jumps */
-        case MOP_COMPARE: { MValue b=pop(vm),a=pop(vm); int r=generic_compare(a,b,(MCompareOp)insn->a); mvalue_free(&a);mvalue_free(&b); if(!push(vm,mval_bool(r))){set_error(out,"compare_failed");return 0;} pc++; break; }
+        case MOP_COMPARE: {
+            MValue b=pop(vm),a=pop(vm);
+            int r=0;
+            if (a.tag==MVAL_I64 && b.tag==MVAL_I64) {
+                switch((MCompareOp)insn->a){
+                    case MCMP_EQ: r=a.as.i64==b.as.i64; break;
+                    case MCMP_NE: r=a.as.i64!=b.as.i64; break;
+                    case MCMP_LT: r=a.as.i64<b.as.i64; break;
+                    case MCMP_LE: r=a.as.i64<=b.as.i64; break;
+                    case MCMP_GT: r=a.as.i64>b.as.i64; break;
+                    case MCMP_GE: r=a.as.i64>=b.as.i64; break;
+                    default: r=0; break;
+                }
+            } else {
+                r=generic_compare(a,b,(MCompareOp)insn->a);
+                mvalue_release_temp(&a);mvalue_release_temp(&b);
+            }
+            if(!push(vm,mval_bool(r))){set_error(out,"compare_failed");return 0;} pc++; break;
+        }
         case MOP_JUMP: pc=(uint32_t)insn->a; break;
-        case MOP_JUMP_IF_FALSE: { MValue c=pop(vm); int r=truthy(c); mvalue_free(&c); pc=r?pc+1:(uint32_t)insn->a; break; }
+        case MOP_JUMP_IF_FALSE: { MValue c=pop(vm); int r=truthy(c); mvalue_release_temp(&c); pc=r?pc+1:(uint32_t)insn->a; break; }
+        case MOP_JUMP_IF_LOCAL_I64_LT_FALSE: {
+            MValue *left=local_ptr(vm,frame,insn->a);
+            MValue *right=local_ptr(vm,frame,insn->b);
+            if (!left || !right || left->tag!=MVAL_I64 || right->tag!=MVAL_I64){set_error(out,"i64_lt_local_jump_requires_i64");return 0;}
+            pc = (left->as.i64 < right->as.i64) ? pc+1 : (uint32_t)insn->c;
+            break;
+        }
 
         /* functions */
         case MOP_CALL: {
@@ -414,10 +661,19 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
 
         case MOP_RETURN: {
             MValue ret=vm->stack_len?pop(vm):mval_none();
-            if (vm->frame_len<=1){out->halted=1;out->result=ret;return 1;}
+            if (vm->frame_len<=1){
+                if (vm->current_task == 0) out->result = ret;
+                else vm->tasks[vm->current_task].result = ret;
+                goto finish_current_task_with_result;
+            }
             MFrame ended=vm->frames[--vm->frame_len];
-            for(size_t i=ended.local_base;i<vm->locals_len;++i) mvalue_free(&vm->locals[i]);
-            vm->locals_len=ended.local_base; vm->stack_len=ended.base;
+            {
+                size_t local_end=(size_t)ended.local_base+(size_t)ended.local_count;
+                if (local_end>vm->locals_len) local_end=vm->locals_len;
+                for(size_t i=ended.local_base;i<local_end;++i) mvalue_release_temp(&vm->locals[i]);
+                if (local_end==vm->locals_len) vm->locals_len=ended.local_base;
+            }
+            vm->stack_len=ended.base;
             if (!push(vm,ret)){set_error(out,"return_push_failed");return 0;}
             pc=ended.return_pc; break;
         }
@@ -438,17 +694,17 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 int64_t i=(idx.tag==MVAL_I64)?idx.as.i64:(idx.tag==MVAL_F64)?(int64_t)idx.as.f64:-1;
                 if (i<0) i+=(int64_t)cont.as.list.len;
                 if (i<0||(size_t)i>=cont.as.list.len){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_index_out_of_range");return 0;}
-                selected=mvalue_deep_copy(&cont.as.list.items[(size_t)i]);
+                selected=mvalue_clone(vm, &cont.as.list.items[(size_t)i]);
             } else if (cont.tag==MVAL_MAP){
                 MValue val=mval_none();
                 if (!map_get(&cont.as.map,&idx,&val)){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_key_not_found");return 0;}
-                selected=mvalue_deep_copy(&val);
+                selected=mvalue_clone(vm, &val);
             } else if (cont.tag==MVAL_STR){
                 int64_t i=(idx.tag==MVAL_I64)?idx.as.i64:(idx.tag==MVAL_F64)?(int64_t)idx.as.f64:-1;
                 if (i<0) i+=(int64_t)cont.as.str.len;
                 if (i<0||(size_t)i>=cont.as.str.len){mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_index_out_of_range");return 0;}
                 char ch[1]; ch[0]=cont.as.str.ptr[(size_t)i];
-                selected=mval_owned_str(ch,1);
+                selected=mval_owned_str(vm,ch,1);
             } else { mvalue_free(&idx);mvalue_free(&cont);set_error(out,"getitem_unsupported_type"); return 0; }
             mvalue_free(&idx);mvalue_free(&cont);
             if (!push(vm,selected)){mvalue_free(&selected);set_error(out,"getitem_push_failed");return 0;}
@@ -471,18 +727,71 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         case MOP_IMPORT: pc++; break; /* metadata in image; no-op at runtime */
 
         case MOP_SYSCALL: {
+            MellowRuntimeContext *rt_ctx = (MellowRuntimeContext *)vm->syscall.user;
             if (!vm->syscall.fn){set_error(out,"syscall_bridge_missing");return 0;}
             size_t argc=(size_t)insn->b;
             if (argc>vm->stack_len){set_error(out,"syscall_stack_underflow");return 0;}
             MValue result=mval_none();
+            if (insn->a == 23) {
+                uint64_t task_id;
+                if (argc != 1 || vm->stack[vm->stack_len - 1].tag != MVAL_FUNC) {
+                    set_error(out,"spawn_requires_function"); return 0;
+                }
+                task_id = mellowrt_scheduler_spawn(vm, vm->stack[vm->stack_len - 1].as.func);
+                if (!task_id) { set_error(out,"spawn_failed"); return 0; }
+                if (rt_ctx) rt_ctx->spawned_tasks++;
+                for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
+                vm->stack_len-=argc;
+                if (insn->c && !push(vm, mval_i64((int64_t)task_id))) { set_error(out,"spawn_result_push_failed"); return 0; }
+                out->syscalls++; pc++; break;
+            }
+            if (insn->a == 24) {
+                if (argc != 0) { set_error(out,"yield_takes_no_args"); return 0; }
+                if (rt_ctx) rt_ctx->yielded_tasks++;
+                out->syscalls++; pc++;
+                mellowrt_task_save_from_vm(vm, vm->current_task, pc);
+                next_task = mellowrt_scheduler_next_runnable(vm);
+                if (next_task != (size_t)-1) {
+                    mellowrt_task_load_into_vm(vm, next_task);
+                    pc = vm->tasks[vm->current_task].pc;
+                }
+                break;
+            }
             if (!vm->syscall.fn(vm->syscall.user,insn->a,vm->stack+(vm->stack_len-argc),argc,&result)){
                 for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
                 vm->stack_len-=argc;set_error(out,"syscall_failed");return 0;
+            }
+            if (rt_ctx && rt_ctx->recv_would_block) {
+                void *waiting = NULL;
+                if (argc == 1 && vm->stack[vm->stack_len - 1].tag == MVAL_NATIVE)
+                    waiting = vm->stack[vm->stack_len - 1].as.ptr;
+                rt_ctx->recv_would_block = 0;
+                mvalue_free(&result);
+                vm->tasks[vm->current_task].blocked = 1;
+                vm->tasks[vm->current_task].waiting_native = waiting;
+                vm->scheduler_blocks++;
+                mellowrt_task_save_from_vm(vm, vm->current_task, pc);
+                next_task = mellowrt_scheduler_next_runnable(vm);
+                if (next_task == (size_t)-1) {
+                    vm->tasks[vm->current_task].blocked = 0;
+                    vm->tasks[vm->current_task].waiting_native = NULL;
+                    for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
+                    vm->stack_len-=argc;
+                    if (insn->c&&!push(vm,result)){mvalue_free(&result);set_error(out,"syscall_result_push_failed");return 0;}
+                    if (!insn->c) mvalue_free(&result);
+                    out->syscalls++; pc++;
+                    break;
+                }
+                mellowrt_task_load_into_vm(vm, next_task);
+                pc = vm->tasks[vm->current_task].pc;
+                out->syscalls++;
+                break;
             }
             for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
             vm->stack_len-=argc;
             if (insn->c&&!push(vm,result)){mvalue_free(&result);set_error(out,"syscall_result_push_failed");return 0;}
             if (!insn->c) mvalue_free(&result);
+            if (insn->a == 26) mellowrt_scheduler_unblock_native_waiters(vm, NULL);
             out->syscalls++; pc++; break;
         }
 
@@ -502,6 +811,21 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
         if (vm->debug.on_after_instruction&&!vm->debug.on_after_instruction(vm->debug.user,&snap)){
             out->halted=1; out->result=vm->stack_len?vm->stack[vm->stack_len-1]:mval_none(); return 1;
         }
+        continue;
+
+finish_current_task:
+        if (vm->current_task == 0)
+            out->result = vm->stack_len ? mvalue_clone(vm, &vm->stack[vm->stack_len-1]) : mval_none();
+        else
+            vm->tasks[vm->current_task].result = vm->stack_len ? mvalue_clone(vm, &vm->stack[vm->stack_len-1]) : mval_none();
+finish_current_task_with_result:
+        vm->tasks[vm->current_task].finished = 1;
+        mellowrt_task_save_from_vm(vm, vm->current_task, pc);
+        next_task = mellowrt_scheduler_next_runnable(vm);
+        if (next_task == (size_t)-1) break;
+        mellowrt_task_load_into_vm(vm, next_task);
+        pc = vm->tasks[vm->current_task].pc;
     }
-    out->halted=1; out->result=vm->stack_len?vm->stack[vm->stack_len-1]:mval_none(); return 1;
+    out->halted=1;
+    return 1;
 }

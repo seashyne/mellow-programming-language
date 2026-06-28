@@ -87,6 +87,17 @@ ext_modules = [
         extra_compile_args=[],
         extra_link_args=["/MANIFEST:NO"] if os.name == "nt" else [],
     ),
+    Extension(
+        "mellowlang._melv",
+        sources=[
+            "native/melv/src/melv_native.c",
+            "native/melv/src/melv_module.c",
+        ],
+        include_dirs=["native/melv/include", *_python_include_dirs()],
+        define_macros=_native_arch_macros(),
+        extra_compile_args=[],
+        extra_link_args=["/MANIFEST:NO"] if os.name == "nt" else [],
+    ),
 ]
 
 setup(

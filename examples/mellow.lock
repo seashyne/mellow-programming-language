@@ -44,6 +44,30 @@
       "entry": "src/main.mel",
       "dependencies": {},
       "sha256": null
+    },
+    "core-json": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "json": "host"
+      },
+      "sha256": null
+    },
+    "mellow-sdk": {
+      "version": "0.3.0",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Core Team"
+      ],
+      "creator": "Mellow Core Team",
+      "dependencies": {
+        "sdk": "host"
+      },
+      "sha256": null
     }
   },
   "root": {
@@ -53,15 +77,19 @@
       "core-strings": "0.1.0",
       "core-math": "0.1.0",
       "core-workflow": "0.1.0",
-      "core-window": "0.1.0"
+      "core-window": "0.1.0",
+      "core-json": "0.2.1",
+      "mellow-sdk": "0.3.0"
     },
     "imports": [
+      "mellow-sdk",
+      "core-json",
+      "core-print",
       "@mellow/std-game",
       "@mellow/std-http",
       "@mellow/std-storage",
       "@mellow/std-ai",
       "core-mmg",
-      "core-print",
       "core-strings",
       "core-math",
       "core-workflow",
