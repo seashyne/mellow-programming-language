@@ -79,6 +79,7 @@ int scope_slot(Scope *scope, const char *name, size_t len, int create) {
     snprintf(scope->vars[scope->len].name, sizeof(scope->vars[scope->len].name), "%.*s", (int)len, name);
     scope->vars[scope->len].slot = slot;
     scope->is_i64[scope->len] = 0;
+    scope->i64_list_len[scope->len] = 0;
     scope->len++;
     return slot;
 }
@@ -140,6 +141,32 @@ static int expr_is_i64_literal(const char *expr) {
     const char *p = skip_spaces(expr);
     (void)strtoll(p, &endp, 10);
     return endp != p && *skip_spaces(endp) == '\0';
+}
+
+static uint16_t expr_i64_list_literal_len(const char *expr) {
+    const char *p = skip_spaces(expr);
+    uint16_t count = 0;
+    if (*p != '[') return 0;
+    p = skip_spaces(p + 1);
+    if (*p == ']') return 0;
+    while (*p) {
+        char *endp = NULL;
+        (void)strtoll(p, &endp, 10);
+        if (endp == p) return 0;
+        if (count == UINT16_MAX) return 0;
+        count++;
+        p = skip_spaces(endp);
+        if (*p == ',') {
+            p = skip_spaces(p + 1);
+            continue;
+        }
+        if (*p == ']') {
+            p = skip_spaces(p + 1);
+            return *p == '\0' ? count : 0;
+        }
+        return 0;
+    }
+    return 0;
 }
 
 static int parse_i64_lt_condition(Compiler *c, const char *condition, int *left_slot_out, int *right_slot_out) {
@@ -245,6 +272,51 @@ static int parse_self_plus_ident(const char *lhs, const char *expr, char *rhs, s
     return *p == '\0';
 }
 
+static int parse_self_plus_list_mod(
+    Compiler *c,
+    const char *lhs,
+    const char *expr,
+    int expected_idx_slot,
+    int *list_slot_out,
+    int *mod_out
+) {
+    const char *p = skip_spaces(expr);
+    int left_len = ident_len_at(p), list_len, idx_len;
+    char list_name[64], idx_name[64];
+    int list_slot, idx_slot;
+    char *endp = NULL;
+    long long mod_value;
+    if (!left_len || strlen(lhs) != (size_t)left_len || memcmp(lhs, p, (size_t)left_len) != 0) return 0;
+    p = skip_spaces(p + left_len);
+    if (*p != '+') return 0;
+    p = skip_spaces(p + 1);
+    list_len = ident_len_at(p);
+    if (!list_len || list_len >= (int)sizeof(list_name)) return 0;
+    memcpy(list_name, p, (size_t)list_len); list_name[list_len] = '\0';
+    list_slot = scope_find(c->scope, list_name, strlen(list_name));
+    if (list_slot < 0) return 0;
+    p = skip_spaces(p + list_len);
+    if (*p != '[') return 0;
+    p = skip_spaces(p + 1);
+    idx_len = ident_len_at(p);
+    if (!idx_len || idx_len >= (int)sizeof(idx_name)) return 0;
+    memcpy(idx_name, p, (size_t)idx_len); idx_name[idx_len] = '\0';
+    idx_slot = scope_find(c->scope, idx_name, strlen(idx_name));
+    if (idx_slot != expected_idx_slot) return 0;
+    p = skip_spaces(p + idx_len);
+    if (*p != '%') return 0;
+    p = skip_spaces(p + 1);
+    mod_value = strtoll(p, &endp, 10);
+    if (endp == p || mod_value <= 0 || mod_value > 65535) return 0;
+    p = skip_spaces(endp);
+    if (*p != ']') return 0;
+    p = skip_spaces(p + 1);
+    if (*p != '\0') return 0;
+    *list_slot_out = list_slot;
+    *mod_out = (int)mod_value;
+    return 1;
+}
+
 static int parse_self_plus_one(const char *lhs, const char *expr) {
     const char *p = skip_spaces(expr);
     int left_len = ident_len_at(p);
@@ -256,6 +328,136 @@ static int parse_self_plus_one(const char *lhs, const char *expr) {
     p = skip_spaces(p + 1);
     delta = strtoll(p, &endp, 10);
     return endp != p && *skip_spaces(endp) == '\0' && delta == 1;
+}
+
+static int parse_self_plus_const(const char *lhs, const char *expr, long long expected) {
+    const char *p = skip_spaces(expr);
+    int left_len = ident_len_at(p);
+    char *endp = NULL;
+    long long delta;
+    if (!left_len || strlen(lhs) != (size_t)left_len || memcmp(lhs, p, (size_t)left_len) != 0) return 0;
+    p = skip_spaces(p + left_len);
+    if (*p != '+') return 0;
+    p = skip_spaces(p + 1);
+    delta = strtoll(p, &endp, 10);
+    return endp != p && *skip_spaces(endp) == '\0' && delta == expected;
+}
+
+static int parse_call_two_idents(
+    const char *expr,
+    char *fn_name,
+    size_t fn_cap,
+    char *arg0,
+    size_t arg0_cap,
+    char *arg1,
+    size_t arg1_cap
+) {
+    const char *p = skip_spaces(expr);
+    int fn_len = ident_len_at(p);
+    int arg0_len, arg1_len;
+    if (!fn_len || fn_len >= (int)fn_cap) return 0;
+    memcpy(fn_name, p, (size_t)fn_len); fn_name[fn_len] = '\0';
+    p = skip_spaces(p + fn_len);
+    if (*p != '(') return 0;
+    p = skip_spaces(p + 1);
+    arg0_len = ident_len_at(p);
+    if (!arg0_len || arg0_len >= (int)arg0_cap) return 0;
+    memcpy(arg0, p, (size_t)arg0_len); arg0[arg0_len] = '\0';
+    p = skip_spaces(p + arg0_len);
+    if (*p != ',') return 0;
+    p = skip_spaces(p + 1);
+    arg1_len = ident_len_at(p);
+    if (!arg1_len || arg1_len >= (int)arg1_cap) return 0;
+    memcpy(arg1, p, (size_t)arg1_len); arg1[arg1_len] = '\0';
+    p = skip_spaces(p + arg1_len);
+    if (*p != ')') return 0;
+    p = skip_spaces(p + 1);
+    return *p == '\0';
+}
+
+static int function_returns_param_sum(Compiler *c, Function *fn) {
+    int count = 0;
+    char *body = NULL;
+    const char *expr;
+    const char *p;
+    int left_len, right_len;
+    if (!fn || fn->arity != 2) return 0;
+    for (int i = fn->line_start + 1; i < fn->line_end; ++i) {
+        char *copy;
+        copy = normalized_line_copy(&c->lines[i]);
+        if (!copy) return 0;
+        if (*copy) {
+            if (c->lines[i].indent != fn->body_indent) { free(copy); free(body); return 0; }
+            if (count++) { free(copy); free(body); return 0; }
+            body = copy;
+        } else {
+            free(copy);
+        }
+    }
+    if (!body || !starts(body, "return ")) { free(body); return 0; }
+    expr = skip_spaces(body + 7);
+    p = skip_spaces(expr);
+    left_len = ident_len_at(p);
+    if (!left_len || strlen(fn->params[0]) != (size_t)left_len || memcmp(p, fn->params[0], (size_t)left_len) != 0) { free(body); return 0; }
+    p = skip_spaces(p + left_len);
+    if (*p != '+') { free(body); return 0; }
+    p = skip_spaces(p + 1);
+    right_len = ident_len_at(p);
+    if (!right_len || strlen(fn->params[1]) != (size_t)right_len || memcmp(p, fn->params[1], (size_t)right_len) != 0) { free(body); return 0; }
+    p = skip_spaces(p + right_len);
+    if (*p) { free(body); return 0; }
+    free(body);
+    return 1;
+}
+
+static int parse_self_plus_string_literal(Compiler *c, const char *lhs, const char *expr, int *const_slot_out) {
+    const char *p = skip_spaces(expr);
+    int left_len = ident_len_at(p);
+    char quote;
+    const char *start;
+    size_t len;
+    int ci;
+    if (!left_len || strlen(lhs) != (size_t)left_len || memcmp(lhs, p, (size_t)left_len) != 0) return 0;
+    p = skip_spaces(p + left_len);
+    if (*p != '+') return 0;
+    p = skip_spaces(p + 1);
+    if (*p != '"' && *p != '\'') return 0;
+    quote = *p++;
+    start = p;
+    while (*p && *p != quote) {
+        if (*p == '\\') return 0;
+        p++;
+    }
+    if (*p != quote) return 0;
+    len = (size_t)(p - start);
+    p = skip_spaces(p + 1);
+    if (*p) return 0;
+    ci = add_const(c, owned_string(start, len));
+    if (ci < 0 || ci > 65535) return -1;
+    *const_slot_out = ci;
+    return 1;
+}
+
+static int parse_mod2_eq_zero_condition(Compiler *c, const char *condition, int expected_idx_slot) {
+    const char *p = skip_spaces(condition);
+    int idx_len = ident_len_at(p), idx_slot;
+    char idx[64];
+    char *endp = NULL;
+    long long mod_value, eq_value;
+    if (!idx_len || idx_len >= (int)sizeof(idx)) return 0;
+    memcpy(idx, p, (size_t)idx_len); idx[idx_len] = '\0';
+    idx_slot = scope_find(c->scope, idx, strlen(idx));
+    if (idx_slot != expected_idx_slot) return 0;
+    p = skip_spaces(p + idx_len);
+    if (*p != '%') return 0;
+    p = skip_spaces(p + 1);
+    mod_value = strtoll(p, &endp, 10);
+    if (endp == p || mod_value != 2) return 0;
+    p = skip_spaces(endp);
+    if (p[0] != '=' || p[1] != '=') return 0;
+    p = skip_spaces(p + 2);
+    eq_value = strtoll(p, &endp, 10);
+    return endp != p && eq_value == 0 && *skip_spaces(endp) == '\0';
 }
 
 static int emit_fast_i64_sum_loop(Compiler *c, int *position, int end, int indent, const char *condition) {
@@ -302,6 +504,219 @@ static int emit_fast_i64_sum_loop(Compiler *c, int *position, int end, int inden
     }
     free(line0); free(line1);
     if (emit(c, MOP_I64_SUM_RANGE_STEP1, acc_slot, idx_slot, limit_slot) < 0) return -1;
+    *position = body_end;
+    return 1;
+}
+
+static int emit_fast_i64_branch_mod2_loop(Compiler *c, int *position, int end, int indent, const char *condition) {
+    int idx_slot, limit_slot, body_start, body_end, count = 0;
+    int body_indices[5];
+    char *lines[5] = {0};
+    char lhs_true[64], lhs_false[64], lhs_inc[64];
+    const char *expr_true, *expr_false, *expr_inc;
+    int acc_slot, ok = 0;
+
+    if (!parse_i64_lt_condition(c, condition, &idx_slot, &limit_slot)) return 0;
+    body_start = *position + 1;
+    body_end = body_start;
+    while (body_end < end && c->lines[body_end].indent > indent) body_end++;
+    for (int i = body_start; i < body_end; ++i) {
+        char *copy;
+        if (c->lines[i].indent != indent + 4 && c->lines[i].indent != indent + 8) return 0;
+        copy = normalized_line_copy(&c->lines[i]);
+        if (!copy) return -1;
+        if (*copy) {
+            if (count >= 5) { free(copy); return 0; }
+            body_indices[count] = i;
+            lines[count++] = copy;
+        } else {
+            free(copy);
+        }
+    }
+    if (count != 5) goto done;
+    if (c->lines[body_indices[0]].indent != indent + 4 ||
+        c->lines[body_indices[1]].indent != indent + 8 ||
+        c->lines[body_indices[2]].indent != indent + 4 ||
+        c->lines[body_indices[3]].indent != indent + 8 ||
+        c->lines[body_indices[4]].indent != indent + 4) goto done;
+    if (!starts(lines[0], "if ") || lines[0][strlen(lines[0])-1] != ':' ||
+        strcmp(lines[2], "else:") != 0) goto done;
+    lines[0][strlen(lines[0])-1] = '\0';
+    if (!parse_mod2_eq_zero_condition(c, trim(lines[0] + 3), idx_slot)) goto done;
+    if (!parse_assignment_parts(lines[1], lhs_true, sizeof(lhs_true), &expr_true) ||
+        !parse_assignment_parts(lines[3], lhs_false, sizeof(lhs_false), &expr_false) ||
+        !parse_assignment_parts(lines[4], lhs_inc, sizeof(lhs_inc), &expr_inc)) goto done;
+    if (strcmp(lhs_true, lhs_false) != 0) goto done;
+    acc_slot = scope_find(c->scope, lhs_true, strlen(lhs_true));
+    if (acc_slot < 0 || !c->scope->is_i64[acc_slot]) goto done;
+    if (!parse_self_plus_const(lhs_true, expr_true, 3) ||
+        !parse_self_plus_const(lhs_false, expr_false, 1) ||
+        scope_find(c->scope, lhs_inc, strlen(lhs_inc)) != idx_slot ||
+        !parse_self_plus_one(lhs_inc, expr_inc)) goto done;
+    if (emit(c, MOP_I64_BRANCH_MOD2_ACCUM_STEP1, acc_slot, idx_slot, limit_slot) < 0) { ok = -1; goto done; }
+    *position = body_end;
+    ok = 1;
+
+done:
+    for (int i = 0; i < count; ++i) free(lines[i]);
+    return ok;
+}
+
+static int emit_fast_i64_list_mod_loop(Compiler *c, int *position, int end, int indent, const char *condition) {
+    int idx_slot, limit_slot, body_start, body_end, count = 0;
+    int body_indices[2];
+    char *line0 = NULL, *line1 = NULL;
+    char lhs0[64], lhs1[64];
+    const char *expr0, *expr1;
+    int acc_slot, list_slot, mod_value;
+    int packed;
+
+    if (!parse_i64_lt_condition(c, condition, &idx_slot, &limit_slot)) return 0;
+    body_start = *position + 1;
+    body_end = body_start;
+    while (body_end < end && c->lines[body_end].indent > indent) body_end++;
+    for (int i = body_start; i < body_end; ++i) {
+        char *copy;
+        if (c->lines[i].indent != indent + 4) return 0;
+        copy = normalized_line_copy(&c->lines[i]);
+        if (!copy) return -1;
+        if (*copy) {
+            if (count >= 2) { free(copy); return 0; }
+            body_indices[count++] = i;
+        }
+        free(copy);
+    }
+    if (count != 2) return 0;
+
+    line0 = normalized_line_copy(&c->lines[body_indices[0]]);
+    line1 = normalized_line_copy(&c->lines[body_indices[1]]);
+    if (!line0 || !line1) { free(line0); free(line1); return -1; }
+    if (!parse_assignment_parts(line0, lhs0, sizeof(lhs0), &expr0) ||
+        !parse_assignment_parts(line1, lhs1, sizeof(lhs1), &expr1) ||
+        !parse_self_plus_list_mod(c, lhs0, expr0, idx_slot, &list_slot, &mod_value) ||
+        scope_find(c->scope, lhs1, strlen(lhs1)) != idx_slot ||
+        !parse_self_plus_one(lhs1, expr1)) {
+        free(line0); free(line1); return 0;
+    }
+    acc_slot = scope_find(c->scope, lhs0, strlen(lhs0));
+    if (acc_slot < 0 || !c->scope->is_i64[acc_slot]) {
+        free(line0); free(line1); return 0;
+    }
+    if (c->scope->i64_list_len[list_slot] != (uint16_t)mod_value) {
+        free(line0); free(line1); return 0;
+    }
+    if (limit_slot < 0 || limit_slot > 65535 || list_slot < 0 || list_slot > 65535 || mod_value <= 0) {
+        free(line0); free(line1); return 0;
+    }
+    /* The runtime validates the list value and item tags. */
+    packed = ((limit_slot & 0xffff) << 16) | (list_slot & 0xffff);
+    free(line0); free(line1);
+    if (emit(c, MOP_I64_LIST_MOD_ACCUM_STEP1, acc_slot, idx_slot, packed) < 0) return -1;
+    *position = body_end;
+    return 1;
+}
+
+static int emit_fast_i64_add_func_loop(Compiler *c, int *position, int end, int indent, const char *condition) {
+    int idx_slot, limit_slot, body_start, body_end, count = 0;
+    int body_indices[2];
+    char *line0 = NULL, *line1 = NULL;
+    char lhs0[64], lhs1[64], fn_name[64], arg0[64], arg1[64];
+    const char *expr0, *expr1;
+    int acc_slot, arg0_slot, arg1_slot;
+    Function *fn;
+
+    if (!parse_i64_lt_condition(c, condition, &idx_slot, &limit_slot)) return 0;
+    body_start = *position + 1;
+    body_end = body_start;
+    while (body_end < end && c->lines[body_end].indent > indent) body_end++;
+    for (int i = body_start; i < body_end; ++i) {
+        char *copy;
+        if (c->lines[i].indent != indent + 4) return 0;
+        copy = normalized_line_copy(&c->lines[i]);
+        if (!copy) return -1;
+        if (*copy) {
+            if (count >= 2) { free(copy); return 0; }
+            body_indices[count++] = i;
+        }
+        free(copy);
+    }
+    if (count != 2) return 0;
+
+    line0 = normalized_line_copy(&c->lines[body_indices[0]]);
+    line1 = normalized_line_copy(&c->lines[body_indices[1]]);
+    if (!line0 || !line1) { free(line0); free(line1); return -1; }
+    if (!parse_assignment_parts(line0, lhs0, sizeof(lhs0), &expr0) ||
+        !parse_assignment_parts(line1, lhs1, sizeof(lhs1), &expr1) ||
+        !parse_call_two_idents(expr0, fn_name, sizeof(fn_name), arg0, sizeof(arg0), arg1, sizeof(arg1)) ||
+        scope_find(c->scope, lhs1, strlen(lhs1)) != idx_slot ||
+        !parse_self_plus_one(lhs1, expr1)) {
+        free(line0); free(line1); return 0;
+    }
+    acc_slot = scope_find(c->scope, lhs0, strlen(lhs0));
+    arg0_slot = scope_find(c->scope, arg0, strlen(arg0));
+    arg1_slot = scope_find(c->scope, arg1, strlen(arg1));
+    if (acc_slot < 0 || arg0_slot != acc_slot || arg1_slot != idx_slot ||
+        !c->scope->is_i64[acc_slot] || !c->scope->is_i64[idx_slot]) {
+        free(line0); free(line1); return 0;
+    }
+    fn = find_function(c, fn_name, strlen(fn_name));
+    if (!function_returns_param_sum(c, fn)) {
+        free(line0); free(line1); return 0;
+    }
+    free(line0); free(line1);
+    if (emit(c, MOP_I64_ADD_FUNC_ACCUM_STEP1, acc_slot, idx_slot, limit_slot) < 0) return -1;
+    *position = body_end;
+    return 1;
+}
+
+static int emit_fast_string_append_loop(Compiler *c, int *position, int end, int indent, const char *condition) {
+    int idx_slot, limit_slot, body_start, body_end, count = 0;
+    int body_indices[2];
+    char *line0 = NULL, *line1 = NULL;
+    char lhs0[64], lhs1[64];
+    const char *expr0, *expr1;
+    int text_slot, const_slot, packed;
+
+    if (!parse_i64_lt_condition(c, condition, &idx_slot, &limit_slot)) return 0;
+    body_start = *position + 1;
+    body_end = body_start;
+    while (body_end < end && c->lines[body_end].indent > indent) body_end++;
+    for (int i = body_start; i < body_end; ++i) {
+        char *copy;
+        if (c->lines[i].indent != indent + 4) return 0;
+        copy = normalized_line_copy(&c->lines[i]);
+        if (!copy) return -1;
+        if (*copy) {
+            if (count >= 2) { free(copy); return 0; }
+            body_indices[count++] = i;
+        }
+        free(copy);
+    }
+    if (count != 2) return 0;
+
+    line0 = normalized_line_copy(&c->lines[body_indices[0]]);
+    line1 = normalized_line_copy(&c->lines[body_indices[1]]);
+    if (!line0 || !line1) { free(line0); free(line1); return -1; }
+    if (!parse_assignment_parts(line0, lhs0, sizeof(lhs0), &expr0) ||
+        !parse_assignment_parts(line1, lhs1, sizeof(lhs1), &expr1) ||
+        scope_find(c->scope, lhs1, strlen(lhs1)) != idx_slot ||
+        !parse_self_plus_one(lhs1, expr1)) {
+        free(line0); free(line1); return 0;
+    }
+    text_slot = scope_find(c->scope, lhs0, strlen(lhs0));
+    if (text_slot < 0 || limit_slot < 0 || limit_slot > 65535) {
+        free(line0); free(line1); return 0;
+    }
+    {
+        int parsed = parse_self_plus_string_literal(c, lhs0, expr0, &const_slot);
+        if (parsed <= 0) {
+            free(line0); free(line1);
+            return parsed;
+        }
+    }
+    packed = ((limit_slot & 0xffff) << 16) | (const_slot & 0xffff);
+    free(line0); free(line1);
+    if (emit(c, MOP_STR_APPEND_REPEAT_STEP1, text_slot, idx_slot, packed) < 0) return -1;
     *position = body_end;
     return 1;
 }
@@ -390,6 +805,18 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
     if (starts(text,"while ") && text[strlen(text)-1]==':') {
         int loop, jf, depth, fast_loop;
         text[strlen(text)-1]='\0';
+        fast_loop = emit_fast_i64_branch_mod2_loop(c, position, end, indent, trim(text+6));
+        if (fast_loop < 0) return 0;
+        if (fast_loop) return 1;
+        fast_loop = emit_fast_i64_list_mod_loop(c, position, end, indent, trim(text+6));
+        if (fast_loop < 0) return 0;
+        if (fast_loop) return 1;
+        fast_loop = emit_fast_i64_add_func_loop(c, position, end, indent, trim(text+6));
+        if (fast_loop < 0) return 0;
+        if (fast_loop) return 1;
+        fast_loop = emit_fast_string_append_loop(c, position, end, indent, trim(text+6));
+        if (fast_loop < 0) return 0;
+        if (fast_loop) return 1;
         fast_loop = emit_fast_i64_sum_loop(c, position, end, indent, trim(text+6));
         if (fast_loop < 0) return 0;
         if (fast_loop) return 1;
@@ -507,6 +934,7 @@ static int compile_statement(Compiler *c, int *position, int end, int indent) {
                 slot=scope_slot(c->scope,name,strlen(name),1);
                 if(slot<0||emit(c,MOP_STORE_LOCAL,slot,0,0)<0)return 0;
                 c->scope->is_i64[slot] = (unsigned char)expr_is_i64_literal(expr);
+                c->scope->i64_list_len[slot] = expr_i64_list_literal_len(expr);
             }
         }
         (*position)++;return 1;
@@ -552,6 +980,150 @@ static int split_lines(Compiler *c, const char *source) {
     return 1;
 }
 
+static int line_module_is_builtin(const char *module) {
+    return strcmp(module, "io") == 0 || strcmp(module, "sys") == 0 ||
+           strcmp(module, "math") == 0 || strcmp(module, "time") == 0 ||
+           strcmp(module, "gc") == 0 || strcmp(module, "thread") == 0 ||
+           strcmp(module, "chan") == 0 || strcmp(module, "canvas") == 0 ||
+           strcmp(module, "money") == 0 || strcmp(module, "server") == 0;
+}
+
+static int parse_import_module_name(const char *line, char *module, size_t module_cap) {
+    char tmp[512];
+    char *rest = NULL;
+    char *as_pos = NULL;
+    size_t module_len;
+    if (!line || !module || module_cap == 0) return 0;
+    snprintf(tmp, sizeof(tmp), "%s", line);
+    strip_inline_comment(tmp);
+    rest = (char *)trim(tmp);
+    if (starts(rest, "import ")) rest = (char *)trim(rest + 7);
+    else if (starts(rest, "use ")) rest = (char *)trim(rest + 4);
+    else if (starts(rest, "need ")) rest = (char *)trim(rest + 5);
+    else return 0;
+    as_pos = strstr(rest, " as ");
+    if (!as_pos) return 0;
+    module_len = (size_t)(as_pos - rest);
+    while (module_len && isspace((unsigned char)rest[module_len - 1])) module_len--;
+    if (module_len >= module_cap) module_len = module_cap - 1;
+    memcpy(module, rest, module_len);
+    module[module_len] = '\0';
+    if (module[0] && (module[0] == '"' || module[0] == '\'') && module[strlen(module) - 1] == module[0]) {
+        size_t n = strlen(module);
+        memmove(module, module + 1, n - 2);
+        module[n - 2] = '\0';
+    }
+    if (strncmp(module, "pkg:", 4) == 0) memmove(module, module + 4, strlen(module + 4) + 1);
+    return *module != '\0';
+}
+
+static char *read_text_file(const char *path) {
+    FILE *f;
+    long size;
+    char *source;
+    if (!path) return NULL;
+    f = fopen(path, "rb");
+    if (!f) return NULL;
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
+    size = ftell(f);
+    if (size < 0) { fclose(f); return NULL; }
+    if (fseek(f, 0, SEEK_SET) != 0) { fclose(f); return NULL; }
+    source = (char *)calloc((size_t)size + 1u, 1u);
+    if (!source) { fclose(f); return NULL; }
+    if (fread(source, 1, (size_t)size, f) != (size_t)size) {
+        free(source);
+        fclose(f);
+        return NULL;
+    }
+    fclose(f);
+    return source;
+}
+
+static int path_already_imported(char imported[][1024], int imported_count, const char *path) {
+    int i;
+    for (i = 0; i < imported_count; ++i)
+        if (strcmp(imported[i], path) == 0) return 1;
+    return 0;
+}
+
+static int append_text(char **out, size_t *len, size_t *cap, const char *text) {
+    size_t n = strlen(text);
+    char *grown;
+    if (*len + n + 2u > *cap) {
+        size_t next = *cap ? *cap * 2u : 4096u;
+        while (*len + n + 2u > next) next *= 2u;
+        grown = (char *)realloc(*out, next);
+        if (!grown) return 0;
+        *out = grown;
+        *cap = next;
+    }
+    memcpy(*out + *len, text, n);
+    *len += n;
+    if (*len == 0 || (*out)[*len - 1] != '\n') (*out)[(*len)++] = '\n';
+    (*out)[*len] = '\0';
+    return 1;
+}
+
+static int expand_package_imports_into(
+    const char *source,
+    const char *source_name,
+    int depth,
+    char imported[][1024],
+    int *imported_count,
+    char **out,
+    size_t *out_len,
+    size_t *out_cap
+) {
+    const char *p = source;
+    const char *start = source;
+    if (depth > 8) return 1;
+    while (1) {
+        if (*p == '\n' || *p == '\0') {
+            size_t n = (size_t)(p - start);
+            char line[512];
+            char module[128];
+            if (n >= sizeof(line)) n = sizeof(line) - 1;
+            memcpy(line, start, n);
+            line[n] = '\0';
+            if (parse_import_module_name(line, module, sizeof(module)) && !line_module_is_builtin(module)) {
+                char resolved[1024];
+                if (mellowrt_resolve_package_entry(source_name, module, resolved, sizeof(resolved)) &&
+                    !path_already_imported(imported, *imported_count, resolved) &&
+                    *imported_count < 32) {
+                    char *pkg_source;
+                    snprintf(imported[*imported_count], 1024, "%s", resolved);
+                    (*imported_count)++;
+                    pkg_source = read_text_file(resolved);
+                    if (pkg_source) {
+                        if (!expand_package_imports_into(pkg_source, resolved, depth + 1, imported, imported_count, out, out_len, out_cap)) {
+                            free(pkg_source);
+                            return 0;
+                        }
+                        free(pkg_source);
+                    }
+                }
+            }
+            if (*p == '\0') break;
+            start = p + 1;
+        }
+        p++;
+    }
+    return append_text(out, out_len, out_cap, source);
+}
+
+static char *expand_package_imports(const char *source, const char *source_name) {
+    char imported[32][1024];
+    int imported_count = 0;
+    char *out = NULL;
+    size_t out_len = 0, out_cap = 0;
+    memset(imported, 0, sizeof(imported));
+    if (!expand_package_imports_into(source, source_name, 0, imported, &imported_count, &out, &out_len, &out_cap)) {
+        free(out);
+        return NULL;
+    }
+    return out;
+}
+
 static int scan_functions(Compiler *c) {
     int i;
     for(i=0;i<c->line_count;++i){
@@ -584,10 +1156,13 @@ static int scan_functions(Compiler *c) {
 
 int mellow_compile_source(const char *source,const char *source_name,MNativeProgram *out,char *error,size_t error_cap){
     Compiler c;int i,pos,jump_main;
+    char *expanded_source = NULL;
     memset(&c,0,sizeof(c));memset(out,0,sizeof(*out));
     c.error=error;c.error_cap=error_cap;c.scope=&c.globals;c.current_line=1;c.source_name=source_name;
     if(error&&error_cap)error[0]='\0';
-    if(!split_lines(&c,source)||!scan_functions(&c))goto fail;
+    expanded_source = expand_package_imports(source, source_name ? source_name : "<memory>");
+    if(!expanded_source){set_error(&c,"package import expansion failed");goto fail;}
+    if(!split_lines(&c,expanded_source)||!scan_functions(&c))goto fail;
     jump_main=emit(&c,MOP_JUMP,0,0,0);
     for(i=0;i<c.func_count;++i){
         Scope local;Function *fn=&c.funcs[i];memset(&local,0,sizeof(local));
@@ -607,12 +1182,14 @@ int mellow_compile_source(const char *source,const char *source_name,MNativeProg
     out->spans=c.spans;out->span_len=c.span_len;out->source_name=copy_text(source_name?source_name:"<memory>",strlen(source_name?source_name:"<memory>"));
     for(i=0;i<c.line_count;++i)free(c.lines[i].text);
     free(c.lines);
+    free(expanded_source);
     return 1;
 fail:
     for(i=0;i<c.line_count;++i)free(c.lines[i].text);
     free(c.lines);
     for(i=0;i<(int)c.const_len;++i)mvalue_free(&c.consts[i]);
     free(c.consts);free(c.code);free(c.spans);
+    free(expanded_source);
     return 0;
 }
 
