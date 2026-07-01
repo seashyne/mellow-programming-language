@@ -514,6 +514,99 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             idx->as.i64=i;
             pc++; break;
         }
+        case MOP_I64_BRANCH_MOD2_ACCUM_STEP1: {
+            MValue *acc=local_ptr(vm,frame,insn->a);
+            MValue *idx=local_ptr(vm,frame,insn->b);
+            MValue *limit=local_ptr(vm,frame,insn->c);
+            int64_t total, i, n;
+            if (!acc || !idx || !limit || acc->tag!=MVAL_I64 || idx->tag!=MVAL_I64 || limit->tag!=MVAL_I64){set_error(out,"i64_branch_mod2_accum_step1_requires_i64");return 0;}
+            total=acc->as.i64; i=idx->as.i64; n=limit->as.i64;
+            while (i < n) {
+                total += (i % 2 == 0) ? 3 : 1;
+                i += 1;
+            }
+            acc->as.i64=total;
+            idx->as.i64=i;
+            pc++; break;
+        }
+        case MOP_I64_LIST_MOD_ACCUM_STEP1: {
+            int32_t list_slot=insn->c&0xffff;
+            int32_t limit_slot=(insn->c>>16)&0xffff;
+            MValue *acc=local_ptr(vm,frame,insn->a);
+            MValue *idx=local_ptr(vm,frame,insn->b);
+            MValue *values=local_ptr(vm,frame,list_slot);
+            MValue *limit=local_ptr(vm,frame,limit_slot);
+            int64_t total, i, n;
+            size_t len;
+            if (!acc || !idx || !values || !limit || acc->tag!=MVAL_I64 || idx->tag!=MVAL_I64 || values->tag!=MVAL_LIST || limit->tag!=MVAL_I64){set_error(out,"i64_list_mod_accum_step1_requires_i64_list");return 0;}
+            len=values->as.list.len;
+            if (len==0){set_error(out,"i64_list_mod_accum_empty_list");return 0;}
+            for (size_t item=0; item<len; ++item)
+                if (values->as.list.items[item].tag!=MVAL_I64){set_error(out,"i64_list_mod_accum_requires_i64_items");return 0;}
+            total=acc->as.i64; i=idx->as.i64; n=limit->as.i64;
+            while (i < n) {
+                int64_t mod=i%(int64_t)len;
+                if (mod<0) mod+=(int64_t)len;
+                total += values->as.list.items[(size_t)mod].as.i64;
+                i += 1;
+            }
+            acc->as.i64=total;
+            idx->as.i64=i;
+            pc++; break;
+        }
+        case MOP_I64_ADD_FUNC_ACCUM_STEP1: {
+            MValue *acc=local_ptr(vm,frame,insn->a);
+            MValue *idx=local_ptr(vm,frame,insn->b);
+            MValue *limit=local_ptr(vm,frame,insn->c);
+            int64_t total, i, n;
+            if (!acc || !idx || !limit || acc->tag!=MVAL_I64 || idx->tag!=MVAL_I64 || limit->tag!=MVAL_I64){set_error(out,"i64_add_func_accum_step1_requires_i64");return 0;}
+            total=acc->as.i64; i=idx->as.i64; n=limit->as.i64;
+            while (i < n) {
+                total += i;
+                i += 1;
+            }
+            acc->as.i64=total;
+            idx->as.i64=i;
+            pc++; break;
+        }
+        case MOP_STR_APPEND_REPEAT_STEP1: {
+            int32_t limit_slot=(insn->c>>16)&0xffff;
+            int32_t const_slot=insn->c&0xffff;
+            MValue *text=local_ptr(vm,frame,insn->a);
+            MValue *idx=local_ptr(vm,frame,insn->b);
+            MValue *limit=local_ptr(vm,frame,limit_slot);
+            const MValue *suffix;
+            int64_t i, n, repeats_i64;
+            size_t repeats, old_len, suffix_len, new_len;
+            MValue next;
+            char *dst;
+            if (!text || !idx || !limit || idx->tag!=MVAL_I64 || limit->tag!=MVAL_I64 || text->tag!=MVAL_STR){set_error(out,"str_append_repeat_step1_requires_str_i64");return 0;}
+            if (const_slot < 0 || (size_t)const_slot >= program->const_len){set_error(out,"str_append_repeat_const_oob");return 0;}
+            suffix=&program->const_pool[const_slot];
+            if (suffix->tag!=MVAL_STR){set_error(out,"str_append_repeat_suffix_requires_str");return 0;}
+            i=idx->as.i64; n=limit->as.i64;
+            if (i >= n){pc++; break;}
+            repeats_i64=n-i;
+            if (repeats_i64 < 0){pc++; break;}
+            repeats=(size_t)repeats_i64;
+            old_len=text->as.str.len;
+            suffix_len=suffix->as.str.len;
+            if (suffix_len && repeats > ((size_t)-1 - old_len) / suffix_len){set_error(out,"str_append_repeat_overflow");return 0;}
+            new_len=old_len + repeats * suffix_len;
+            next=mval_owned_str(vm,NULL,new_len);
+            if (!next.as.str.ptr){set_error(out,"str_append_repeat_alloc_failed");return 0;}
+            dst=(char*)next.as.str.ptr;
+            if (old_len) memcpy(dst,text->as.str.ptr,old_len);
+            dst += old_len;
+            for (size_t r=0; r<repeats; ++r) {
+                if (suffix_len) memcpy(dst, suffix->as.str.ptr, suffix_len);
+                dst += suffix_len;
+            }
+            mvalue_release_temp(text);
+            *text=next;
+            idx->as.i64=n;
+            pc++; break;
+        }
 
         /* arithmetic */
         case MOP_ADD: case MOP_SUB: case MOP_MUL: case MOP_DIV: {
@@ -627,16 +720,17 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             if (!ensure_frames(vm, vm->frame_len+1)) { set_error(out,"call_frame_alloc_failed"); return 0; }
             size_t argc = (size_t)insn->a;
             size_t args_base = vm->stack_len - 1 - argc;   /* args start below func_ref */
-            if (!ensure_local_window(vm, vm->locals_len + callee.as.func.local_count)) { set_error(out,"call_local_alloc_failed"); return 0; }
-            size_t lb = vm->locals_len;
+            size_t local_count = callee.as.func.local_count > argc ? callee.as.func.local_count : argc;
+            size_t lb = frame ? (size_t)frame->local_base + (size_t)frame->local_count : vm->locals_len;
+            if (!ensure_local_window(vm, lb + local_count)) { set_error(out,"call_local_alloc_failed"); return 0; }
             for (size_t i = 0; i < argc; ++i) vm->locals[lb+i] = vm->stack[args_base+i];
-            for (size_t i = argc; i < callee.as.func.local_count; ++i) vm->locals[lb+i] = mval_none();
-            vm->locals_len += callee.as.func.local_count;
+            for (size_t i = argc; i < local_count; ++i) vm->locals[lb+i] = mval_none();
+            vm->locals_len = lb + local_count;
             vm->stack_len = args_base;   /* pop args + func_ref */
             vm->frames[vm->frame_len++] = (MFrame){
                 .frame_id=(uint32_t)vm->frame_len, .return_pc=pc+1,
                 .base=(uint32_t)vm->stack_len, .local_base=(uint32_t)lb,
-                .local_count=callee.as.func.local_count, .function=callee.as.func
+                .local_count=(uint32_t)local_count, .function=callee.as.func
             };
             pc = callee.as.func.address; break;
         }
@@ -649,13 +743,14 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             if (callee.tag!=MVAL_FUNC){set_error(out,"call_val_non_function");return 0;}
             if (!ensure_frames(vm,vm->frame_len+1)){set_error(out,"call_val_frame_alloc_failed");return 0;}
             size_t args_base=vm->stack_len-argc;
-            if (!ensure_local_window(vm,vm->locals_len+callee.as.func.local_count)){set_error(out,"call_val_local_alloc_failed");return 0;}
-            size_t lb=vm->locals_len;
+            size_t local_count=callee.as.func.local_count>argc?callee.as.func.local_count:argc;
+            size_t lb=frame?(size_t)frame->local_base+(size_t)frame->local_count:vm->locals_len;
+            if (!ensure_local_window(vm,lb+local_count)){set_error(out,"call_val_local_alloc_failed");return 0;}
             for(size_t i=0;i<argc;++i) vm->locals[lb+i]=vm->stack[args_base+i];
-            for(size_t i=argc;i<callee.as.func.local_count;++i) vm->locals[lb+i]=mval_none();
-            vm->locals_len+=callee.as.func.local_count;
+            for(size_t i=argc;i<local_count;++i) vm->locals[lb+i]=mval_none();
+            vm->locals_len=lb+local_count;
             vm->stack_len=args_base-1;
-            vm->frames[vm->frame_len++]=(MFrame){.frame_id=(uint32_t)vm->frame_len,.return_pc=pc+1,.base=(uint32_t)vm->stack_len,.local_base=(uint32_t)lb,.local_count=callee.as.func.local_count,.function=callee.as.func};
+            vm->frames[vm->frame_len++]=(MFrame){.frame_id=(uint32_t)vm->frame_len,.return_pc=pc+1,.base=(uint32_t)vm->stack_len,.local_base=(uint32_t)lb,.local_count=(uint32_t)local_count,.function=callee.as.func};
             pc=callee.as.func.address; break;
         }
 
@@ -671,7 +766,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
                 size_t local_end=(size_t)ended.local_base+(size_t)ended.local_count;
                 if (local_end>vm->locals_len) local_end=vm->locals_len;
                 for(size_t i=ended.local_base;i<local_end;++i) mvalue_release_temp(&vm->locals[i]);
-                if (local_end==vm->locals_len) vm->locals_len=ended.local_base;
+                vm->locals_len=ended.local_base;
             }
             vm->stack_len=ended.base;
             if (!push(vm,ret)){set_error(out,"return_push_failed");return 0;}
