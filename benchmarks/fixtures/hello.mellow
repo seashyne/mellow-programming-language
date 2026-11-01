@@ -1,0 +1,6 @@
+// hello.mellow — ตัวอย่างเริ่มต้น (MellowLang v1.0.1)
+
+print("Hello from MellowLang!")
+keep score = 0
+score = score + 1
+print("score = " + score)

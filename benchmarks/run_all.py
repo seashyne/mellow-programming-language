@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BENCHMARKS = ROOT / "benchmarks"
 NATIVE_VS_ZIG = BENCHMARKS / "native_vs_zig"
 DEFAULT_MELLOW_BINARY = ROOT / "build" / "standalone-release" / "Release" / "mellow.exe"
-DEFAULT_STANDALONE_SOURCE = ROOT / "examples" / "hello.mellow"
+DEFAULT_STANDALONE_SOURCE = BENCHMARKS / "fixtures" / "hello.mellow"
 LOCAL_ZIG = ROOT / "tools" / "zig" / "zig-x86_64-windows-0.16.0" / "zig.exe"
 
 sys.path.insert(0, str(ROOT / "src"))

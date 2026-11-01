@@ -63,7 +63,10 @@ Jobs: `workspace` (boundary gate), `native` (CTest), `nativePy` (`tests/native`)
 Docs-only edits map to no jobs; `.github/`, `scripts/`, `pyproject.toml`, and
 `setup.py` map to all jobs. Run `workspace` plus the touched jobs before
 reporting work complete; do not run the benchmark job unless
-`benchmarks/` or the runtime hot paths changed. The script exits 1 and lists the
+`benchmarks/` or the runtime hot paths changed. The benchmark harness reads its
+standalone workload from `benchmarks/fixtures/hello.mellow`, never from
+`examples/`, because `examples/` is user-facing sample code that gets rewritten.
+The script exits 1 and lists the
 failed jobs, so compare its failures against the pre-existing set before
 attributing them to a change.
 
