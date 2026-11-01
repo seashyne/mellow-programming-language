@@ -55,6 +55,7 @@ fix the ignore rule before continuing.
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-changed.ps1 -ListOnly -ByRoot   # what would run
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-changed.ps1                     # run those jobs
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-changed.ps1 -Base main          # branch diff
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-changed.ps1 -Only workspace,nativePy
 ```
 
 Jobs: `workspace` (boundary gate), `native` (CTest), `nativePy` (`tests/native`),
@@ -62,7 +63,9 @@ Jobs: `workspace` (boundary gate), `native` (CTest), `nativePy` (`tests/native`)
 Docs-only edits map to no jobs; `.github/`, `scripts/`, `pyproject.toml`, and
 `setup.py` map to all jobs. Run `workspace` plus the touched jobs before
 reporting work complete; do not run the benchmark job unless
-`benchmarks/` or the runtime hot paths changed.
+`benchmarks/` or the runtime hot paths changed. The script exits 1 and lists the
+failed jobs, so compare its failures against the pre-existing set before
+attributing them to a change.
 
 ## Moving trees
 

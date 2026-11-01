@@ -1,5 +1,6 @@
 param(
     [string]$Base = "HEAD",
+    [string]$Only = "",
     [switch]$ListOnly,
     [switch]$ByRoot
 )
@@ -8,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
 
-$jobs = [ordered]@{
+$checkJobs = [ordered]@{
     workspace = @("python", "-m", "pytest", "tests/test_workspace_boundaries.py", "-q")
     native    = @("ctest", "--test-dir", "build/standalone-release", "-C", "Release", "--output-on-failure")
     nativePy  = @("python", "-m", "pytest", "tests/native", "-q")
@@ -35,8 +36,8 @@ function Get-JobsForPath {
         '^benchmarks/'                          { return @("benchmark") }
         '^(starter_packages|frameworks|mellow_packages|packages)/' { return @("packages") }
         '^(apps|docs|examples|project_template|sdk|plugin_sdk|vscode-extension|packaging)/' { return @() }
-        '^(\.github|scripts)/'                  { return $jobs.Keys }
-        '^(pyproject\.toml|setup\.py)$'         { return $jobs.Keys }
+        '^(\.github|scripts)/'                  { return $checkJobs.Keys }
+        '^(pyproject\.toml|setup\.py)$'         { return $checkJobs.Keys }
         default                                 { return @() }
     }
 }
@@ -53,10 +54,18 @@ function Invoke-Git {
 }
 
 function Invoke-Job {
-    param([string[]]$Command)
-    $arguments = @($Command[1..($Command.Count - 1)])
-    & $Command[0] @arguments
-    return $LASTEXITCODE
+    param([string]$Name)
+    $command = $script:checkJobs[$Name]
+    $executable = $command[0]
+    if (-not (Get-Command $executable -CommandType Application -ErrorAction SilentlyContinue) -and
+        -not (Get-Command $executable -ErrorAction SilentlyContinue)) {
+        Write-Host "    '$executable' is not available, so this job could not run."
+        return $true
+    }
+    $arguments = @($command[1..($command.Count - 1)])
+    # Piping keeps the child output on the host so only the boolean reaches the caller.
+    & $executable @arguments | Out-Host
+    return ($LASTEXITCODE -ne 0)
 }
 
 $changed = Invoke-Git @("diff", "--name-only", $Base)
@@ -68,7 +77,23 @@ if ($changed.Count -eq 0) {
     return
 }
 
-$selected = @($changed | ForEach-Object { Get-JobsForPath $_ } | Sort-Object -Unique)
+$wanted = @{}
+foreach ($path in $changed) {
+    foreach ($name in Get-JobsForPath $path) {
+        if ($name) { $wanted[$name] = $true }
+    }
+}
+# Keep the declared order so cheap gates run before the benchmark job.
+$selected = @($checkJobs.Keys | Where-Object { $wanted[$_] })
+
+$onlyNames = @($Only -split "[,; ]+" | Where-Object { $_ })
+if ($onlyNames.Count) {
+    $unknown = @($onlyNames | Where-Object { -not $checkJobs.Contains($_) })
+    if ($unknown.Count) {
+        throw "Unknown job(s): $($unknown -join ', '). Known: $($checkJobs.Keys -join ', ')"
+    }
+    $selected = @($selected | Where-Object { $onlyNames -contains $_ })
+}
 
 Write-Host "Changed files : $($changed.Count)"
 if ($ByRoot) {
@@ -79,15 +104,15 @@ if ($ByRoot) {
         Write-Host ("  {0,6}  {1}" -f $_.Count, $_.Name)
     }
 }
-Write-Host "Affected jobs : $(if ($selected.Count) { $selected -join ', ' } else { 'none (docs-only change)' })"
+Write-Host "Affected jobs : $(if ($selected.Count) { $selected -join ', ' } else { 'none' })"
 
 if ($ListOnly) { return }
 
 $failed = @()
 foreach ($name in $selected) {
     Write-Host ""
-    Write-Host "==> $($name): $($jobs[$name] -join ' ')"
-    if ((Invoke-Job $jobs[$name]) -ne 0) { $failed += $name }
+    Write-Host "==> $($name): $($checkJobs[$name] -join ' ')"
+    if (Invoke-Job $name) { $failed += $name }
 }
 
 Write-Host ""
