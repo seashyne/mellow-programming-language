@@ -12,6 +12,7 @@ tests/.pytest-work/
 pytest-cache-files-*/
 .tmp_money_finance_test/
 .tmp_data_core_test/
+.tmp_melv_test*/
 .tmp/
 .mellow-data-benchmark-*/
 tmp/
@@ -37,12 +38,15 @@ replay*.jsonl
 .mellow_aliases.json
 $null
 
+# Vendored toolchains downloaded by the benchmark runners (e.g. tools/zig).
+/tools/
+
 # Local package installs/cache. Keep curated registry fixtures tracked explicitly.
 mellow_packages/installed/
 examples/mellow_packages/installed/
 
 .wrangler/
-deploy/cloudflare-public-registry/.wrangler/
+apps/deploy/cloudflare-public-registry/.wrangler/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

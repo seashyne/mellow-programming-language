@@ -15,7 +15,7 @@ area that matches the task and stay inside it.
 | Measure performance or read benchmark reports | `benchmarks/` |
 | Work on packages or frameworks | `starter_packages/`, `mellow_packages/`, `frameworks/` |
 | Work on integrations | `sdk/`, `plugin_sdk/`, `vscode-extension/` |
-| Build releases or deploy services | `packaging/`, `deploy/`, `.github/` |
+| Build releases or deploy services | `packaging/`, `apps/deploy/`, `.github/` |
 | Learn the language or add examples | `docs/`, `examples/` |
 
 ## Directory Groups
@@ -39,6 +39,10 @@ area that matches the task and stay inside it.
 - `frameworks/` - Optional framework packages maintained with the repository.
 - `sdk/`, `plugin_sdk/` - Host-language and plugin integration surfaces.
 
+### Apps
+
+- `apps/deploy/` - Registry and service deployment projects, each with its own manifest.
+
 ### Tools And Delivery
 
 - `scripts/` - Development, verification, release, and cleanup commands.
@@ -46,7 +50,8 @@ area that matches the task and stay inside it.
 - `project_template/` - Template copied into new user projects.
 - `.github/` - CI and GitHub configuration.
 - `packaging/` - Native/distribution packaging configuration.
-- `deploy/` - Registry and service deployment projects.
+- `packages/npm/` - npm installer wrapper that downloads a built distribution.
+- `.qoder/skills/` - Project skills that encode these layout and verification rules for agents.
 
 ### Documentation
 
@@ -79,6 +84,7 @@ These should not be committed unless there is a specific fixture reason:
 - `mellow_packages/installed/`
 - `examples/mellow_packages/installed/`
 - `native/**/build/`
+- `tools/` (vendored toolchains downloaded by benchmark runners)
 - root `.mellow_aliases.json`, `.mellow_imports.json`, `.mellow_runtime.json`
 - root `mellow.lock` unless it is intentionally used as a project-level fixture
 - `mellow_models/`
