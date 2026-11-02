@@ -7,7 +7,7 @@ import textwrap
 from pathlib import Path
 
 from mellowlang import __version__
-from mellowlang.cli import main as cli_main
+from mellowlang.cli.main import main as cli_main
 from mellowlang.compiler import Compiler
 from mellowlang.vm import MellowVM, RunConfig
 

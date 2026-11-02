@@ -11,7 +11,8 @@ import pytest
 # Allow running tests without installing the package
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src")))
 
-from mellowlang.cli import main as cli_main, _print_pretty_error
+from mellowlang.cli.main import main as cli_main
+from mellowlang.cli.common import _print_pretty_error
 from mellowlang.compiler.compiler import Compiler
 from mellowlang.vm.vm import MellowVM, RunConfig
 from mellowlang.error_core import MellowLangRuntimeError
