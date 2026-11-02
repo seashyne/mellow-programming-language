@@ -18,6 +18,7 @@ Notes:
 import asyncio
 import base64
 import importlib
+import inspect
 import json
 import threading
 import time
@@ -34,6 +35,12 @@ def _load_websockets() -> Any:
             "NET_WS_DEPENDENCY_MISSING: install WebSocket support with "
             "`pip install mellowlang[net]`"
         ) from exc
+
+
+def _headers_kwarg(websockets: Any) -> str:
+    # websockets 14 renamed extra_headers to additional_headers in the asyncio client.
+    params = inspect.signature(websockets.connect).parameters
+    return "additional_headers" if "additional_headers" in params else "extra_headers"
 
 
 def http_post_json(url: str, payload: Dict[str, Any], *, timeout_s: float = 10.0, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
@@ -116,7 +123,8 @@ class WebSocketManager:
     async def _ws_task(self, hid: int, url: str, *, headers: Optional[Dict[str, str]] = None) -> None:
         try:
             websockets = _load_websockets()
-            async with websockets.connect(url, extra_headers=headers) as ws:
+            connect_kwargs = {} if not headers else {_headers_kwarg(websockets): headers}
+            async with websockets.connect(url, **connect_kwargs) as ws:
                 with self._lock:
                     st = self._states.get(hid)
                     if st:
