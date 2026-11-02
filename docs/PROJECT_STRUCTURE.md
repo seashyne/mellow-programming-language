@@ -8,7 +8,8 @@ area that matches the task and stay inside it.
 | Task | Directory |
 | --- | --- |
 | Change syntax, compiler, CLI, or Python compatibility runtime | `src/mellowlang/` |
-| Change the default C compiler/runtime | `native/` |
+| Change the default engine's C extension | `native/mellowvm/` |
+| Change the standalone native runtime and `mellow` CLI | `native/standalone/` |
 | Change the language contract | `spec/`, `SPEC.md` |
 | Add built-in library behavior | `stdlib/` |
 | Add or update tests | `tests/` |
@@ -23,7 +24,11 @@ area that matches the task and stay inside it.
 ### Language
 
 - `src/mellowlang/` - Compiler v3 pipeline, CLI, compatibility VM, package manager, LSP, and host services.
-- `native/` - Native C compiler/runtime and CMake targets used by the default engine.
+- `native/` - Native C code, split by execution surface:
+  - `native/standalone/` - the full-native compiler and runtime that produce the `mellow` executable; no Python.
+  - `native/mellowvm/` - the CPython extension used by `--engine=c`.
+  - `native/melv/`, `native/sm/` - asset and codec natives built by `setup.py` and the standalone CMake.
+  - `native/mmg_gpu/`, `native/mellowllm/` - optional GPU and LLM natives.
 - `spec/` - Machine-readable syntax locks and language conformance material.
 - `stdlib/` - Built-in standard-library modules.
 
@@ -82,6 +87,7 @@ These should not be committed unless there is a specific fixture reason:
 - `node_modules/`
 - `.wrangler/` in deployment workspaces
 - `mellow_packages/installed/`
+- `mellow_agent_packages/`
 - `examples/mellow_packages/installed/`
 - `native/**/build/`
 - `tools/` (vendored toolchains downloaded by benchmark runners)

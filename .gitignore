@@ -45,6 +45,13 @@ $null
 mellow_packages/installed/
 examples/mellow_packages/installed/
 
+# Agent package installs/cache, created at runtime by src/mellowlang/agents/registry.py.
+mellow_agent_packages/
+
+# Binaries left in the working tree by hand-run benchmark comparisons.
+/sum_loop_zig.exe
+/sum_loop_zig.pdb
+
 .wrangler/
 apps/deploy/cloudflare-public-registry/.wrangler/
 *.sqlite

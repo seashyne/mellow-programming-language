@@ -18,6 +18,7 @@ MELLOW_SOURCE_ROOTS = {
 }
 ROOT_IMPLEMENTATION_FILES = {"main.py", "setup.py"}
 IMPLEMENTATION_SUFFIXES = {".py", ".c", ".h", ".js", ".ts"}
+ROOT_ARTIFACT_SUFFIXES = {".exe", ".pdb", ".dll", ".obj", ".lib", ".o", ".zip"}
 STRUCTURE_DOC = "docs/PROJECT_STRUCTURE.md"
 
 
@@ -51,6 +52,15 @@ def test_repository_root_stays_free_of_implementation_files() -> None:
     assert sorted(extras) == sorted(ROOT_IMPLEMENTATION_FILES)
 
 
+def test_repository_root_stays_free_of_build_artifacts() -> None:
+    artifacts = [
+        path
+        for path in _tracked_files()
+        if "/" not in path and Path(path).suffix.lower() in ROOT_ARTIFACT_SUFFIXES
+    ]
+    assert not artifacts, f"commit build output under an ignored directory instead: {artifacts}"
+
+
 def test_mellow_sources_live_only_under_declared_roots() -> None:
     stray = sorted(
         {
@@ -75,3 +85,14 @@ def test_every_top_level_directory_is_documented() -> None:
     tracked_dirs = sorted({path.split("/", 1)[0] for path in _tracked_files() if "/" in path})
     missing = [name for name in tracked_dirs if f"`{name}" not in documented]
     assert not missing, f"add {missing} to {STRUCTURE_DOC}"
+
+
+def test_every_native_surface_is_documented() -> None:
+    documented = (ROOT / STRUCTURE_DOC).read_text(encoding="utf-8")
+    surfaces = {
+        path.split("/")[1]
+        for path in _tracked_files()
+        if path.startswith("native/") and len(path.split("/")) > 2
+    }
+    missing = sorted(name for name in surfaces if f"`native/{name}/" not in documented)
+    assert not missing, f"native/ holds several surfaces; document {missing} in {STRUCTURE_DOC}"
