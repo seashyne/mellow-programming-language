@@ -40,6 +40,7 @@ typedef struct {
 typedef struct {
     Variable vars[256];
     unsigned char is_i64[256];
+    uint16_t i64_list_len[256];
     int len;
 } Scope;
 
@@ -106,6 +107,7 @@ int scope_slot(Scope *scope, const char *name, size_t len, int create);
 Function *find_function(Compiler *c, const char *name, size_t len);
 
 int resolve_builtin_id(Compiler *c, const char *name, size_t len);
+Function *resolve_package_function(Compiler *c, const char *name, size_t len);
 int parse_import_statement(Compiler *c, const char *text);
 int compile_expr(Compiler *c, const char *text);
 

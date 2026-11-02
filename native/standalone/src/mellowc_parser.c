@@ -129,6 +129,7 @@ static int parse_primary(Expr *e) {
             }
             if (!expect(e, TK_RP, "expected ')' after arguments")) return 0;
             if (id) return emit(c, MOP_SYSCALL, id, argc, id == 1 ? 0 : 1) >= 0;
+            if (!fn) fn = resolve_package_function(c, token.start, token.len);
             if (!fn) { set_error(c, "unknown function"); return 0; }
             if (emit(c, MOP_PUSH_CONST, fn->const_slot, 0, 0) < 0) return 0;
             return emit(c, MOP_CALL, argc, 0, 0) >= 0;

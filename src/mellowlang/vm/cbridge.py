@@ -138,6 +138,36 @@ class NativeHostAdapter:
         self._data.close_all()
 
 
+def _lock_native_storage_dir(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the config the native engine should run with.
+
+    Project mode locks storage under <project_root>/<sandbox_root>; the Python VM
+    does this in its constructor, so the native path needs the same resolution.
+    A copy keeps the caller's config untouched for the Python fallback.
+    """
+    if not bool(config.get("project_mode", False)):
+        return config
+    project_root = os.path.abspath(str(config.get("project_root") or os.getcwd()))
+    sandbox_root = str(config.get("sandbox_root") or "saves").strip().strip('"').strip("'").replace("\\", "/")
+    if not sandbox_root:
+        sandbox_root = "saves"
+    locked = dict(config)
+    locked["project_root"] = project_root
+    locked["sandbox_root"] = sandbox_root
+    base = config.get("storage_dir")
+    raw = "" if base is None else str(base).strip().strip('"').strip("'")
+    if raw in ("", ".", "mellow_saves", "saves"):
+        locked["storage_dir"] = os.path.join(project_root, sandbox_root)
+        return locked
+    normalized = raw.replace("\\", "/")
+    if os.path.isabs(normalized) and os.path.normcase(os.path.abspath(normalized)).startswith(
+        os.path.normcase(os.path.join(project_root, sandbox_root))
+    ):
+        return locked  # already inside the sandbox — do not nest it again
+    locked["storage_dir"] = os.path.join(project_root, sandbox_root, normalized.lstrip("/"))
+    return locked
+
+
 def _storage_path_unsafe(value: Any) -> bool:
     raw = ("" if value is None else str(value)).strip().strip('"').strip("'").replace("\\", "/")
     if not raw or raw == ".":
@@ -226,12 +256,13 @@ def run_bytecode_ex(
     ext = _load_ext()
     native_available = ext is not None
     if ext is not None:
-        adapter = NativeHostAdapter(host, config)
+        native_config = _lock_native_storage_dir(config)
+        adapter = NativeHostAdapter(host, native_config)
         try:
             _validate_native_storage_bytecode(bytecode, config)
             run_kwargs = {
                 'bytecode': bytecode,
-                'config': config,
+                'config': native_config,
                 'func_table': func_table,
                 'event_table': event_table,
                 'host': adapter,

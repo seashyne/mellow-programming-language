@@ -138,6 +138,42 @@ STDLIB_CALLS = {
     "ledger_balance": "std.ledger.balance",
     "ledger.entries": "std.ledger.entries",
     "ledger_entries": "std.ledger.entries",
+    "storage_dir": "std.storage.dir",
+    "storage.dir": "std.storage.dir",
+    "storage_pwd": "std.storage.pwd",
+    "storage.pwd": "std.storage.pwd",
+    "storage_info": "std.storage.info",
+    "storage.info": "std.storage.info",
+    "save_data": "std.storage.save",
+    "storage.save": "std.storage.save",
+    "load_data": "std.storage.load",
+    "storage.load": "std.storage.load",
+    "mkdir": "std.storage.mkdir",
+    "storage.mkdir": "std.storage.mkdir",
+    "fs_read": "std.fs.read",
+    "fs.read": "std.fs.read",
+    "fs_write": "std.fs.write",
+    "fs.write": "std.fs.write",
+    "fs_append": "std.fs.append",
+    "fs.append": "std.fs.append",
+    "fs_exists": "std.fs.exists",
+    "fs.exists": "std.fs.exists",
+    "fs_delete": "std.fs.delete",
+    "fs.delete": "std.fs.delete",
+    "fs_mkdir": "std.fs.mkdir",
+    "fs.mkdir": "std.fs.mkdir",
+    "fs_pwd": "std.fs.pwd",
+    "fs.pwd": "std.fs.pwd",
+    "file_read": "std.file.read",
+    "file.read": "std.file.read",
+    "file_write": "std.file.write",
+    "file.write": "std.file.write",
+    "file_append": "std.file.append",
+    "file.append": "std.file.append",
+    "file_exists": "std.file.exists",
+    "file.exists": "std.file.exists",
+    "file_delete": "std.file.delete",
+    "file.delete": "std.file.delete",
 }
 
 
@@ -151,6 +187,53 @@ def _module_syscall(module: str, function: str) -> str:
     if mod in MODULE_ALLOWLIST and func in MODULE_ALLOWLIST[mod]:
         return MODULE_ALLOWLIST[mod][func]
     return f"std.{mod}.{func}"
+
+
+# Positional parameter names of the syscalls that scripts call with named
+# arguments. The instruction format has no keyword slot, so a named argument is
+# lowered into its positional slot (missing slots become none, which each host
+# builtin reads as "use my default").
+SYSCALL_ARGUMENTS: Dict[str, tuple] = {
+    "std.storage.dir": ("path",),
+    "std.storage.save": ("key", "value"),
+    "std.storage.load": ("key",),
+    "std.storage.mkdir": ("path",),
+    "std.fs.read": ("path", "mode"),
+    "std.fs.write": ("path", "data", "mode"),
+    "std.fs.append": ("path", "data", "mode"),
+    "std.fs.exists": ("path",),
+    "std.fs.delete": ("path",),
+    "std.fs.mkdir": ("path",),
+    "std.file.read": ("path", "mode"),
+    "std.file.write": ("path", "data", "mode"),
+    "std.file.append": ("path", "data", "mode"),
+    "std.file.exists": ("path",),
+    "std.file.delete": ("path",),
+}
+
+
+def _bind_call_arguments(syscall_name: str, args: List[Expr],
+                         kwargs: List[tuple]) -> List[Expr]:
+    signature = SYSCALL_ARGUMENTS.get(syscall_name)
+    if signature is None:
+        raise UnsupportedLoweringError(
+            "named arguments are not yet lowered in IR pipeline")
+    slots = list(args)
+    filled = set(range(len(slots)))
+    for raw_name, value in kwargs:
+        name = str(raw_name).strip().lower().lstrip("*")
+        if name not in signature:
+            raise UnsupportedLoweringError(
+                f"unknown named argument '{raw_name}' for syscall: {syscall_name}")
+        index = signature.index(name)
+        if index in filled:
+            raise UnsupportedLoweringError(
+                f"duplicate argument '{raw_name}' for syscall: {syscall_name}")
+        while len(slots) <= index:
+            slots.append(Literal(None))
+        slots[index] = value
+        filled.add(index)
+    return slots
 
 
 @dataclass
@@ -446,12 +529,12 @@ class IRLowerer:
         elif isinstance(expr, Call):
             syscall_name = STDLIB_CALLS.get(str(expr.name).lower())
             if syscall_name:
-                if expr.kwargs:
-                    raise UnsupportedLoweringError("named arguments are not yet lowered in IR pipeline")
+                call_args = (_bind_call_arguments(syscall_name, expr.args, expr.kwargs)
+                             if expr.kwargs else list(expr.args))
                 self.emit("PUSH", syscall_name, line=line, col=col)
-                for arg in expr.args:
+                for arg in call_args:
                     self._expr(arg)
-                self.emit("SYSCALL", len(expr.args), line=line, col=col)
+                self.emit("SYSCALL", len(call_args), line=line, col=col)
                 return
             for arg in expr.args:
                 self._expr(arg)

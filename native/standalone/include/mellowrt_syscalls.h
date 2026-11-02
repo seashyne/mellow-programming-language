@@ -20,6 +20,13 @@ typedef struct {
     uint64_t scheduler_worker_changes;
     int recv_would_block;
     void *native_registry;
+    char storage_dir[512];
+    MValue server_request;
+    MValue server_response_body;
+    int server_response_set;
+    int server_response_status;
+    char server_response_content_type[64];
+    char syscall_error[256];
 } MellowRuntimeContext;
 
 int mellowrt_default_syscall(

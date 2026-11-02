@@ -10,7 +10,8 @@ from ..error_core import MellowLangRuntimeError
 from ..range_core import MellowLangRange
 from ..data_core import DataCoreError, DataStreamManager
 from .debugger import DebuggerMixin
-from .storage import StorageMixin
+from .storage import (STORAGE_BUILTIN_NAMES, STORAGE_SLOT_NAMES,
+                      STORAGE_SYSCALL_BUILTINS, StorageMixin)
 
 class MellowLangVM(DebuggerMixin, StorageMixin):
     def __init__(self, bytecode, func_table=None, event_table=None, *, config=None, host: HostRegistry | None = None, replay: ReplayConfig | None = None, filename: str | None = None, source_lines: list[str] | None = None, line_map: list[int] | None = None, col_map: list[int] | None = None, end_line_map: list[int] | None = None, end_col_map: list[int] | None = None, span_map: list[dict] | None = None):
@@ -720,7 +721,7 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
             n = int(instr[1]); d = {}
             for _ in range(n):
                 v = self.stack.pop(); k = self.stack.pop(); d[str(k)] = v
-            self.stack.append(d)
+            self.stack.append({k: d[k] for k in reversed(d)})
         elif op == _Op.POP:
             if self.stack: self.stack.pop()
         elif op == _Op.LEN:
@@ -1047,6 +1048,7 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
                         if not isinstance(key, str):
                             key = str(key)
                         d[key] = val
+                    d = {key: d[key] for key in reversed(d)}  # pairs arrive last-first
                     self._enforce_value_limits(d)
                     self.stack.append(d)
 
@@ -1106,30 +1108,9 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
                         self.pc += 1
                         continue
                     # Built-in helpers (game/AI friendly) implemented by VM
-                    # storage_dir/storage_pwd allow scripts to choose where files are written (Python/Lua-like UX)
-                    if f_name in (
-                        'mkdir','save_data','load_data',
-                        'file_read','file_write','file_append','file_exists','file_delete',
-                        'storage_dir','storage_pwd','storage_info',
-                        # Secure save system (v1.3.4)
-                        'save_init','save_set','save_get','save_commit','save_load',
-                        'save_list','save_delete','save_clear',
-                        # Hybrid (Level C) signed saves + networking (v1.3.5)
-                        'save_commit_signed','save_load_signed',
-                        'net_http_post','net_http_get',
-                        'net_ws_connect','net_ws_send','net_ws_recv','net_ws_close','net_ws_state',
-                        # Host filesystem (dev/tooling) - permission gated in project mode
-                        'fs_read','fs_write','fs_append','fs_exists','fs_delete','fs_mkdir','fs_pwd',
-                    ):
-                        # storage_dir/storage_pwd/storage_info are safe even if allow_storage is false
-                        # (they don't touch the filesystem; they only configure/query sandbox root).
-                        if f_name not in ('storage_dir','storage_pwd','storage_info',
-                                          'save_init','save_set','save_get','save_commit','save_load','save_list','save_delete','save_clear',
-                                          'save_commit_signed','save_load_signed',
-                                          'net_http_post','net_http_get','net_ws_connect','net_ws_send','net_ws_recv','net_ws_close','net_ws_state',
-                                          'fs_read','fs_write','fs_append','fs_exists','fs_delete','fs_mkdir','fs_pwd'):
-                            if not self.config.get('allow_storage', True):
-                                self._raise_sandbox('storage is disabled')
+                    if f_name in STORAGE_BUILTIN_NAMES:
+                        if f_name in STORAGE_SLOT_NAMES and not self.config.get('allow_storage', True):
+                            self._raise_sandbox('storage is disabled')
                         # pop call args (same calling convention as syscalls)
                         args = []
                         for _ in range(argc):
@@ -1676,10 +1657,7 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
                         import difflib
                         candidates = set()
                         candidates.update(getattr(self, 'func_table', {}).keys())
-                        candidates.update(['mkdir','save_data','load_data','file_read','file_write','file_append','file_exists','file_delete',
-                                           'storage_dir','storage_pwd','storage_info',
-                                           'save_init','save_set','save_get','save_commit','save_load','save_list','save_delete','save_clear'])
-                        candidates.update(['storage_dir','storage_pwd','storage_info'])
+                        candidates.update(STORAGE_BUILTIN_NAMES)
                         # common stdlib helpers (exposed as functions)
                         candidates.update(['vec2','vec3','vec','vector','range','wait','show','print'])
                         sugg = difflib.get_close_matches(str(f_name), sorted(candidates), n=3, cutoff=0.6)
@@ -1787,6 +1765,9 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
                         args.append(self.stack.pop() if self.stack else None)
                     args.reverse()
                     name = self.stack.pop() if self.stack else ''
+                    if name in STORAGE_SYSCALL_BUILTINS:
+                        self._dispatch_storage_syscall(str(name), args, argc)
+                        continue
 
                     # v1.4.7: list.map/filter/reduce with user-defined function support
                     if name in ("std.list.map", "std.list.filter", "std.list.reduce") and len(args) >= 2:

@@ -1,0 +1,70 @@
+# Storage slots, sandboxed files and host filesystem, run by both engines.
+# Each check is asserted in-language, so a mismatch exits with a non-zero code.
+storage_dir("mellow_fixture_saves")
+mkdir("profiles")
+
+let hero = {"name": "mellow", "hp": 3, "tags": ["swift", "bright"], "alive": true, "score": 1.5}
+let saved = storage.save("profiles/hero", hero)
+if not saved:
+    exit(2)
+let loaded = load_data("profiles/hero")
+if loaded["name"] != "mellow":
+    exit(3)
+if loaded["hp"] != 3:
+    exit(4)
+if loaded["tags"][1] != "bright":
+    exit(5)
+if not loaded["alive"]:
+    exit(6)
+if loaded["score"] != 1.5:
+    exit(7)
+let ghost = load_data("profiles/ghost")
+if ghost:
+    exit(8)
+
+let here = storage_pwd()
+if here != "mellow_fixture_saves":
+    exit(9)
+let meta = storage_info()
+if meta["storage_dir"] != "mellow_fixture_saves":
+    exit(10)
+
+let wrote = file_write("notes.txt", "hello")
+if not wrote:
+    exit(11)
+let appended = file_append("notes.txt", " world")
+if not appended:
+    exit(12)
+let notes = file_read("notes.txt")
+if notes != "hello world":
+    exit(13)
+let present = file_exists("notes.txt")
+if not present:
+    exit(14)
+let removed = file_delete("notes.txt")
+if not removed:
+    exit(15)
+let gone = file_exists("notes.txt")
+if gone:
+    exit(16)
+
+let side = fs_write("side.txt", "host")
+if not side:
+    exit(17)
+let body = fs_read("side.txt")
+if body != "host":
+    exit(18)
+let dropped = fs_delete("side.txt")
+if not dropped:
+    exit(19)
+let still = fs_exists("side.txt")
+if still:
+    exit(20)
+let deep = fs_mkdir("nested/deep")
+if not deep:
+    exit(21)
+let outer = fs_exists("nested")
+if not outer:
+    exit(22)
+
+print("storage ok")

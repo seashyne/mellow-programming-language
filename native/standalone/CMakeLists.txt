@@ -36,20 +36,32 @@ message(STATUS "Mellow target architecture: ${MELLOW_TARGET_ARCH}")
 add_library(mellowrt_core STATIC
   src/mellowrt_core.c
   src/mellowrt_debug.c
+  src/mellowrt_ledger.c
+  src/mellowrt_money.c
   src/mellowrt_platform.c
   src/mellowrt_packages.c
   src/mellowrt_scheduler.c
+  src/mellowrt_server.c
+  src/mellowrt_sm_cli.c
+  src/mellowrt_storage.c
   src/mellowrt_syscalls.c
   src/mellow_runtime.c
   src/mellowc.c
   src/mellowc_lexer.c
   src/mellowc_modules.c
   src/mellowc_parser.c
+  ../sm/src/sm_native.c
 )
-target_include_directories(mellowrt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(mellowrt_core PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../sm/include
+)
 # MSVC exposes math through its C runtime and has no separate libm.
 if(NOT MSVC)
   target_link_libraries(mellowrt_core PUBLIC m)
+endif()
+if(WIN32)
+  target_link_libraries(mellowrt_core PUBLIC ws2_32)
 endif()
 
 add_executable(mellowrt src/mellowrt_main.c)
@@ -78,5 +90,17 @@ if(BUILD_TESTING)
   add_test(
     NAME mellow_core_conformance
     COMMAND mellow ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/fixtures/full_native_core.mellow
+  )
+  add_test(
+    NAME mellow_ledger_conformance
+    COMMAND mellow ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/fixtures/ledger_core.mellow
+  )
+  file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/storage-core)
+  add_test(
+    NAME mellow_storage_conformance
+    COMMAND mellow ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/fixtures/storage_core.mellow
+  )
+  set_tests_properties(mellow_storage_conformance PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/storage-core
   )
 endif()

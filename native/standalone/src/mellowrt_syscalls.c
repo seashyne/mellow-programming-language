@@ -4,6 +4,9 @@
 
 #include "mellowrt_syscalls.h"
 #include "mellowrt_scheduler.h"
+#include "mellowrt_money.h"
+#include "mellowrt_ledger.h"
+#include "mellowrt_storage.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -494,6 +497,7 @@ static MValue stats_map(const MellowRuntimeContext *ctx){
 int mellowrt_default_syscall(void *user, int32_t id, const MValue *args, size_t argc, MValue *out_result){
     MellowRuntimeContext *ctx=(MellowRuntimeContext*)user;
     *out_result=mval_none();
+    if (ctx) ctx->syscall_error[0]='\0';
     switch(id){
     case 1:{
         size_t i; for(i=0;i<argc;++i){if(i)fputc(' ',stdout);print_value(stdout,&args[i]);}
@@ -823,6 +827,107 @@ int mellowrt_default_syscall(void *user, int32_t id, const MValue *args, size_t 
         *out_result=mval_owned_copy(mode,strlen(mode));
         return 1;
     }
+    case 38:
+    case 39:
+    case 40:
+    case 41:
+    case 42:
+    case 43:
+    case 44:
+    case 45:
+    case 46:
+    case 47:
+    case 48:
+    case 49:
+        return mellowrt_money_syscall(id,args,argc,out_result);
+    case 56:
+    case 57:
+    case 58:
+    case 59:
+    case 60:
+        return mellowrt_ledger_syscall(id,args,argc,out_result,
+                                       ctx?ctx->syscall_error:NULL,
+                                       ctx?sizeof(ctx->syscall_error):0);
+    case 52:
+        if(argc!=0)return 0;
+        if(ctx&&ctx->server_request.tag!=MVAL_NONE) *out_result=clone_value(ctx,&ctx->server_request);
+        else {
+            MValue req=mval_none();
+            req.tag=MVAL_MAP;
+            req.as.map.len=req.as.map.cap=4;
+            req.as.map.keys=(MValue*)calloc(4,sizeof(MValue));
+            req.as.map.values=(MValue*)calloc(4,sizeof(MValue));
+            if(!req.as.map.keys||!req.as.map.values){free(req.as.map.keys);free(req.as.map.values);return 0;}
+            req.as.map.keys[0]=mval_owned_copy("method",6); req.as.map.values[0]=mval_owned_copy("GET",3);
+            req.as.map.keys[1]=mval_owned_copy("path",4); req.as.map.values[1]=mval_owned_copy("/",1);
+            req.as.map.keys[2]=mval_owned_copy("query",5); req.as.map.values[2]=mval_owned_copy("",0);
+            req.as.map.keys[3]=mval_owned_copy("body",4); req.as.map.values[3]=mval_owned_copy("",0);
+            *out_result=req;
+        }
+        return 1;
+    case 53:
+    case 54:{
+        const char *ct=(id==53)?"application/json":"text/plain; charset=utf-8";
+        if(argc!=1||!ctx)return 0;
+        mvalue_free(&ctx->server_response_body);
+        ctx->server_response_body=clone_value(ctx,&args[0]);
+        ctx->server_response_set=1;
+        ctx->server_response_status=200;
+        snprintf(ctx->server_response_content_type,sizeof(ctx->server_response_content_type),"%s",ct);
+        return 1;
+    }
+    case 55:{
+        const char *ct;
+        if(argc!=2||!ctx||args[0].tag!=MVAL_I64)return 0;
+        ct=(args[1].tag==MVAL_MAP||args[1].tag==MVAL_LIST)?"application/json":"text/plain; charset=utf-8";
+        mvalue_free(&ctx->server_response_body);
+        ctx->server_response_body=clone_value(ctx,&args[1]);
+        ctx->server_response_set=1;
+        ctx->server_response_status=(int)args[0].as.i64;
+        snprintf(ctx->server_response_content_type,sizeof(ctx->server_response_content_type),"%s",ct);
+        return 1;
+    }
+    case 50:{
+        double value, low, high, out;
+        if(argc!=3)return 0;
+        if(!numeric_value(&args[0],&value)||!numeric_value(&args[1],&low)||!numeric_value(&args[2],&high))return 0;
+        out=value<low?low:(value>high?high:value);
+        if(args[0].tag==MVAL_I64&&args[1].tag==MVAL_I64&&args[2].tag==MVAL_I64)*out_result=mval_i64((int64_t)out);
+        else *out_result=mval_f64(out);
+        return 1;
+    }
+    case 51:{
+        double a,b,t,out;
+        if(argc!=3)return 0;
+        if(!numeric_value(&args[0],&a)||!numeric_value(&args[1],&b)||!numeric_value(&args[2],&t))return 0;
+        out=a+(b-a)*t;
+        if(args[0].tag==MVAL_I64&&args[1].tag==MVAL_I64&&args[2].tag==MVAL_I64)*out_result=mval_i64((int64_t)out);
+        else *out_result=mval_f64(out);
+        return 1;
+    }
+    case 61:
+    case 62:
+    case 63:
+    case 64:
+    case 65:
+    case 66:
+    case 67:
+    case 68:
+    case 69:
+    case 70:
+    case 71:
+    case 72:
+    case 73:
+    case 74:
+    case 75:
+    case 76:
+    case 77:
+    case 78:
+        return mellowrt_storage_syscall(id,args,argc,out_result,
+                                        ctx?ctx->storage_dir:NULL,
+                                        ctx?sizeof(ctx->storage_dir):0,
+                                        ctx?ctx->syscall_error:NULL,
+                                        ctx?sizeof(ctx->syscall_error):0);
     default: return 0;
     }
 }

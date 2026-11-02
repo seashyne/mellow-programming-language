@@ -12,6 +12,7 @@ static int builtin_id(const char *name, size_t len) {
         {"str",5},{"type",6},
         {"abs",7},{"math.abs",7},{"floor",8},{"math.floor",8},{"ceil",9},{"math.ceil",9},
         {"sqrt",10},{"math.sqrt",10},{"min",11},{"math.min",11},{"max",12},{"math.max",12},
+        {"clamp",50},{"math.clamp",50},{"lerp",51},{"math.lerp",51},
         {"write",14},{"io.write",14},{"input",15},{"io.input",15},{"readline",15},{"io.readline",15},
         {"read_line",15},{"io.read_line",15},{"ask",15},{"io.ask",15},
         {"args",16},{"argv",16},{"sys.args",16},{"sys.argv",16},{"cwd",17},{"sys.cwd",17},
@@ -28,7 +29,46 @@ static int builtin_id(const char *name, size_t len) {
         {"canvas_circle",33},{"canvas.circle",33},
         {"canvas_save",34},{"canvas.save",34},
         {"workers",35},{"thread.workers",35},{"worker_count",36},{"thread.worker_count",36},
-        {"scheduler_mode",37},{"thread.scheduler_mode",37}
+        {"scheduler_mode",37},{"thread.scheduler_mode",37},
+        {"money",38},{"money_of",38},{"money.of",38},
+        {"money_add",39},{"money.add",39},
+        {"money_sub",40},{"money.sub",40},
+        {"money_mul",41},{"money.mul",41},
+        {"money_div",42},{"money.div",42},
+        {"money_quantize",43},{"money.quantize",43},
+        {"money_format",44},{"money.format",44},
+        {"money_amount",45},{"money.amount",45},
+        {"money_currency",46},{"money.currency",46},
+        {"money_eq",47},{"money.eq",47},
+        {"money_lt",48},{"money.lt",48},
+        {"money_gt",49},{"money.gt",49},
+        {"server_request",52},{"server.request",52},
+        {"server_json",53},{"server.json",53},
+        {"server_text",54},{"server.text",54},
+        {"server_status",55},{"server.status",55},
+        {"ledger_create",56},{"ledger.create",56},
+        {"ledger_post",57},{"ledger.post",57},
+        {"ledger_verify",58},{"ledger.verify",58},
+        {"ledger_balance",59},{"ledger.balance",59},
+        {"ledger_entries",60},{"ledger.entries",60},
+        {"storage_dir",61},{"storage.dir",61},
+        {"storage_pwd",62},{"storage.pwd",62},
+        {"storage_info",63},{"storage.info",63},
+        {"save_data",64},{"storage.save",64},
+        {"load_data",65},{"storage.load",65},
+        {"mkdir",66},{"storage.mkdir",66},
+        {"fs_read",67},{"fs.read",67},
+        {"fs_write",68},{"fs.write",68},
+        {"fs_append",69},{"fs.append",69},
+        {"fs_exists",70},{"fs.exists",70},
+        {"fs_delete",71},{"fs.delete",71},
+        {"fs_mkdir",72},{"fs.mkdir",72},
+        {"fs_pwd",73},{"fs.pwd",73},
+        {"file_read",74},{"file.read",74},
+        {"file_write",75},{"file.write",75},
+        {"file_append",76},{"file.append",76},
+        {"file_exists",77},{"file.exists",77},
+        {"file_delete",78},{"file.delete",78}
     };
     size_t i;
     for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)
@@ -40,7 +80,10 @@ static int module_is_builtin(const char *module) {
     return strcmp(module, "io") == 0 || strcmp(module, "sys") == 0 ||
            strcmp(module, "math") == 0 || strcmp(module, "time") == 0 ||
            strcmp(module, "gc") == 0 || strcmp(module, "thread") == 0 ||
-           strcmp(module, "chan") == 0 || strcmp(module, "canvas") == 0;
+           strcmp(module, "chan") == 0 || strcmp(module, "canvas") == 0 ||
+           strcmp(module, "money") == 0 || strcmp(module, "server") == 0 ||
+           strcmp(module, "ledger") == 0 || strcmp(module, "storage") == 0 ||
+           strcmp(module, "fs") == 0 || strcmp(module, "file") == 0;
 }
 
 static int add_module_alias(Compiler *c, const char *module, const char *alias) {
@@ -68,6 +111,27 @@ static int add_module_alias(Compiler *c, const char *module, const char *alias) 
     return 1;
 }
 
+static int add_package_alias(Compiler *c, const char *package_name, const char *alias) {
+    int i;
+    if (!alias || !*alias) alias = package_name;
+    for (i = 0; i < c->module_alias_count; ++i) {
+        if (strcmp(c->module_aliases[i].alias, alias) == 0) {
+            snprintf(c->module_aliases[i].module, sizeof(c->module_aliases[i].module), "pkg");
+            return 1;
+        }
+    }
+    if (c->module_alias_count >= 32) {
+        set_error(c, "too many module imports");
+        return 0;
+    }
+    snprintf(c->module_aliases[c->module_alias_count].alias,
+             sizeof(c->module_aliases[c->module_alias_count].alias), "%s", alias);
+    snprintf(c->module_aliases[c->module_alias_count].module,
+             sizeof(c->module_aliases[c->module_alias_count].module), "pkg");
+    c->module_alias_count++;
+    return 1;
+}
+
 int resolve_builtin_id(Compiler *c, const char *name, size_t len) {
     char rewritten[128];
     const char *dot = memchr(name, '.', len);
@@ -83,6 +147,20 @@ int resolve_builtin_id(Compiler *c, const char *name, size_t len) {
         }
     }
     return 0;
+}
+
+Function *resolve_package_function(Compiler *c, const char *name, size_t len) {
+    const char *dot = memchr(name, '.', len);
+    int i;
+    if (!dot) return NULL;
+    for (i = 0; i < c->module_alias_count; ++i) {
+        size_t alias_len = strlen(c->module_aliases[i].alias);
+        if (strcmp(c->module_aliases[i].module, "pkg") != 0) continue;
+        if ((size_t)(dot - name) == alias_len && memcmp(name, c->module_aliases[i].alias, alias_len) == 0) {
+            return find_function(c, dot + 1, len - alias_len - 1);
+        }
+    }
+    return NULL;
 }
 
 int parse_import_statement(Compiler *c, const char *text) {
@@ -117,8 +195,8 @@ int parse_import_statement(Compiler *c, const char *text) {
     {
         char resolved[1024];
         if (mellowrt_resolve_package_entry(c->source_name, module, resolved, sizeof(resolved))) {
-            (void)alias;
-            return 1;
+            (void)resolved;
+            return add_package_alias(c, module, alias) ? 1 : -1;
         }
     }
     set_error(c, "package import not installed");

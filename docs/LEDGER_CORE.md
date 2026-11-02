@@ -35,6 +35,18 @@ SHA-256. `ledger_verify` checks:
 No timestamp is inserted automatically, so identical inputs produce identical
 hashes. A caller may include an explicit timestamp in the metadata map.
 
+## Native Runtime
+
+Since v2.9.7 the five ledger built-ins (`ledger_create`, `ledger_post`,
+`ledger_verify`, `ledger_balance`, `ledger_entries`, also reachable as
+`ledger.*` after `use ledger as ledger`) are implemented in C inside the
+standalone runtime in `native/standalone/src/mellowrt_ledger.c`. Amounts use
+cents-based 64-bit integers, and the canonical JSON pre-image is byte-identical
+to the Python reference, so a hash produced by `mellow` verifies a ledger built
+by `mellowlang.ledger_core` and the other way round.
+`tests/native/test_full_native_c_cli.py` pins that parity, including the
+`ledger: …` error messages.
+
 ## Security Boundary
 
 Ledger Core does not provide durable persistence, user authentication,

@@ -4,6 +4,8 @@
 */
 #include "mellowrt.h"
 #include "mellowrt_syscalls.h"
+#include "mellowrt_sm_cli.h"
+#include "mellowrt_server.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -195,13 +197,17 @@ static void usage(const char *argv0){
         "  %s check <file>           Compile/syntax check a .mellow script\n"
         "  %s doctor                 Show native runtime status\n"
         "  %s status                 Show native runtime status\n"
+        "  %s sm pack <in> -o <out>  Pack text-like assets into native SM3\n"
+        "  %s server serve <file>    Run a native C HTTP server from Mellow source\n"
+        "  %s sm inspect <file.sm>   Inspect a native SM3 file\n"
+        "  %s sm unpack <in> -o <out> Unpack a native SM3 file\n"
         "  %s help                   Show this help\n"
         "\n"
         "Direct native forms:\n"
         "  %s <program.mellow|program.mvi>\n"
         "  %s --runtime-info\n"
         "  %s --version\n",
-        argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0);
+        argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0);
 }
 
 static void native_doctor(const char *argv0){
@@ -242,6 +248,12 @@ int main(int argc, char **argv){
     if(!strcmp(argv[1],"doctor")||!strcmp(argv[1],"status")){
         native_doctor(argv[0]);
         return 0;
+    }
+    if(!strcmp(argv[1],"sm")){
+        return mellowrt_sm_cli(argc,argv);
+    }
+    if(!strcmp(argv[1],"server")){
+        return mellowrt_server_cli(argc,argv);
     }
     if(!strcmp(argv[1],"--runtime-info")){
         MRuntimePlatform platform=mellow_runtime_platform();

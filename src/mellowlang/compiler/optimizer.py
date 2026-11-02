@@ -786,6 +786,16 @@ class IROptimizer:
                 stack.append(_StackValue(const=_CONST_TOP, expr=("call",) + tuple(ins.args), start=len(out) - 1))
                 continue
 
+            # SYSCALL keeps its name on the stack, then argc arguments.
+            if op == "SYSCALL":
+                argc = int(ins.args[0]) if ins.args else 0
+                for _ in range(argc + 1):
+                    if stack:
+                        stack.pop()
+                out.append(ins)
+                stack.append(_StackValue(const=_CONST_TOP, expr=("syscall",) + tuple(ins.args), start=len(out) - 1))
+                continue
+
             if op == "LEN":
                 value = stack.pop() if stack else _StackValue()
                 out.append(ins)
@@ -828,11 +838,10 @@ class IROptimizer:
                 self._invalidate_var_aliases(expr_to_var, value_of_var, var_name)
                 continue
 
+            # Any op this pass does not model may leave a value of its own on
+            # the stack, so nothing above STORE may be treated as a constant.
             out.append(ins)
-            if op in {"PRINT", "PRINTN", "SAVE_VAL", "LIST_PUT", "WAIT", "SHOW_PREC"}:
-                stack.clear()
-            elif op in {"RETURN", "STOP", "HALT"}:
-                stack.clear()
+            stack.clear()
         return out, cp_count, lvn_count, branch_count, jump_count
 
     # ---------------- global value numbering / loops ----------------
@@ -950,6 +959,14 @@ class IROptimizer:
                         if stack:
                             stack.pop()
                     stack.append(_StackValue(const=_CONST_TOP, expr=("call",)+tuple(ins.args), start=len(out)-1))
+                    exprs.clear()
+                    continue
+                if op == "SYSCALL":
+                    argc = int(ins.args[0]) if ins.args else 0
+                    for _ in range(argc + 1):
+                        if stack:
+                            stack.pop()
+                    stack.append(_StackValue(const=_CONST_TOP, expr=("syscall",)+tuple(ins.args), start=len(out)-1))
                     exprs.clear()
                     continue
                 if op == "POP":

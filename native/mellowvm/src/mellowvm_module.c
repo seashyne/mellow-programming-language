@@ -127,6 +127,7 @@ typedef struct CVM {
     int allow_wait;
     int allow_storage;
     PyObject *storage_dir;    /* owned by top-level VM, borrowed by sub-VMs */
+    PyObject *config;         /* run config dict — borrowed, sandbox policy reads */
 
     /* output capture buffer — NULL means write to real stdout */
     PyObject *capture_list;   /* list of strings, or NULL */
@@ -457,6 +458,7 @@ static PyObject *cvm_call1(CVM *parent_vm, PyObject *fn_ref,
     sub.allow_wait   = parent_vm->allow_wait;
     sub.allow_storage = parent_vm->allow_storage;
     sub.storage_dir = parent_vm->storage_dir;
+    sub.config = parent_vm->config;
     sub.capture_list = parent_vm->capture_list;
 
     /* new scope for the function */
@@ -482,6 +484,9 @@ static PyObject *cvm_call1(CVM *parent_vm, PyObject *fn_ref,
 
     return result; /* new ref or NULL */
 }
+
+/* Storage, fs and file syscalls live in their own include unit. */
+#include "mellowvm_storage.inc"
 
 /* Syscall implementation is isolated from the VM dispatch loop. */
 #include "mellowvm_syscalls.inc"
@@ -579,6 +584,7 @@ mellowvm_run(PyObject *self, PyObject *args_in, PyObject *kwargs)
     vm.allow_wait   = allow_wait;
     vm.allow_storage = allow_storage;
     vm.storage_dir = storage_dir;
+    vm.config = config_obj;
     vm.capture_list = NULL;
 
     PyObject *result = cvm_exec(&vm, 0);

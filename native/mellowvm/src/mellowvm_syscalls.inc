@@ -733,6 +733,13 @@ static PyObject *cvm_syscall_dispatch(const char *sn,
         return total;
     }
 
+    /* Storage, fs and file live in their own unit; see mellowvm_storage.inc. */
+    {
+        int storage_handled = 0;
+        PyObject *storage_result = cvm_storage_syscall(sn, sa, argc, parent_vm, &storage_handled);
+        if (storage_handled) return storage_result;
+    }
+
     /* Stateful/optional stdlib services are delegated to the per-run host. */
     if (parent_vm->host && parent_vm->host != Py_None) {
         PyObject *arg_list = PyList_New(argc);

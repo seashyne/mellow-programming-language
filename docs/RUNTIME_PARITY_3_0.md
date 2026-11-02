@@ -28,7 +28,7 @@ Legend:
 | Source locations in runtime diagnostics | pass | pass | core | Native errors carry instruction spans and render `file:line:column`. |
 | Money core | pass | pass | core-host | Decimal semantics are host-backed. |
 | Data processing | pass | pass | core-host | Bounded data helpers are stable when enabled. |
-| Ledger core | pass | pass | core-host | Hash-chain behavior must remain deterministic. |
+| Ledger core | pass | pass | core | Hash-chain behavior is deterministic; the standalone runtime computes entry hashes in C and is tested against `mellowlang.ledger_core`. |
 | Package imports | pass | fallback | extended | Runtime resolution is still host/tooling assisted. |
 | `interop` module | pass | fallback | extended | External process execution stays host-backed and allowlisted. |
 | Network helpers | pass | fallback | extended | Deny-by-default project permissions. |

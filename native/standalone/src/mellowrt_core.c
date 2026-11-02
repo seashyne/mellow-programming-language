@@ -854,7 +854,7 @@ int mvm_run(MVM *vm, const MProgram *program, MRunResult *out) {
             }
             if (!vm->syscall.fn(vm->syscall.user,insn->a,vm->stack+(vm->stack_len-argc),argc,&result)){
                 for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
-                vm->stack_len-=argc;set_error(out,"syscall_failed");return 0;
+                vm->stack_len-=argc;set_error(out,(rt_ctx&&rt_ctx->syscall_error[0])?rt_ctx->syscall_error:"syscall_failed");return 0;
             }
             if (rt_ctx && rt_ctx->recv_would_block) {
                 void *waiting = NULL;
