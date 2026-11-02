@@ -143,8 +143,9 @@ def test_record_replay_overrides_nondeterministic_seed():
         print(random(1, 100))
         print(random(1, 100))
         """
-        out1 = _run_vm(src, cwd=cwd, cfg=RunConfig(record_path=str(log), seed=1))
-        out2 = _run_vm(src, cwd=cwd, cfg=RunConfig(replay_path=str(log), seed=9999))
+        # record/replay parity is Python-VM only; the C engine refuses it.
+        out1 = _run_vm(src, cwd=cwd, cfg=RunConfig(engine="py", record_path=str(log), seed=1))
+        out2 = _run_vm(src, cwd=cwd, cfg=RunConfig(engine="py", replay_path=str(log), seed=9999))
         assert out1 == out2
 
 
@@ -153,12 +154,11 @@ def test_ai_timeline_writes_jsonl_when_enabled():
         cwd = Path(td)
         timeline = cwd / "ai.jsonl"
         src = """
-        import "ai" as ai
-        call(ai["decide"], "combat", "see_enemy")
-        call(ai["decide"], "combat", "attack")
+        get ai.decide("combat", "see_enemy")
+        get ai.decide("combat", "attack")
         print("ok")
         """
-        out = _run_vm(src, cwd=cwd, cfg=RunConfig(ai_timeline=str(timeline)))
+        out = _run_vm(src, cwd=cwd, cfg=RunConfig(engine="py", ai_timeline=str(timeline)))
         assert "ok" in out
         txt = timeline.read_text(encoding="utf-8")
         assert "combat" in txt

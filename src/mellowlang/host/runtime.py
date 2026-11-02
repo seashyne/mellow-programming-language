@@ -1292,6 +1292,31 @@ def default_host() -> HostRegistry:
     h.register(HostFunction('std.math.vec_lerp', _vec_lerp, cost=1, min_args=3, max_args=3))
     h.register(HostFunction('std.math.vec_limit', _vec_limit, cost=1, min_args=2, max_args=2))
 
+    # ----- std.random -----
+    # Each VM run gets its own HostRegistry, and vm.py pushes RunConfig into
+    # runtime_config before the first syscall, so seeding here is per run.
+    import random as _random_mod
+    _rng_state: Dict[str, Any] = {"rng": None}
+
+    def _rng() -> "_random_mod.Random":
+        if _rng_state["rng"] is None:
+            seed = (h.runtime_config or {}).get("seed")
+            _rng_state["rng"] = _random_mod.Random(int(seed)) if seed is not None else _random_mod.Random()
+        return _rng_state["rng"]
+
+    def _random(args: List[Any]):
+        rng = _rng()
+        if len(args) == 0:
+            return rng.random()
+        if len(args) == 1:
+            return rng.randint(0, int(args[0]))
+        lo, hi = int(args[0]), int(args[1])
+        if hi < lo:
+            lo, hi = hi, lo
+        return rng.randint(lo, hi)
+
+    h.register(HostFunction('std.random.range', _random, cost=1, min_args=0, max_args=2))
+
     # ----- std.time (advanced) -----
     import time as _time
     h.register(HostFunction('std.time.unix', lambda a: _time.time(), cost=1, min_args=0, max_args=0))

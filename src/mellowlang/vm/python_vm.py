@@ -1966,6 +1966,7 @@ class MellowLangVM(DebuggerMixin, StorageMixin):
                 pass
 
         # final result
+        self._replay.close()
         result = self.stack[-1] if self.stack else None
         if self._profile:
             import time as _time

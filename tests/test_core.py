@@ -161,8 +161,9 @@ def test_record_replay_same_output():
         print(random(1, 100))
         print(random(1, 100))
         """
-        out1 = run_source(src, cwd=cwd, cfg=RunConfig(record_path=str(log), seed=7))
-        out2 = run_source(src, cwd=cwd, cfg=RunConfig(replay_path=str(log), seed=999))
+        # record/replay parity is Python-VM only; the C engine refuses it.
+        out1 = run_source(src, cwd=cwd, cfg=RunConfig(engine="py", record_path=str(log), seed=7))
+        out2 = run_source(src, cwd=cwd, cfg=RunConfig(engine="py", replay_path=str(log), seed=999))
         assert out1 == out2
 
 
@@ -181,12 +182,12 @@ def test_ai_decide_timeline_jsonl():
         cwd = Path(td)
         timeline = cwd / "ai.jsonl"
         src = """
-        import "ai" as ai
-        call(ai["decide"], "patrol", "start")
-        call(ai["decide"], "patrol", "end")
+        get ai.decide("patrol", "start")
+        get ai.decide("patrol", "end")
         print("ok")
         """
-        out = run_source(src, cwd=cwd, cfg=RunConfig(ai_timeline=str(timeline)))
+        # std.ai.decide is a Python-VM service; the native engines do not register it yet.
+        out = run_source(src, cwd=cwd, cfg=RunConfig(engine="py", ai_timeline=str(timeline)))
         assert "ok" in out
         txt = timeline.read_text(encoding="utf-8")
         assert "patrol" in txt

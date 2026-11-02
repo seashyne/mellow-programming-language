@@ -65,6 +65,10 @@ print(thread.scheduler_mode())
 - `vec_add(a, b)`, `vec_sub(a, b)`
 - `vec_len(v)`
 
+The vector family resolves through `std.math.*` host services, so it runs on the
+Python VM and the `--engine=c` extension. The standalone `mellow` executable has
+no native vector syscalls yet; `vec(...)` there is still a compile error.
+
 ## Money / decimal-safe rules
 
 Money helpers use Python `Decimal` internally and return a map shaped like
@@ -181,6 +185,12 @@ JavaScript, Go, Rust, Java, C++, C#, TypeScript, COBOL, and other runtimes.
 ## Random (deterministic)
 
 - `random(min, max)` *(deterministic under seed / replay)*
+- `random()` returns a float in `[0, 1)`; `random(n)` returns an int in `[0, n]`.
+
+`std.random.range` is seeded from `RunConfig(seed=...)` per run, so the same seed
+gives the same sequence on the Python VM and on `--engine=c`. Record/replay
+capture is Python-VM only. The standalone `mellow` executable has no native
+random syscall yet, so `random(...)` there is still a compile error.
 
 ## Storage statements
 

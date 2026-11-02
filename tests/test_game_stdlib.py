@@ -24,8 +24,7 @@ def run_source(src: str):
 
 def test_game_module_get_and_easing():
     src = """
-    g = get("game")
-    v = call(g["ease_in_quad"], 0.5)
+    let v = get game.ease_in_quad(0.5)
     print(v)
     """
     out = run_source(src)
@@ -35,13 +34,12 @@ def test_game_module_get_and_easing():
 
 def test_game_astar_basic():
     src = """
-    g = get("game")
     grid = [
       [0,0,0,0],
       [1,1,0,1],
       [0,0,0,0]
     ]
-    path = call(g["astar"], grid, [0,0], [3,2], false)
+    path = get game.astar(grid, [0,0], [3,2])
     print(path)
     """
     out = run_source(src)
