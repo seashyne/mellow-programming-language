@@ -1,0 +1,35 @@
+def of(amount, currency):
+    return money.of(amount, currency)
+
+def total(left, right):
+    return money.add(left, right)
+
+def net(gross, fee):
+    return money.sub(gross, fee)
+
+def tax(subtotal, rate):
+    return money.mul(subtotal, rate)
+
+def fee(amount, rate):
+    return money.mul(amount, rate)
+
+def discount(amount, rate):
+    return money.mul(amount, rate)
+
+def apply_tax(subtotal, rate):
+    return money.add(subtotal, tax(subtotal, rate))
+
+def apply_discount(amount, rate):
+    return money.sub(amount, discount(amount, rate))
+
+def settle(gross, fee_amount):
+    return money.sub(gross, fee_amount)
+
+def format(value):
+    return money.format(value)
+
+def amount(value):
+    return money.amount(value)
+
+def currency(value):
+    return money.currency(value)
