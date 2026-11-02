@@ -180,8 +180,14 @@ def _project_root() -> Path:
 
 
 def _standalone_binary() -> Path:
+    name = 'mellowrt.exe' if os.name == 'nt' else 'mellowrt'
     root = _project_root() / 'native' / 'standalone' / 'build'
-    return root / ('mellowrt.exe' if os.name == 'nt' else 'mellowrt')
+    # Multi-config generators (Visual Studio, Xcode) emit into per-configuration
+    # subdirectories; standalone_runtime_status() uses the same candidate order.
+    for candidate in (root / name, root / 'Release' / name, root / 'Debug' / name):
+        if candidate.exists():
+            return candidate
+    return root / name
 
 
 def _core_module_candidates() -> list[Path]:

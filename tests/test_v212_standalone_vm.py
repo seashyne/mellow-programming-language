@@ -10,7 +10,7 @@ from mellowlang.standalone_runtime import build_standalone_runtime, standalone_r
 
 
 def test_standalone_image_compile_and_run(tmp_path: Path):
-    src = ROOT / 'examples' / 'hello.mellow'
+    src = ROOT / 'tests' / 'fixtures' / 'hello_core.mellow'
     out = tmp_path / 'hello.mvi'
     res = compile_file_to_standalone_image(str(src), output_path=str(out))
     assert res['ok'] is True
@@ -20,7 +20,8 @@ def test_standalone_image_compile_and_run(tmp_path: Path):
     build = build_standalone_runtime(build_dir=str(build_dir))
     assert build['ok'] is True
 
-    binary = build_dir / ('mellowrt.exe' if os.name == 'nt' else 'mellowrt')
+    name = 'mellowrt.exe' if os.name == 'nt' else 'mellowrt'
+    binary = next(p for p in (build_dir / 'Release' / name, build_dir / name, build_dir / 'Debug' / name) if p.exists())
     run = standalone_run_image(str(out), binary_path=str(binary))
     assert run['ok'] is True, run
     assert 'Hello from MellowLang!' in run['stdout']

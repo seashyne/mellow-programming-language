@@ -13,10 +13,10 @@ def test_export_native_scene(tmp_path: Path):
     spec = parse_mmg_file(src)
     out = export_mmg_gpu_commands(spec, tmp_path / "scene.mmgscene")
     text = out.read_text(encoding="utf-8")
-    assert text.startswith("MMGSCENE 1")
+    assert text.startswith("MMGSCENE 3")
     assert 'APP "Demo" 320 200' in text
     assert 'RECT 10.000 20.000 30.000 40.000' in text
-    assert 'ON_KEY_ESCAPE CLOSE' in text
+    assert 'ON_KEY "Escape" CLOSE ""' in text
 
 
 def test_mmg_gpu_status_shape():
