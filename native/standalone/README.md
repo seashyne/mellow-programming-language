@@ -175,7 +175,7 @@ c.send(mailbox, "hello")
 print(c.recv(mailbox))
 ```
 
-In v2.9.7 these APIs are native C built-ins. Channels are FIFO native handles,
+In v2.9.8 these APIs are native C built-ins. Channels are FIFO native handles,
 `spawn` creates cooperative tasks, and `yield` round-robin switches between
 runnable tasks. `workers(n)` configures the native M:N scheduler topology,
 `worker_count()` reports the configured worker count, and `scheduler_mode()`

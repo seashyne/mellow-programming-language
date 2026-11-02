@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 2.9.8 - 2026-11-02
+
+### Native Runtime Services
+- Storage, save, fs, and file APIs now lower to `std.*` syscalls and run in C on
+  the CPython extension and the standalone executable, so the save-path sandbox
+  applies to native programs too.
+- Ledger, money, server, and the SM CLI share the native syscall id table.
+- The Python VM re-enters its legacy builtins from the syscall instruction on a
+  VM-private bytecode copy, keeping the shared compile cache intact.
+
+### Parity Coverage
+- Added `tests/fixtures/storage_core.mellow` and the ledger core fixture as the
+  shared native/Python parity source.
+- Added `examples/native_server.mellow` as the maintained native HTTP example.
+
+### Workspace
+- The boundary gate rejects root build artifacts and undocumented `native/`
+  surfaces, and generated agent-package output is now ignored.
+
 ## 2.9.4 - 2026-06-21
 
 ### Runtime Structure
