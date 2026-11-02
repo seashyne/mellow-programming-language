@@ -58,3 +58,6 @@ apps/deploy/cloudflare-public-registry/.wrangler/
 *.sqlite-shm
 *.sqlite-wal
 mellow-*-check.exe
+
+# Dated benchmark runs written by benchmarks/run_all.py; curated report directories stay tracked.
+benchmarks/reports/standard/

@@ -10,10 +10,13 @@ from mellowlang.vm import MellowVM, RunConfig
 
 
 ROOT = Path(__file__).resolve().parents[2]
+# These v3 programs are conformance input, not user-facing demos, so they live
+# beside the other locked-behaviour fixtures instead of examples/.
+FIXTURES = ROOT / "tests" / "fixtures"
 
 
 def run_example(name: str) -> list[str]:
-    script = ROOT / "examples" / name
+    script = FIXTURES / name
     program = Compiler().compile(script.read_text(encoding="utf-8"), filename=str(script))
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
@@ -43,12 +46,12 @@ def test_v3_game_script_demo_runs() -> None:
 
 
 def test_v3_package_demo_compiles() -> None:
-    script = ROOT / "examples" / "v3_package_core_usage.mellow"
+    script = FIXTURES / "v3_package_core_usage.mellow"
     parsed = parse_program(script.read_text(encoding="utf-8").splitlines(), filename=str(script))
     assert parsed.body
 
 
 def test_v3_interop_demo_compiles() -> None:
-    script = ROOT / "examples" / "v3_interop_node.mellow"
+    script = FIXTURES / "v3_interop_node.mellow"
     program = Compiler().compile(script.read_text(encoding="utf-8"), filename=str(script))
     assert program.bytecode

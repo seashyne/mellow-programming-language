@@ -1,0 +1,4 @@
+# Mellow v3 demo: CLI automation
+let tasks = ["check", "test", "package"]
+for i in range(0, len(tasks)):
+    print("task", i, tasks[i])

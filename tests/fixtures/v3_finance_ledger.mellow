@@ -1,0 +1,5 @@
+# Mellow v3 demo: finance-safe decimal workflow
+let cash = money.of("125.50", "USD")
+let fee = money.of("0.50", "USD")
+let net = money.sub(cash, fee)
+print(money.format(net))

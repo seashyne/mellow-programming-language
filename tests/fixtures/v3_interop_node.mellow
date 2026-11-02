@@ -1,0 +1,4 @@
+# Mellow v3 demo: external runtime interop
+# Requires mellow.json permission: "interop:node"
+let result = get interop.run("node", ["tools/hello.js"], {"name": "Mellow"})
+print(result["ok"])

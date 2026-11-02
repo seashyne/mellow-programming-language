@@ -98,7 +98,7 @@ def test_list_and_map_literals_print_values():
 
 
 def test_cli_run_and_check_core_script():
-    script = Path(__file__).resolve().parents[2] / "examples" / "hello.mellow"
+    script = Path(__file__).resolve().parents[1] / "fixtures" / "hello_core.mellow"
     run_out = io.StringIO()
     with contextlib.redirect_stdout(run_out):
         assert cli_main(["run", str(script), "--engine", "py"]) == 0

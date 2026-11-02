@@ -100,11 +100,16 @@ Expected native layout:
 Use Mellow packages for the public declarations and examples, with C built-ins
 behind them.
 
-Landed: storage slots plus the `file_*` and `fs_*` APIs are native built-ins in
-both engines (`native/mellowvm/src/mellowvm_storage.inc`,
-`native/standalone/src/mellowrt_storage.c`), and
-`tests/fixtures/storage_core.mellow` is the conformance program they share with
-the Python VM. Remaining P1 targets: secure save envelope, network host bindings.
+Landed: storage slots plus the `file_*` and `fs_*` APIs, and the ledger, money,
+server, and SM CLI services are native built-ins in both engines
+(`native/mellowvm/src/mellowvm_storage.inc`,
+`native/standalone/src/mellowrt_storage.c`, `mellowrt_ledger.c`,
+`mellowrt_money.c`, `mellowrt_server.c`, `mellowrt_sm_cli.c`).
+`tests/fixtures/storage_core.mellow` and `tests/fixtures/ledger_core.mellow` are
+the conformance programs they share with the Python VM. Remaining P1 targets:
+secure save envelope (`mellowrt_save.c`), network host bindings
+(`mellowrt_net.c`), data transforms (`mellowrt_data.c`), and the time/range/list
+and math helper cores.
 
 ### P2: Native Asset/Codec Tooling
 
@@ -216,7 +221,9 @@ A Python-backed system is considered migrated only when:
 
 ## Current Next Step
 
-The next practical move is to move storage/save/data services behind native
-runtime built-ins, then add standalone MELV CLI hooks. This keeps migration
-incremental while making each finished subsystem genuinely usable without
-Python.
+Storage, save-slot, ledger, money, and server services now run behind native
+built-ins, so the next practical move is the standalone MELV CLI hook: make
+`mellow melv ...` work from the C executable without importing Python, keeping
+the Python CLI as a compatibility wrapper. The secure save envelope
+(`mellowrt_save.c`) and the network host bindings (`mellowrt_net.c`) stay in the
+queue; the envelope is deliberately held for phase 2.
