@@ -78,13 +78,14 @@ def test_cli_check_nonzero_on_syntax_error():
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "bad.mellow"
         p.write_text("print(1)\nend\n", encoding="utf-8")
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = cli_main(["check", str(p)])
         assert code != 0
-        out = buf.getvalue()
-        assert "error:" in out.lower()
-        assert ":" in out  # includes file:line:col
+        # check delegates to the standalone binary, which reports diagnostics on stderr.
+        text = out.getvalue() + err.getvalue()
+        assert "error:" in text.lower()
+        assert ":" in text  # includes file:line:col
 
 
 def test_pretty_error_includes_code_frame_and_caret():
