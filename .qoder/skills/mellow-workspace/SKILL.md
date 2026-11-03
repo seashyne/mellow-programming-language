@@ -93,10 +93,30 @@ Established seams, in the tree that owns them:
 - `native/mellowvm/src/mellowvm_module.c` - dispatch stays; syscalls, exec, and
   storage live in their `.inc` fragments.
 - `src/mellowlang/package_manager.py` - facade over `packages/*`.
+- `src/mellowlang/ai_core.py` - facade over `ai/`: `state.py` owns every mutable
+  store, one module per concern, and only `registration.py` builds `HostFunction`.
+- `src/mellowlang/compiler/optimizer.py` - facade over `compiler/optimizations/`:
+  `ir_data.py` owns the shared IR value types, one mixin per pass section, and the
+  driver keeps only the op-set constants plus `optimize()`. A stateless giant class
+  splits this way without touching a single method body.
 
 A split must be verbatim and proven, not reviewed: snapshot the registry or
 output before and after, diff handler metadata plus behavior over a call battery,
 and rebuild before claiming native coverage.
+
+Prove a Python split by loading the `HEAD` copy of the module as a probe
+(`git show HEAD:<path>` plus `exec(compile(...))` with `__package__` set and the
+module registered in `sys.modules`, which `@dataclass` needs to resolve string
+annotations), then diff both sides. Two fingerprint traps:
+
+- CPython picks between two identical method loads - `LOAD_ATTR m + NULL|self`
+  when the receiver is a module-level assignment, `LOAD_ATTR m` plus a bare
+  `PUSH_NULL` when it arrives through a relative package import. Canonicalise both
+  to one token or a verbatim move looks like a regression; `co_stacksize` shifts by
+  one with it.
+- `frozenset` literals print in iteration order, and a `__pycache__` copy keeps the
+  order the writing process had. Compare containers as sorted sets and mask object
+  addresses and timestamps, or the diff reports noise.
 
 ## Moving trees
 

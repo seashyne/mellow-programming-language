@@ -11,6 +11,25 @@ NATIVE_VM = ROOT / "native" / "mellowvm" / "src"
 STANDALONE = ROOT / "native" / "standalone" / "src"
 HOST_FAMILIES = SRC / "host" / "families"
 AI_FAMILIES = SRC / "ai"
+OPTIMIZATIONS = SRC / "compiler" / "optimizations"
+
+# One module per IR pass section, plus the shared value types and the driver.
+PASS_MODULES = ("graph", "folding", "dataflow", "rewrite", "gvn", "sccp", "loops",
+                "cleanup", "exprs")
+OPTIMIZER_VALUE_TYPES = ("BasicBlock", "ControlFlowGraph", "DominatorTree", "DefUseInfo",
+                         "PhiNode", "SSAProgram", "OptimizationSummary", "_StackValue",
+                         "_CONST_TOP")
+# Where a pass must live, so the seams stay meaningful instead of merely small.
+PASS_HOME = {
+    "build_cfg": "graph", "build_dominator_tree": "graph", "build_def_use": "graph",
+    "build_ssa": "graph", "_compute_dominance_frontier": "graph",
+    "_constant_fold": "folding", "_cfg_dataflow_optimize": "dataflow",
+    "_transfer_env": "dataflow", "_merge_envs": "dataflow", "_rewrite_block": "rewrite",
+    "_global_value_numbering": "gvn", "_sccp_optimize": "sccp",
+    "_loop_invariant_motion": "loops", "_simplify_jumps": "cleanup",
+    "_eliminate_dead_code": "cleanup", "_remove_unused_labels": "cleanup",
+    "_eval_binary": "exprs", "_eval_unary": "exprs", "_vars_in_expr": "exprs",
+}
 
 # Any file longer than this must appear in LINE_CEILINGS, so a new oversized
 # file is a deliberate decision instead of an accident.
@@ -20,7 +39,6 @@ FILE_LENGTH_LIMIT = 1_000
 # never raise it to make this test pass - split the file instead.
 LINE_CEILINGS: dict[str, int] = {
     "src/mellowlang/cli/commands/agents.py": 1_150,
-    "src/mellowlang/compiler/optimizer.py": 1_300,
     "src/mellowlang/package_manager.py": 1_100,
     "src/mellowlang/parser.py": 1_300,
     "src/mellowlang/vm/python_vm.py": 2_000,
@@ -147,6 +165,65 @@ def test_ai_engine_is_split_by_concern() -> None:
         if other == "registration":
             continue
         assert "HostFunction(" not in (AI_FAMILIES / f"{other}.py").read_text(encoding="utf-8")
+
+
+def test_optimizer_passes_are_split_by_pass() -> None:
+    """compiler/optimizer.py is a facade; one module per pass lives in optimizations/."""
+    facade = SRC / "compiler" / "optimizer.py"
+    assert _line_count(facade) <= 200, "the facade re-exports, it does not implement"
+    source = facade.read_text(encoding="utf-8")
+    assert "def " not in source, "the facade holds no logic"
+    assert "@dataclass" not in source, "the facade declares no types"
+    assert "from .optimizations import" in source
+
+    for module in PASS_MODULES + ("ir_data", "optimizer", "__init__"):
+        path = OPTIMIZATIONS / f"{module}.py"
+        assert path.is_file(), f"compiler/optimizations/{module}.py is missing"
+        assert _line_count(path) <= 300, f"{module}.py grew past one pass"
+
+    # the driver assembles the mixins and owns the pipeline and the op sets; it
+    # carries no pass body of its own beyond optimize()
+    driver = next(n for n in ast.parse(
+        (OPTIMIZATIONS / "optimizer.py").read_text(encoding="utf-8")).body
+        if isinstance(n, ast.ClassDef) and n.name == "IROptimizer")
+    bases = sorted(ast.unparse(b) for b in driver.bases)
+    assert len(bases) == len(PASS_MODULES), "one mixin per pass section"
+    assert all(name.endswith("Mixin") for name in bases), bases
+    methods = [n.name for n in driver.body if isinstance(n, ast.FunctionDef)]
+    assert methods == ["optimize"], f"the driver only drives: {methods}"
+    constants = [t.id for n in driver.body if isinstance(n, ast.Assign)
+                 for t in n.targets if isinstance(t, ast.Name)]
+    assert set(constants) >= {"TERMINATORS", "STORE_OPS", "BINARY_OPS", "UNARY_OPS",
+                              "SIDE_EFFECT_BARRIERS"}, "the op sets stay on the driver"
+
+    # every mixin module declares exactly the class the driver inherits
+    homes: dict[str, str] = {}
+    for module in PASS_MODULES:
+        tree = ast.parse((OPTIMIZATIONS / f"{module}.py").read_text(encoding="utf-8"))
+        classes = [n for n in tree.body if isinstance(n, ast.ClassDef)]
+        assert len(classes) == 1, f"{module}.py declares {len(classes)} classes"
+        assert classes[0].name in bases, f"{module}.py is not assembled into IROptimizer"
+        for fn in classes[0].body:
+            if isinstance(fn, ast.FunctionDef):
+                assert fn.name not in homes, f"{fn.name} is defined in two pass modules"
+                homes[fn.name] = module
+    for method, module in PASS_HOME.items():
+        assert homes.get(method) == module, (
+            f"{method} belongs in compiler/optimizations/{module}.py, "
+            f"found in {homes.get(method)}")
+
+    # the shared IR value types are declared once, in ir_data.py
+    data = ast.parse((OPTIMIZATIONS / "ir_data.py").read_text(encoding="utf-8"))
+    declared = {n.name for n in data.body if isinstance(n, (ast.ClassDef, ast.FunctionDef))}
+    declared |= {t.id for n in data.body if isinstance(n, ast.Assign)
+                 for t in n.targets if isinstance(t, ast.Name)}
+    assert set(OPTIMIZER_VALUE_TYPES) <= declared, "ir_data.py owns the shared value types"
+    for module in PASS_MODULES + ("optimizer",):
+        tree = ast.parse((OPTIMIZATIONS / f"{module}.py").read_text(encoding="utf-8"))
+        top = {n.name for n in tree.body if isinstance(n, (ast.ClassDef, ast.FunctionDef))}
+        top |= {t.id for n in tree.body if isinstance(n, ast.Assign)
+                for t in n.targets if isinstance(t, ast.Name)}
+        assert not top & set(OPTIMIZER_VALUE_TYPES), f"{module}.py re-declares a value type"
 
 
 def test_package_facade_uses_focused_modules() -> None:
