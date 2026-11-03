@@ -12,6 +12,7 @@ STANDALONE = ROOT / "native" / "standalone" / "src"
 HOST_FAMILIES = SRC / "host" / "families"
 AI_FAMILIES = SRC / "ai"
 OPTIMIZATIONS = SRC / "compiler" / "optimizations"
+PARSING = SRC / "parsing"
 
 # One module per IR pass section, plus the shared value types and the driver.
 PASS_MODULES = ("graph", "folding", "dataflow", "rewrite", "gvn", "sccp", "loops",
@@ -31,6 +32,22 @@ PASS_HOME = {
     "_eval_binary": "exprs", "_eval_unary": "exprs", "_vars_in_expr": "exprs",
 }
 
+# parser.py is a facade over parsing/: three value layers (errors, line text, the
+# expression parser) and the statement driver, whose long if-chain is one run
+# method per stmt_* mixin. The run order is the order the chain tested them in.
+PARSE_LAYER_MODULES = ("errors", "line_text", "expressions", "expression_atoms",
+                       "expression_postfix", "block_core", "blocks")
+PARSE_STATEMENT_MODULES = ("stmt_loops", "stmt_definitions", "stmt_control",
+                           "stmt_bindings", "stmt_output", "stmt_calls")
+PARSE_RUN_HOME = {
+    "_run_scope_loops": "stmt_loops", "_run_loop_forms": "stmt_loops",
+    "_run_definitions": "stmt_definitions",
+    "_run_exceptions": "stmt_control", "_run_conditionals": "stmt_control",
+    "_run_bindings": "stmt_bindings",
+    "_run_output": "stmt_output", "_run_utility": "stmt_output",
+    "_run_module_calls": "stmt_calls",
+}
+
 # Any file longer than this must appear in LINE_CEILINGS, so a new oversized
 # file is a deliberate decision instead of an accident.
 FILE_LENGTH_LIMIT = 1_000
@@ -40,7 +57,6 @@ FILE_LENGTH_LIMIT = 1_000
 LINE_CEILINGS: dict[str, int] = {
     "src/mellowlang/cli/commands/agents.py": 1_150,
     "src/mellowlang/package_manager.py": 1_100,
-    "src/mellowlang/parser.py": 1_300,
     "src/mellowlang/vm/python_vm.py": 2_000,
     "native/mellowvm/src/mellowvm_exec.inc": 800,
     "native/mellowvm/src/mellowvm_module.c": 700,
@@ -60,6 +76,19 @@ SKIP_PARTS = {"build", "node_modules", "dist", "__pycache__", ".venv"}
 
 def _line_count(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").splitlines())
+
+
+def _top_level_names(path: Path) -> set[str]:
+    """Every name a module declares at module level."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            names.add(node.name)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            names |= {t.id for t in targets if isinstance(t, ast.Name)}
+    return names
 
 
 def _long_files() -> dict[str, int]:
@@ -224,6 +253,98 @@ def test_optimizer_passes_are_split_by_pass() -> None:
         top |= {t.id for n in tree.body if isinstance(n, ast.Assign)
                 for t in n.targets if isinstance(t, ast.Name)}
         assert not top & set(OPTIMIZER_VALUE_TYPES), f"{module}.py re-declares a value type"
+
+
+def test_parser_grammar_is_split_by_layer() -> None:
+    """parser.py is a facade; parsing/ holds the grammar, one run per stmt mixin."""
+    facade = SRC / "parser.py"
+    assert _line_count(facade) <= 200, "the facade re-exports, it does not implement"
+    source = facade.read_text(encoding="utf-8")
+    assert "def " not in source, "the facade holds no logic"
+    assert "class " not in source, "the facade declares no types"
+    assert "from .ast import *" in source, "the node re-export is part of the old surface"
+    assert "from .parsing import" in source
+
+    modules = sorted(p.stem for p in PARSING.glob("*.py") if p.stem != "__init__")
+    assert modules == sorted([*PARSE_LAYER_MODULES, *PARSE_STATEMENT_MODULES]), modules
+    for module in [*modules, "__init__"]:
+        assert _line_count(PARSING / f"{module}.py") <= 300, (
+            f"parsing/{module}.py grew past one grammar layer")
+
+    # BLOCK_RUNS is data: it fixes the order the statement chain is tested in.
+    core = ast.parse((PARSING / "block_core.py").read_text(encoding="utf-8"))
+    runs = next(
+        tuple(ast.literal_eval(value) for value in node.value.elts)
+        for node in core.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        and any(isinstance(t, ast.Name) and t.id == "BLOCK_RUNS"
+                for t in ([node.target] if isinstance(node, ast.AnnAssign)
+                          else node.targets))
+    )
+    assert len(runs) == len(set(runs)) == len(PARSE_RUN_HOME), runs
+
+    # each run is declared once, by a mixin in the module holding its statements
+    homes: dict[str, str] = {}
+    owner: dict[str, str] = {}
+    classes: dict[str, str] = {}
+    for module in PARSE_STATEMENT_MODULES:
+        tree = ast.parse((PARSING / f"{module}.py").read_text(encoding="utf-8"))
+        for cls in [n for n in tree.body if isinstance(n, ast.ClassDef)]:
+            classes[cls.name] = module
+            methods = [n.name for n in cls.body if isinstance(n, ast.FunctionDef)]
+            assert not {"__init__", "parse", "sub_block"} & set(methods), (
+                f"{module}.py carries parser state, not just statements")
+            for name in methods:
+                if not name.startswith("_run_"):
+                    continue
+                assert name not in homes, f"{name} is defined in two statement modules"
+                homes[name] = module
+                owner[name] = cls.name
+    assert sorted(homes) == sorted(runs), (
+        f"BLOCK_RUNS and the mixins drifted apart: {sorted(set(homes) ^ set(runs))}")
+    for run, module in PARSE_RUN_HOME.items():
+        assert homes.get(run) == module, (
+            f"{run} belongs in parsing/{module}.py, found in {homes.get(run)}")
+
+    # blocks.py assembles the runs; the base owns the cursor and the driver loop
+    blocks = ast.parse((PARSING / "blocks.py").read_text(encoding="utf-8"))
+    parser_cls = next(n for n in blocks.body
+                      if isinstance(n, ast.ClassDef) and n.name == "BlockParser")
+    bases = [ast.unparse(b) for b in parser_cls.bases]
+    assert bases == [owner[run] for run in runs] + ["BlockParserBase"], (
+        "the assembly order must match BLOCK_RUNS")
+    driver = next(n for n in core.body
+                  if isinstance(n, ast.ClassDef) and n.name == "BlockParserBase")
+    methods = [n.name for n in driver.body if isinstance(n, ast.FunctionDef)]
+    assert set(methods) == {"__init__", "parse", "sub_block"}, methods
+    assert set(_top_level_names(PARSING / "blocks.py")) >= {
+        "BlockParser", "_parse_block", "parse_program"}
+    for module in PARSE_STATEMENT_MODULES:
+        text = (PARSING / f"{module}.py").read_text(encoding="utf-8")
+        assert "from .blocks import" not in text, (
+            f"{module}.py reaches back into the assembly - the runs stay below it")
+
+    # the value layers are each declared once, in the layer that owns them
+    layer_owner = {
+        "ParseError": "errors",
+        "ExprParser": "expressions", "PRECEDENCE": "expressions",
+        "parse_expr": "expressions", "_expr_col": "line_text",
+        "_split_top_level_commas": "line_text", "_collect_multiline_expr": "line_text",
+        "_rewrite_modern_aliases": "line_text",
+        "ExpressionAtomMixin": "expression_atoms",
+        "ExpressionPostfixMixin": "expression_postfix",
+        "_extract_cond": "block_core", "_consume_end": "block_core",
+        "BlockParserBase": "block_core", "BLOCK_RUNS": "block_core",
+    }
+    for name, module in layer_owner.items():
+        declared = [m for m in [*modules, "__init__"]
+                    if name in _top_level_names(PARSING / f"{m}.py")]
+        assert declared == [module], f"{name} is declared in {declared}, not only {module}.py"
+    exprs = ast.parse((PARSING / "expressions.py").read_text(encoding="utf-8"))
+    expr_cls = next(n for n in exprs.body
+                    if isinstance(n, ast.ClassDef) and n.name == "ExprParser")
+    assert sorted(ast.unparse(b) for b in expr_cls.bases) == [
+        "ExpressionAtomMixin", "ExpressionPostfixMixin"], "the two expression halves assemble"
 
 
 def test_package_facade_uses_focused_modules() -> None:

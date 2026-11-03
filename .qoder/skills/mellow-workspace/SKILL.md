@@ -99,10 +99,28 @@ Established seams, in the tree that owns them:
   `ir_data.py` owns the shared IR value types, one mixin per pass section, and the
   driver keeps only the op-set constants plus `optimize()`. A stateless giant class
   splits this way without touching a single method body.
+- `src/mellowlang/parser.py` - facade over `parsing/`: `errors.py`, `line_text.py`
+  (line helpers), `expression_atoms.py` + `expression_postfix.py` assembled by
+  `expressions.py` into `ExprParser`, and `block_core.py` (driver state, `BLOCK_RUNS`,
+  `parse()`, `sub_block()`) plus one `_run_*` mixin per statement group in
+  `stmt_*.py`, assembled by `blocks.py`. Cut a long `if`/`elif` chain at whole
+  statement boundaries, keep the chain's order as a tuple of method names, and pass
+  the possibly-rewritten `line` from run to run so an alias rewritten by an earlier
+  run still reaches the later ones. Nested blocks recurse through `type(self)`, so
+  they keep the whole mixin set without importing the assembly.
 
 A split must be verbatim and proven, not reviewed: snapshot the registry or
 output before and after, diff handler metadata plus behavior over a call battery,
 and rebuild before claiming native coverage.
+
+When a step is not verbatim - a chain becomes mixin methods, `continue` becomes
+`return line, i` - code fingerprints no longer apply, so prove behavioural
+identity instead: a recursive dataclass fingerprint (including attributes the
+driver `setattr`s onto nodes), identical raised-error attributes, the parsed
+corpus in `examples/ stdlib/ tests/ mellow_packages/`, and the end-to-end
+compiled bytecode. Then show the comparison bites: drop each run from the order
+tuple and require the battery to change, because run predicates are near-disjoint
+and a plain reorder proves nothing.
 
 Prove a Python split by loading the `HEAD` copy of the module as a probe
 (`git show HEAD:<path>` plus `exec(compile(...))` with `__package__` set and the
