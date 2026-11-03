@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 
@@ -9,6 +10,7 @@ SRC = ROOT / "src" / "mellowlang"
 NATIVE_VM = ROOT / "native" / "mellowvm" / "src"
 STANDALONE = ROOT / "native" / "standalone" / "src"
 HOST_FAMILIES = SRC / "host" / "families"
+AI_FAMILIES = SRC / "ai"
 
 # Any file longer than this must appear in LINE_CEILINGS, so a new oversized
 # file is a deliberate decision instead of an accident.
@@ -17,7 +19,6 @@ FILE_LENGTH_LIMIT = 1_000
 # Largest each long file may become. Lower the number when the file shrinks;
 # never raise it to make this test pass - split the file instead.
 LINE_CEILINGS: dict[str, int] = {
-    "src/mellowlang/ai_core.py": 1_325,
     "src/mellowlang/cli/commands/agents.py": 1_150,
     "src/mellowlang/compiler/optimizer.py": 1_300,
     "src/mellowlang/package_manager.py": 1_100,
@@ -109,6 +110,43 @@ def test_host_syscall_registry_is_split_by_family() -> None:
         assert f"def register_{family}_functions(" in module
     # no syscall is registered by the assembler except the trivial echo probe
     assert assembler.count("HostFunction(") == 1
+
+
+def test_ai_engine_is_split_by_concern() -> None:
+    """ai_core.py is a facade; the AI engine lives in ai/ concern modules."""
+    facade = SRC / "ai_core.py"
+    assert _line_count(facade) <= 200, "the facade re-exports, it does not implement"
+    source = facade.read_text(encoding="utf-8")
+    assert "def ai_" not in source
+    assert "from .ai import" in source
+
+    families = sorted(p.stem for p in AI_FAMILIES.glob("*.py") if p.stem != "__init__")
+    for expected in ("state", "numerics", "network", "language_model", "models",
+                     "sessions", "llm_api", "llm_service", "providers", "registration"):
+        assert expected in families, f"ai/{expected}.py is missing"
+    for family in families:
+        assert _line_count(AI_FAMILIES / f"{family}.py") <= 300, f"ai/{family}.py grew back"
+
+    # The mutable AI stores live in exactly one module, so a handler can never
+    # write to a private copy of the registry.
+    stores = ("_MODELS", "_LLM_MODELS", "_SESSIONS", "_RUNTIME_STATE", "_API_CONFIG")
+    declared = re.compile(
+        rf"^({'|'.join(stores)})[:=]", re.MULTILINE)
+    state = (AI_FAMILIES / "state.py").read_text(encoding="utf-8")
+    assert set(declared.findall(state)) == set(stores), "ai/state.py owns every store"
+    for family in families:
+        if family == "state":
+            continue
+        text = (AI_FAMILIES / f"{family}.py").read_text(encoding="utf-8")
+        assert not declared.findall(text), f"a store is re-created in ai/{family}.py"
+
+    # registration is the only place that binds AI syscalls
+    assert "def register_ai_functions(" in (
+        AI_FAMILIES / "registration.py").read_text(encoding="utf-8")
+    for other in families:
+        if other == "registration":
+            continue
+        assert "HostFunction(" not in (AI_FAMILIES / f"{other}.py").read_text(encoding="utf-8")
 
 
 def test_package_facade_uses_focused_modules() -> None:
