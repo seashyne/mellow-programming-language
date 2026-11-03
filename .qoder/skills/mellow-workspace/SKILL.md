@@ -32,7 +32,7 @@ are permitted wrappers there.
 
 ## Hard rules (tests/test_workspace_boundaries.py)
 
-- No tracked `native/standalone/**/*.{c,h}` file may mention `mellowlang`. The
+- No tracked `native/standalone/**/*.{c,h,inc}` file may mention `mellowlang`. The
   standalone runtime is C-only; the Python layer is a separate product surface.
 - Repository root holds no `.py/.c/.h/.js/.ts` files beyond `main.py`, `setup.py`.
 - `.mellow` and `.mel` sources live only under `benchmarks`, `examples`,
@@ -60,6 +60,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-changed.ps1 -
 
 Jobs: `workspace` (boundary gate), `native` (CTest), `nativePy` (`tests/native`),
 `python` (`tests/core` + quality gates), `language`, `packages`, `benchmark`.
+`native` runs CTest against whatever is already in `build/standalone-release`;
+after touching `native/**` build first with
+`cmake --build build/standalone-release --config Release`, otherwise the job
+passes against a stale binary and proves nothing.
 Docs-only edits map to no jobs; `.github/`, `scripts/`, `pyproject.toml`, and
 `setup.py` map to all jobs. Run `workspace` plus the touched jobs before
 reporting work complete; do not run the benchmark job unless
@@ -69,6 +73,30 @@ standalone workload from `benchmarks/fixtures/hello.mellow`, never from
 The script exits 1 and lists the
 failed jobs, so compare its failures against the pre-existing set before
 attributing them to a change.
+
+## Splitting long files
+
+`tests/language/test_source_structure.py` holds `LINE_CEILINGS`: any file over
+1,000 lines must be declared there, and a declared file may never exceed its
+ceiling. Lower a ceiling when a file shrinks and delete the entry once it drops
+under the limit. Raise a ceiling only by splitting the file instead.
+
+Established seams, in the tree that owns them:
+
+- `src/mellowlang/host/` - `base.py` for `HostRegistry`/`HostFunction`/allowlist,
+  `families/<name>.py` for each `register_<name>_functions(h)` group, `runtime.py`
+  as a thin assembler that keeps the original registration order, and
+  `families/support.py` for predicates shared by more than one family.
+- `native/standalone/src/mellowc.c` - statement dispatch stays; loop-shape
+  recognizers move to `mellowc_fastloops.inc` (included, not compiled, so CMake
+  needs no change and the helpers stay private to that translation unit).
+- `native/mellowvm/src/mellowvm_module.c` - dispatch stays; syscalls, exec, and
+  storage live in their `.inc` fragments.
+- `src/mellowlang/package_manager.py` - facade over `packages/*`.
+
+A split must be verbatim and proven, not reviewed: snapshot the registry or
+output before and after, diff handler metadata plus behavior over a call battery,
+and rebuild before claiming native coverage.
 
 ## Moving trees
 

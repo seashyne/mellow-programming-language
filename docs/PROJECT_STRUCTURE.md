@@ -63,6 +63,23 @@ area that matches the task and stay inside it.
 - `docs/` - Current manuals, specifications, policies, and release notes.
 - `examples/` - Small maintained Mellow programs.
 
+## Module Boundaries
+
+Files that grew past a readable size are split along these seams.
+`tests/language/test_source_structure.py` carries the line ceilings, so a split
+cannot quietly grow back and a new long file has to be declared on purpose.
+
+| Area | Boundary |
+| --- | --- |
+| Host syscalls | `src/mellowlang/host/base.py` holds `HostRegistry`, `HostFunction`, and the public module allowlist. Each syscall group is its own `register_<family>_functions(h)` module under `src/mellowlang/host/families/`; `host/runtime.py` only assembles them in registration order. `families/support.py` keeps the argument predicates shared by more than one family. |
+| Standalone compiler | `native/standalone/src/mellowc.c` scans, parses, and dispatches statements. The while-loop shape recognizers and their fused emitters live in `native/standalone/src/mellowc_fastloops.inc`, included by that one translation unit; a new shape there needs a matching opcode executor in `mellowrt_core.c`. |
+| CPython extension | `native/mellowvm/src/mellowvm_module.c` keeps dispatch thin and includes `mellowvm_syscalls.inc`, `mellowvm_exec.inc`, and `mellowvm_storage.inc`. |
+| Facades | `src/mellowlang/package_manager.py` re-exports `packages/{config,metadata,manifest,lockfile,project}`; `host/registry.py` and `host/modules.py` stay stable import paths for the split host package. |
+
+`native/**/*.inc` fragments are part of the C surface: like the `.c` and `.h`
+files beside them, they must not mention `mellowlang` or reach the Python layer
+(`tests/test_workspace_boundaries.py`).
+
 ## Root Files
 
 - `README.md`, `SPEC.md`, `CHANGELOG.md`, `LICENSE` - public project documents.

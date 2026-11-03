@@ -36,7 +36,8 @@ def test_standalone_runtime_never_reaches_the_python_layer() -> None:
     offenders = [
         path
         for path in _tracked_files()
-        if path.startswith("native/standalone/") and path.endswith((".c", ".h"))
+        if path.startswith("native/standalone/")
+        and path.endswith((".c", ".h", ".inc"))  # .inc fragments are compiled too
     ]
     for path in offenders:
         text = (ROOT / path).read_text(encoding="utf-8", errors="ignore")
