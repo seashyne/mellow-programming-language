@@ -2,7 +2,7 @@
   "name": "mellowlang",
   "displayName": "MellowLang Language Support",
   "description": "Syntax highlighting + polished LSP for MellowLang (.mellow / .mel)",
-  "version": "2.9.8",
+  "version": "2.9.9",
   "publisher": "seashyne",
   "icon": "icons/mellow-logo.png",
   "engines": {

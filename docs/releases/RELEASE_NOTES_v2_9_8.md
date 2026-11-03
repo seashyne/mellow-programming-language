@@ -42,6 +42,13 @@ same bytecode now behaves the same on all three engines.
 
 ## Benchmarks (quick profile)
 
+> Superseded: these medians time whole subprocesses, so Windows process startup
+> (~5 ms) and dead-code elimination on the comparison languages dominate them.
+> The rerun in `benchmarks/native_vs_zig/RESULTS_2026-11-02_CROSS-LANGUAGE-HONEST.md`
+> measures work-only throughput on shapes no backend can eliminate. The
+> `arithmetic_loop` ratio below is a recognized fast-loop pattern, not general
+> numeric speed.
+
 - `arithmetic_loop` 25.2-25.6x over the Python VM, `function_calls` 7.6-9.8x,
   `money_add` 2.7x.
 - Standalone native run median 6.5-7.0 ms, Python CLI startup 63-64 ms.

@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "language": "Mellow Programming Language",
+  "version": "2.9.9",
+  "profile": "core",
+  "status": "in-development",
+  "goal": "Split the oversized host and compiler translation units along their existing seams and lock the result with a line-ceiling ratchet, without changing any observable language or runtime behaviour",
+  "baseline": {
+    "version": "2.9",
+    "manifest": "spec/mellow-2.9-core.json",
+    "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
+  },
+  "entrypoint": "SPEC.md",
+  "stable_core": "docs/STABLE_CORE.md",
+  "experimental_index": "docs/experimental/README.md",
+  "previous_patch": "spec/mellow-2.9.8-stability.json",
+  "v3_track": "spec/mellow-3.0-stability.json",
+  "required_gates": [
+    "tests/core",
+    "tests/language",
+    "tests/native",
+    "native-safety",
+    "native-fuzzer",
+    "package-registry-smoke",
+    "native-arm64-ci",
+    "release-gate"
+  ],
+  "release_commands": [
+    "powershell -File scripts/test-v294-stability.ps1",
+    "cmake -S native/standalone -B build/standalone-safety -DCMAKE_BUILD_TYPE=Debug -DMELLOW_ENABLE_SANITIZERS=ON -DMELLOW_BUILD_FUZZER=ON",
+    "ctest --test-dir build/standalone-safety --output-on-failure"
+  ],
+  "new_in_2_9_9": [
+    "src/mellowlang/host/runtime.py is a 66-line assembler over host/base.py plus fourteen host/families/<name>.py registration modules; the 204-syscall registry, its order, its costs, and every handler result are unchanged",
+    "argument-shape predicates shared by more than one syscall family live in host/families/support.py",
+    "native/standalone/src/mellowc.c keeps scanning, parsing, and statement dispatch while the while-loop shape recognizers and their fused emitters moved to mellowc_fastloops.inc, included by that one translation unit so CMake needs no change",
+    "tests/language/test_source_structure.py carries LINE_CEILINGS: a file over 1,000 lines must be declared and no declared file may exceed its ceiling, so the budgets only move down",
+    "the workspace boundary gate treats native/standalone .inc fragments as C surface, so they cannot reach the Python layer either",
+    "docs/PROJECT_STRUCTURE.md documents the module boundaries and the project skill records the split seams plus the rule that the native job needs an explicit cmake --build before CTest"
+  ],
+  "runtime_notes": [
+    "no syscall, opcode, bytecode layout, or CLI output changed in this patch",
+    "the encrypted save envelope (ChaCha20Poly1305 with HKDF) stays a Python service until phase 2",
+    "MELV standalone CLI hooks remain Python-side and are scheduled after the storage migration",
+    "green threads stay cooperative and explicit-yield based",
+    "the standalone heap registry is still a linear scan with no automatic GC trigger, which is the measured cost behind money/ledger throughput on the native surface"
+  ],
+  "runtime_policy": [
+    "Native C is the release-authoritative runtime for v2.9.9 core work",
+    "default C execution must fail fast when native support is missing",
+    "release and CI validation should include native-only execution plus sanitizer/fuzzer gates",
+    "a file split must be verbatim and proven by before/after equivalence, not by review"
+  ]
+}

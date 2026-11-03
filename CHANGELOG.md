@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+## 2.9.9 - 2026-11-03
+
+### Structure
+- Split `src/mellowlang/host/runtime.py` (1,470 lines) into `host/base.py`,
+  fourteen `host/families/<name>.py` registration modules, and a 66-line
+  assembler that keeps the original registration order. `families/support.py`
+  now holds the argument-shape predicates that were duplicated inline.
+- Split `native/standalone/src/mellowc.c` (1,210 lines) so the while-loop shape
+  recognizers and their fused emitters live in `mellowc_fastloops.inc`, included
+  by that one translation unit; CMake is unchanged.
+- Both splits are verbatim and proven by before/after equivalence: identical
+  204-syscall registry (names, order, costs, bounds) and 7,020 differential host
+  calls per side with identical results and errors.
+
+### Gates
+- `tests/language/test_source_structure.py` carries `LINE_CEILINGS`: any file
+  over 1,000 lines must be declared, and a declared file may not exceed its
+  ceiling. Ceilings only move down.
+- Added structure tests for the host family seam and the compiler fragment seam.
+- The workspace boundary gate now treats `native/standalone/**/*.inc` as C-only
+  surface.
+- `docs/PROJECT_STRUCTURE.md` documents module boundaries; the project skill
+  records the split seams and the rule that `native` requires an explicit
+  `cmake --build` before CTest.
+
+### Measured
+- Reran the cross-language comparison on optimizer-proof workloads and wrote
+  `benchmarks/native_vs_zig/RESULTS_2026-11-02_CROSS-LANGUAGE-HONEST.md`:
+  45.9 ns/iter for Mellow against 2.8 for gcc `-O3` on a serialized chain, plus
+  the startup floors and the shape cliff the previous table hid.
+- Root-caused the native money/ledger throughput defect to the linear
+  `heap_find()` scan and the absent GC trigger (553 microseconds per `money_add`
+  at 3,000 live blocks against 56 ns on the Python Decimal path).
+
 ## 2.9.8 - 2026-11-02
 
 ### Native Runtime Services

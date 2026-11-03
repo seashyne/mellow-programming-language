@@ -77,7 +77,7 @@ def test_full_native_version_has_no_python_runtime(native_binary: Path) -> None:
         check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == "Mellow Programming Language 2.9.8 (Full Native C)"
+    assert result.stdout.strip() == "Mellow Programming Language 2.9.9 (Full Native C)"
 
 
 def test_full_native_reports_runtime_platform(native_binary: Path) -> None:

@@ -1,6 +1,6 @@
-# MellowLang Stdlib Reference (v2.9.8)
+# MellowLang Stdlib Reference (v2.9.9)
 
-This is a pragmatic reference for the stable 2.9 line plus the v2.9.8
+This is a pragmatic reference for the stable 2.9 line plus the v2.9.9
 native C I/O, system, builtin-module, and GC/concurrency foundation additions.
 
 > Note: Host modules are **allowlisted**. Use `mellow modules` to see what is available.
@@ -33,9 +33,9 @@ native C I/O, system, builtin-module, and GC/concurrency foundation additions.
 - `call(fn, ...args)` *(dynamic function call)*
 
 Full Native C supports these built-ins directly in the standalone runtime and
-is the authoritative implementation for new v2.9.8 runtime work.
+is the authoritative implementation for new v2.9.9 runtime work.
 
-The v2.9.8 GC API marks reachable native handles from the VM stack/locals and
+The v2.9.9 GC API marks reachable native handles from the VM stack/locals and
 sweeps unreachable channel handles. `gc_stats()["mode"]` reports
 `mark-sweep-native-handles`. Channels work as native FIFO handles. `spawn`,
 `yield`, `workers`, `worker_count`, and `scheduler_mode` expose the native M:N
