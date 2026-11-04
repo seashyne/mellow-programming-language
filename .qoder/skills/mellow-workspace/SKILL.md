@@ -131,6 +131,19 @@ Established seams, in the tree that owns them:
   one module per subject (`jobs`, `webhooks`, `queue`, `drain`, `runner`, `http_api`).
   Ranks make the direction checkable: an import may only point at a lower rank, so a
   subject cannot reach into the driver that calls it and the package stays cycle-free.
+- `src/mellowlang/standalone_image.py` - facade over `mvi/`: the byte format
+  (`ops.py`, `format.py`, `binary.py`, `consts.py`), the pass (`state.py` owns the
+  accumulators, then `scopes.py`, `emit.py`, `entries.py`, `lowering.py`) and the
+  surface (`compile.py`), cut out of one 391-line function along its own comment
+  seams. Cutting a giant function at its seams means renaming every enclosing local it
+  shares to `state.<same name>`, and the rename set is scope-resolved, not the free
+  names: a name the block *assigns* counts as well as one it reads, or the extracted
+  function silently gets a fresh local and the write is lost (`_pending_syscall_name`
+  was read in one block and assigned in another). Rename NAME tokens, not text, so
+  comments and string literals keep their prose. `from __future__ import annotations`
+  makes a dataclass field and signature annotation dead at runtime, so a borrowed-name
+  audit has to split runtime from annotation-only imports and stub each runtime name
+  in the module that drew it.
 
 A battery that drives an HTTP handler and a clock adds traps the stateful-machine
 check does not hit:

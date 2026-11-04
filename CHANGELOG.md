@@ -3,6 +3,39 @@
 ## Unreleased
 
 ### Structure
+- Split `src/mellowlang/standalone_image.py` (668 lines) into
+  `src/mellowlang/mvi/`, one module per concern of the `.mvi` file: `ops.py` holds
+  the three lookup tables, `format.py` the header, the four entry records and
+  `to_bytes`, `binary.py` the project-root anchor and the standalone-executable
+  paths, `consts.py` the constant-pool and span helpers, `state.py` the `Lowering`
+  accumulators with `slot_for`/`enter_scope`, `scopes.py` the `func_table` rebuild
+  and the per-function slot scan, `emit.py` the opcode chain, `entries.py` the
+  function entries, core-module seed and the address/jump/module fix-ups,
+  `lowering.py` the driver, and `compile.py` the compile-source, compile-file and
+  run entry points - behind a 23-line imports-only facade that keeps the
+  `mellowlang.standalone_image` import path. The 391-line
+  `lower_compiled_to_standalone_image` became that driver plus nine named steps,
+  with every enclosing local the blocks shared turned into a `Lowering` field, so
+  the cut is a rename and not a rewrite. Imports point only at a lower module in
+  that order, and only the facade reaches into the package.
+- Also proven against `HEAD`: the 19 module-level members are identical to the
+  monolith (instruction stream, names, consts, dataclass fields and values) with
+  exactly two declared edits - `_project_root` re-anchored from `parents[2]` to
+  `parents[3]`, and `compile_source_to_standalone_image`'s lazy `from .compiler`
+  deepened to `from ..compiler`; the 391 lines are accounted for, every non-blank
+  line claimed by exactly one emitted block, and each rewritten body's AST is
+  equal to the original's after the same rename. 121 differential cases produce
+  byte-for-byte identical images or the same error type and message (106
+  lowerings, 58 of them from real `.mellow` source, plus the compile/run surface
+  and the byte writer), and those images are 61 distinct files from 135 to 9,051
+  bytes. Statement coverage executed 336 of the 337 moved statement lines, the one
+  gap being unreachable in `HEAD` too, and stubbing any of the 26 runtime imports
+  drawn between the modules changes that battery; the other 6 are annotation-only
+  because `from __future__ import annotations` keeps them unevaluated.
+  `test_standalone_image_format_is_split_by_concern()` now locks each member's and
+  step's home, the 19 `Lowering` fields, the one-way layering, the exported surface
+  against the package, and that no other module imports `mvi`; the
+  `compiler.bytecode` absence check now spans the package rather than the facade.
 - Split `src/mellowlang/cli/commands/agents.py` (1,137 lines) into
   `cli/commands/agent_groups/`: `deps.py` keeps the 81 lazy `_lazy_attr` aliases,
   `support.py` the helpers shared across groups, and one module per subject of

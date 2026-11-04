@@ -16,6 +16,7 @@ PARSING = SRC / "parsing"
 INTERP = SRC / "vm" / "interp"
 AGENT_GROUPS = SRC / "cli" / "commands" / "agent_groups"
 SCHEDULING = SRC / "agents" / "scheduling"
+MVI = SRC / "mvi"
 
 # One module per IR pass section, plus the shared value types and the driver.
 PASS_MODULES = ("graph", "folding", "dataflow", "rewrite", "gvn", "sccp", "loops",
@@ -156,6 +157,46 @@ SCHED_SUBJECT_HOME = {
 SCHED_LAYER_RANK = {
     "paths": 0, "backoff": 0, "state": 1, "cron": 1, "jobs": 2, "queue": 2,
     "drain": 3, "webhooks": 3, "runner": 4, "http_api": 4,
+}
+
+# standalone_image.py is a facade over mvi/: the format and the tables it reads, the
+# anchors under the project root, the accumulators one lowering carries, the steps that
+# fill them, and the three entry points on top. The 391-line pass is a driver plus the
+# named steps below, run in the order the monolith ran its blocks.
+MVI_FORMAT_MODULES = ("ops", "format", "binary", "consts")
+MVI_PASS_MODULES = ("state", "scopes", "emit", "entries", "lowering")
+MVI_SURFACE_MODULES = ("compile",)
+MVI_MODULES = (*MVI_FORMAT_MODULES, *MVI_PASS_MODULES, *MVI_SURFACE_MODULES)
+# An import may only point at a module earlier in this order, which is what keeps the
+# byte format from knowing anything about the pass that fills it.
+MVI_LAYER_RANK = {name: index for index, name in enumerate(MVI_MODULES)}
+# Where each member the monolith owned at module level must live.
+MVI_MEMBER_HOME = {
+    "MAGIC": "format", "VERSION": "format", "FunctionEntry": "format",
+    "EventEntry": "format", "ModuleEntry": "format", "StandaloneImage": "format",
+    "_pack_string": "format",
+    "_STANDALONE_OPS": "ops", "_COMPARE_MAP": "ops", "_SYSCALL_NAME_MAP": "ops",
+    "_project_root": "binary", "_standalone_binary": "binary",
+    "_core_module_candidates": "binary",
+    "_add_const": "consts", "_const_from_python": "consts", "_span_tuple": "consts",
+    "compile_source_to_standalone_image": "compile",
+    "compile_file_to_standalone_image": "compile", "run_standalone_image": "compile",
+}
+# Where each step cut out of the lowering function must live.
+MVI_STEP_HOME = {
+    "Lowering": "state",
+    "rebuild_func_table": "scopes", "scan_func_scopes": "scopes",
+    "emit_instruction": "emit",
+    "build_function_entries": "entries", "seed_core_module": "entries",
+    "remap_function_addresses": "entries", "rewrite_jump_targets": "entries",
+    "dedupe_modules": "entries",
+    "lower_compiled_to_standalone_image": "lowering",
+}
+# The two helpers the monolith nested inside the pass became methods of the accumulators,
+# and the byte writer stayed a method of the image it writes.
+MVI_METHOD_HOME = {
+    "slot_for": ("state", "Lowering"), "enter_scope": ("state", "Lowering"),
+    "to_bytes": ("format", "StandaloneImage"),
 }
 
 # Any file longer than this must appear in LINE_CEILINGS, so a new oversized
@@ -742,6 +783,88 @@ def test_agents_scheduler_is_split_by_subject() -> None:
                 f"{module}.py imports {dep}, which is not a layer below it")
 
 
+def test_standalone_image_format_is_split_by_concern() -> None:
+    """standalone_image.py is a facade; mvi/ holds the format, the pass and the surface."""
+    facade = SRC / "standalone_image.py"
+    assert _line_count(facade) <= 40, "the facade re-exports, it does not lower"
+    source = facade.read_text(encoding="utf-8")
+    assert "def " not in source, "the facade holds no logic"
+    assert "class " not in source, "the facade declares no types"
+    assert "from .mvi." in source
+
+    modules = sorted(p.stem for p in MVI.glob("*.py") if p.stem != "__init__")
+    assert modules == sorted(MVI_MODULES), modules
+    for module in [*modules, "__init__"]:
+        assert _line_count(MVI / f"{module}.py") <= 300, (
+            f"mvi/{module}.py grew past one concern")
+
+    # every module-level name the monolith owned is declared once, in the module
+    # that owns its concern
+    homes: dict[str, str] = {}
+    for module in modules:
+        for name in _top_level_names(MVI / f"{module}.py"):
+            assert name not in homes, f"{name} is declared in two mvi modules"
+            homes[name] = module
+    assert homes == {**MVI_MEMBER_HOME, **MVI_STEP_HOME}, (
+        "the mvi modules drifted from their declared concerns: "
+        f"{sorted(set(homes.items()) ^ set({**MVI_MEMBER_HOME, **MVI_STEP_HOME}.items()))}")
+
+    # the pass carries its accumulators on one state object, because the monolith's
+    # 391-line body shared them across every block - a step that grew its own copy
+    # would lose the writes the next step reads
+    state_tree = ast.parse((MVI / "state.py").read_text(encoding="utf-8"))
+    lowering = next(n for n in state_tree.body
+                    if isinstance(n, ast.ClassDef) and n.name == "Lowering")
+    fields = [n.target.id for n in lowering.body if isinstance(n, ast.AnnAssign)]
+    assert len(fields) == len(set(fields)) == 19, f"Lowering declares {fields}"
+    for name, (module, owner) in MVI_METHOD_HOME.items():
+        tree = ast.parse((MVI / f"{module}.py").read_text(encoding="utf-8"))
+        holder = next((n for n in tree.body
+                       if isinstance(n, ast.ClassDef) and n.name == owner), None)
+        assert holder is not None, f"{module}.py no longer declares {owner}"
+        assert name in [n.name for n in holder.body if isinstance(n, ast.FunctionDef)], (
+            f"{name} is not a method of {owner}")
+
+    # the driver stays a driver: the opcode chain it used to hold inline is emit.py
+    driver = _functions(MVI / "lowering.py")
+    assert driver == ["lower_compiled_to_standalone_image"], driver
+    assert "elif op ==" not in (MVI / "lowering.py").read_text(encoding="utf-8"), (
+        "the opcode chain leaked back into the driver")
+
+    # layering: a module may only import a concern earlier in MVI_MODULES, never a
+    # peer or the pass above it - that is what keeps the byte format from knowing
+    # anything about the lowering that fills it
+    for module in modules:
+        tree = ast.parse((MVI / f"{module}.py").read_text(encoding="utf-8"))
+        for node in tree.body:
+            if not (isinstance(node, ast.ImportFrom) and node.level == 1):
+                continue
+            dep = (node.module or "").split(".")[0]
+            assert dep in MVI_LAYER_RANK, (
+                f"{module}.py imports .{node.module}, which is not an mvi module")
+            assert MVI_LAYER_RANK[dep] < MVI_LAYER_RANK[module], (
+                f"{module}.py imports {dep}, which is not a layer below it")
+
+    # the facade hands out the surface callers need and nothing of the pass internals
+    exported = {alias.name for node in ast.parse(source).body
+                if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("mvi.")
+                for alias in node.names}
+    internals = set(MVI_STEP_HOME) - {"lower_compiled_to_standalone_image"}
+    assert exported == set(homes) - internals, (
+        f"the facade drifted from the mvi modules: {sorted(exported ^ (set(homes) - internals))}")
+
+    # and only the facade reaches into the package, so `mellowlang.standalone_image`
+    # stays the one import path for the image format
+    for path in sorted(SRC.rglob("*.py")):
+        if MVI in path.parents or path == facade:
+            continue
+        reaching = {node.module for node in ast.walk(
+                        ast.parse(path.read_text(encoding="utf-8")))
+                    if isinstance(node, ast.ImportFrom)
+                    and (node.module or "").split(".")[0] == "mvi"}
+        assert not reaching, f"{path.name} imports {sorted(reaching)}; use standalone_image"
+
+
 def test_package_facade_uses_focused_modules() -> None:
     source = (SRC / "package_manager.py").read_text(encoding="utf-8")
     for module in ("config", "metadata", "manifest", "lockfile", "project"):
@@ -780,9 +903,11 @@ def test_standalone_compiler_keeps_loop_recognizers_separate() -> None:
 def test_compiler_v3_has_no_legacy_compiler_or_silent_fallback() -> None:
     compiler_dir = SRC / "compiler"
     facade = (compiler_dir / "compiler.py").read_text(encoding="utf-8")
-    standalone = (SRC / "standalone_image.py").read_text(encoding="utf-8")
+    image_sources = "\n".join(
+        (path.read_text(encoding="utf-8"))
+        for path in [SRC / "standalone_image.py", *sorted(MVI.glob("*.py"))])
 
     assert not (compiler_dir / "bytecode.py").exists()
     assert "_BytecodeCompiler" not in facade
-    assert "compiler.bytecode" not in standalone
+    assert "compiler.bytecode" not in image_sources
     assert "v3-ir-bytecode" in facade
