@@ -3,6 +3,35 @@
 ## Unreleased
 
 ### Structure
+- Split `src/mellowlang/compiler/ir_lowering.py` (597 lines) into
+  `src/mellowlang/compiler/lowering/`, behind a 13-line imports-only facade that keeps
+  the `mellowlang.compiler.ir_lowering` path `compiler.py` uses. `tables.py` holds the
+  vocabulary (`STDLIB_CALLS` with 141 entries, `SYSCALL_ARGUMENTS` with 15), `errors.py`
+  `UnsupportedLoweringError`, and `syscalls.py` the module-call resolver and the
+  named-argument binder. `driver.py` owns the machine - `_LoopCtx`, the instruction
+  list, the label and temp counters, the loop stack and `lower()` - as
+  `LoweringDriverMixin`; `statements.py` and `expressions.py` hold one dispatch chain
+  each (`_stmt`, `_expr`); `lowerer.py` is a class header assembling the three, and
+  defines nothing else. Imports only point downwards - `tables`/`errors`/`driver` (0),
+  `syscalls` (1), `statements`/`expressions` (2), `lowerer` (3) - and no module outside
+  the facade may import the package. The unused `Optional` import was dropped rather
+  than re-exported.
+- Also proven against `HEAD`: the 10 functions and 2 classes are byte-identical with
+  equal code signatures (masking `CO_METHOD`, which a module-level re-compile of a
+  method cannot carry), both tables compare equal, and the assembled `IRLowerer` gets
+  every method from its declared mixin. 39 hand-built ASTs - the error paths no
+  maintained program reaches, from `TryStmt` and `foreach` unpacking to unknown
+  operators, anonymous f-string parts and allowlist misses - and 120 real `.mellow`
+  files (101 producing an `IRProgram`, 37 distinct opcodes) lower identically to the
+  monolith, down to every instruction's opcode, argument, line and column. The battery
+  executes every executable line of all 7 modules, needing no unreachable exemption,
+  and stubbing each of the 55 runtime imports, or patching a provider such as
+  `dataclasses.dataclass`, changes that battery; the other 9 are annotation-only because
+  `from __future__ import annotations` keeps them unevaluated.
+  `test_ir_lowering_structure.py` carries the contract - each member's home, the
+  assembler's empty body and bases, each module at 300 lines or fewer, the one-way
+  layering, the exported surface, and that no other module imports the package - in its
+  own file because `test_source_structure.py` sits at its declared 1,100-line ceiling.
 - Split `src/mellowlang/cli/commands/runtime.py` (661 lines) into
   `src/mellowlang/cli/commands/runtime_groups/`, behind a 12-line imports-only
   facade that keeps the import path `cli/main.py` already uses. `deps.py` holds the

@@ -154,6 +154,14 @@ Established seams, in the tree that owns them:
   makes a dataclass field and signature annotation dead at runtime, so a borrowed-name
   audit has to split runtime from annotation-only imports and stub each runtime name
   in the module that drew it.
+- `src/mellowlang/compiler/ir_lowering.py` - facade over `compiler/lowering/`: the two
+  lookup tables, the error, the module-call helpers, the machine (`_LoopCtx` plus the
+  instruction list, counters and loop stack), one mixin per dispatch chain, and an
+  assembler that is only a class header. The tables are leaves, so the vocabulary can
+  grow without any chain importing another. When comparing moved methods against the
+  monolith, mask `CO_METHOD` out of `co_flags`: a `def` compiled at module level for
+  the comparison lacks the flag it had inside a class body, and every check fails on
+  that one bit.
 - `src/mellowlang/fast_compiler.py` - facade over `fastlang/`: the Python prelude
   (`builtins.py`), the name mangler (`names.py`), the writer helpers (`writer.py`), one
   emitter mixin per dispatch chain (`statements.py`, `expressions.py`), `transpiler.py`
