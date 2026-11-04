@@ -17,6 +17,7 @@ INTERP = SRC / "vm" / "interp"
 AGENT_GROUPS = SRC / "cli" / "commands" / "agent_groups"
 SCHEDULING = SRC / "agents" / "scheduling"
 MVI = SRC / "mvi"
+FASTLANG = SRC / "fastlang"
 
 # One module per IR pass section, plus the shared value types and the driver.
 PASS_MODULES = ("graph", "folding", "dataflow", "rewrite", "gvn", "sccp", "loops",
@@ -199,6 +200,39 @@ MVI_METHOD_HOME = {
     "to_bytes": ("format", "StandaloneImage"),
 }
 
+# fast_compiler.py is a facade over fastlang/: the Python prelude it emits, the name
+# mangler, the three emitter mixins, the class that assembles them, and the runner.
+# The monolith's methods already sat at class indentation, so each mixin is HEAD's text
+# with no edit at all - which is only provable if the seams stay this shape.
+FL_LEAF_MODULES = ("builtins", "names", "writer")
+FL_EMITTER_MODULES = ("statements", "expressions")
+FL_SURFACE_MODULES = ("transpiler", "runner")
+FL_MODULES = (*FL_LEAF_MODULES, *FL_EMITTER_MODULES, *FL_SURFACE_MODULES)
+# An import may only point at a module earlier in this order: an emitter knows the name
+# mangler, never another emitter, and the runner knows only the transpiler.
+FL_LAYER_RANK = {name: index for index, name in enumerate(FL_MODULES)}
+# Where each member the monolith declared at module level must live.
+FL_MEMBER_HOME = {"_MELLOW_BUILTINS_SRC": "builtins", "_py_name": "names",
+                  "PyTranspiler": "transpiler", "FastRunner": "runner"}
+# The class that used to hold every method is now assembled from these.
+FL_MIXIN_HOME = {"WriterMixin": "writer", "StatementMixin": "statements",
+                 "ExpressionMixin": "expressions"}
+# Every method the monolith's two classes owned, by the module that now carries it.
+FL_METHOD_HOME = {
+    "WriterMixin._w": ("writer", "WriterMixin"),
+    "WriterMixin._w_raw": ("writer", "WriterMixin"),
+    "WriterMixin._new_tmp": ("writer", "WriterMixin"),
+    "StatementMixin._stmt": ("statements", "StatementMixin"),
+    "StatementMixin._skill_def": ("statements", "StatementMixin"),
+    "StatementMixin._import_stmt": ("statements", "StatementMixin"),
+    "ExpressionMixin._expr": ("expressions", "ExpressionMixin"),
+    "ExpressionMixin._call_expr": ("expressions", "ExpressionMixin"),
+    "PyTranspiler.__init__": ("transpiler", "PyTranspiler"),
+    "PyTranspiler.transpile": ("transpiler", "PyTranspiler"),
+    "FastRunner.__init__": ("runner", "FastRunner"),
+    "FastRunner.run": ("runner", "FastRunner"),
+}
+
 # Any file longer than this must appear in LINE_CEILINGS, so a new oversized
 # file is a deliberate decision instead of an accident.
 FILE_LENGTH_LIMIT = 1_000
@@ -215,6 +249,12 @@ LINE_CEILINGS: dict[str, int] = {
     "native/standalone/src/mellowrt_storage.c": 1_000,
     "native/standalone/src/mellowrt_syscalls.c": 975,
     "tests/native/test_full_native_c_cli.py": 1_375,
+    # This gate is one self-contained file on purpose: nothing under tests/ imports a
+    # helper in-tree, and every declared boundary reads in one place. Each split adds its
+    # tables and its contract, so the headroom is deliberate - when a further split
+    # reaches past it, the per-subsystem split tests move to their own module rather
+    # than the ceiling rising again.
+    "tests/language/test_source_structure.py": 1_100,
 }
 
 LENGTH_SUFFIXES = {".py", ".c", ".h", ".inc"}
@@ -863,6 +903,89 @@ def test_standalone_image_format_is_split_by_concern() -> None:
                     if isinstance(node, ast.ImportFrom)
                     and (node.module or "").split(".")[0] == "mvi"}
         assert not reaching, f"{path.name} imports {sorted(reaching)}; use standalone_image"
+
+
+def test_fast_compiler_is_split_by_concern() -> None:
+    """fast_compiler.py is a facade; fastlang/ holds the prelude, the emitters, the runner."""
+    facade = SRC / "fast_compiler.py"
+    assert _line_count(facade) <= 30, "the facade re-exports, it does not transpile"
+    source = facade.read_text(encoding="utf-8")
+    assert "def " not in source, "the facade holds no logic"
+    assert "class " not in source, "the facade declares no types"
+    assert "from .fastlang." in source
+
+    modules = sorted(p.stem for p in FASTLANG.glob("*.py") if p.stem != "__init__")
+    assert modules == sorted(FL_MODULES), modules
+    for module in [*modules, "__init__"]:
+        assert _line_count(FASTLANG / f"{module}.py") <= 300, (
+            f"fastlang/{module}.py grew past one concern")
+
+    # every module-level name the monolith declared is declared once, in the module that
+    # owns its concern - and the mixins are not re-exported, so no caller can rebuild the
+    # transpiler from a subset of its emitters
+    homes: dict[str, str] = {}
+    for module in modules:
+        for name in _top_level_names(FASTLANG / f"{module}.py"):
+            assert name not in homes, f"{name} is declared in two fastlang modules"
+            homes[name] = module
+    assert homes == {**FL_MEMBER_HOME, **FL_MIXIN_HOME}, (
+        "the fastlang modules drifted from their declared concerns: "
+        f"{sorted(set(homes.items()) ^ set({**FL_MEMBER_HOME, **FL_MIXIN_HOME}.items()))}")
+
+    # the class the CLI imports is assembled from exactly the three emitters, in order,
+    # and each method still sits on the mixin that owned it in the monolith
+    def methods(path: Path, owner: str) -> list[str]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        holder = next((n for n in tree.body
+                       if isinstance(n, ast.ClassDef) and n.name == owner), None)
+        assert holder is not None, f"{path.name} no longer declares {owner}"
+        return [n.name for n in holder.body if isinstance(n, ast.FunctionDef)]
+
+    tp_tree = ast.parse((FASTLANG / "transpiler.py").read_text(encoding="utf-8"))
+    tp_class = next(n for n in tp_tree.body
+                    if isinstance(n, ast.ClassDef) and n.name == "PyTranspiler")
+    assert [b.id for b in tp_class.bases] == [
+        "WriterMixin", "StatementMixin", "ExpressionMixin"], (
+        f"PyTranspiler assembles {[ast.unparse(b) for b in tp_class.bases]}")
+    assert methods(FASTLANG / "transpiler.py", "PyTranspiler") == ["__init__", "transpile"]
+    for dotted, (module, owner) in FL_METHOD_HOME.items():
+        assert dotted.split(".")[1] in methods(FASTLANG / f"{module}.py", owner), (
+            f"{dotted} is not a method of {owner} in fastlang/{module}.py")
+
+    # the driver assembles and delegates; the two dispatch chains live in their own
+    # modules and never leak back into the class header or transpile()
+    transpiler_src = (FASTLANG / "transpiler.py").read_text(encoding="utf-8")
+    assert "isinstance(s," not in transpiler_src and "isinstance(e," not in transpiler_src
+    assert "isinstance(s," in (FASTLANG / "statements.py").read_text(encoding="utf-8")
+    assert "isinstance(e," in (FASTLANG / "expressions.py").read_text(encoding="utf-8")
+
+    # layering: an emitter may reach the name mangler and nothing else of its peers,
+    # so a statement form and an expression form cannot start sharing state
+    for module in modules:
+        tree = ast.parse((FASTLANG / f"{module}.py").read_text(encoding="utf-8"))
+        for node in tree.body:
+            if not (isinstance(node, ast.ImportFrom) and node.level == 1):
+                continue
+            dep = (node.module or "").split(".")[0]
+            assert dep in FL_LAYER_RANK, (
+                f"{module}.py imports .{node.module}, which is not a fastlang module")
+            assert FL_LAYER_RANK[dep] < FL_LAYER_RANK[module], (
+                f"{module}.py imports {dep}, which is not a layer below it")
+
+    # the facade hands out the members callers used, and only the facade reaches in
+    exported = {alias.name for node in ast.parse(source).body
+                if isinstance(node, ast.ImportFrom)
+                and (node.module or "").startswith("fastlang.")
+                for alias in node.names}
+    assert exported == set(FL_MEMBER_HOME), sorted(exported ^ set(FL_MEMBER_HOME))
+    for path in sorted(SRC.rglob("*.py")):
+        if FASTLANG in path.parents or path == facade:
+            continue
+        reaching = {node.module for node in ast.walk(
+                        ast.parse(path.read_text(encoding="utf-8")))
+                    if isinstance(node, ast.ImportFrom)
+                    and (node.module or "").split(".")[0] == "fastlang"}
+        assert not reaching, f"{path.name} imports {sorted(reaching)}; use fast_compiler"
 
 
 def test_package_facade_uses_focused_modules() -> None:

@@ -3,6 +3,41 @@
 ## Unreleased
 
 ### Structure
+- Split `src/mellowlang/fast_compiler.py` (662 lines) into `src/mellowlang/fastlang/`,
+  one module per concern of the compile-to-Python fast path: `builtins.py` holds
+  `_MELLOW_BUILTINS_SRC`, the Python prelude every transpiled program starts with,
+  `names.py` the `_py_name` mangler, `writer.py` `WriterMixin` (`_w`, `_w_raw`,
+  `_new_tmp`), `statements.py` `StatementMixin` (`_stmt`, `_skill_def`, `_import_stmt`),
+  `expressions.py` `ExpressionMixin` (`_expr`, `_call_expr`), `transpiler.py` assembling
+  the three mixins into `PyTranspiler` with only `__init__` and `transpile()`, and
+  `runner.py` `FastRunner` - behind a 17-line imports-only facade that keeps the
+  `mellowlang.fast_compiler` import path the CLI commands and tests already use. The
+  monolith's methods already sat at class indentation, so each move is verbatim: the
+  only text this split authors is a docstring, a future import, a mixin header and the
+  import block per module, and `symtable` free-name analysis resolves every name a
+  module reads from outside itself instead of a hand-written scope walk. Imports point
+  only at a lower layer - leaves, then the two emitters, then the assembled class, then
+  the runner - so an emitter cannot reach a peer, and only the facade imports `fastlang`.
+- Also proven against `HEAD`: all 4 module-level members and all 10 methods of the two
+  classes are the monolith's own code objects (same instruction stream, names, consts,
+  docstrings and signatures), `PyTranspiler` assembles
+  `WriterMixin/StatementMixin/ExpressionMixin`, and the instance state matches. 98 real
+  `.mellow` programs transpile to byte-identical Python (78 produced source, 20 raised
+  the same `ParseError`), 54 runnable ones produce identical output, and 86 hand-built
+  AST nodes - fed straight to `_stmt`/`_expr`, since the chains hold branches no
+  maintained program reaches - render identically including the writer's counters. The
+  facade keeps all 5 caller-visible names; the 58 that left are the monolith's own
+  import bindings and no file under `src/` or `tests/` imports any of them from
+  `fast_compiler`. Statement coverage executed all 320 statement lines of the 7 modules
+  (one `except Exception: pass` around a `sys.stdout` restore is declared unreachable,
+  docstring statements cannot be traced), and stubbing any of the 49 runtime imports in
+  the module that drew it changes that battery; 2 are annotation-only (`Expr`, `Stmt`)
+  and 3 are consumed once by a class header (`*Mixin`), which the MRO check covers.
+  `test_fast_compiler_is_split_by_concern()` now locks the module set, each member's and
+  method's home, the mixin assembly and driver shape, the one-way layering, the exported
+  surface, and that no other module imports `fastlang`; that gate file is now declared
+  in `LINE_CEILINGS` at 1,100, because each split adds its tables there and the next
+  overflow moves the split contracts to their own module rather than raising it again.
 - Split `src/mellowlang/standalone_image.py` (668 lines) into
   `src/mellowlang/mvi/`, one module per concern of the `.mvi` file: `ops.py` holds
   the three lookup tables, `format.py` the header, the four entry records and

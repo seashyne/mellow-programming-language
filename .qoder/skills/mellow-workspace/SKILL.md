@@ -144,6 +144,16 @@ Established seams, in the tree that owns them:
   makes a dataclass field and signature annotation dead at runtime, so a borrowed-name
   audit has to split runtime from annotation-only imports and stub each runtime name
   in the module that drew it.
+- `src/mellowlang/fast_compiler.py` - facade over `fastlang/`: the Python prelude
+  (`builtins.py`), the name mangler (`names.py`), the writer helpers (`writer.py`), one
+  emitter mixin per dispatch chain (`statements.py`, `expressions.py`), `transpiler.py`
+  assembling the three into `PyTranspiler` with only `__init__` and `transpile()`, and
+  `runner.py` holding `FastRunner`. Because the monolith's methods already sat at class
+  indentation, each move was verbatim - the only authored text is a docstring, the
+  future import, the mixin header and the import block - so `symtable` free-name
+  analysis replaces hand-rolled scope walking: every name a module reads from outside
+  itself must resolve to a sibling member, a stdlib module name, `..ast`/`..parser` or
+  typing, and a miss is a hard failure rather than a silent `NameError` later.
 
 A battery that drives an HTTP handler and a clock adds traps the stateful-machine
 check does not hit:
@@ -200,6 +210,21 @@ Command handlers add oracle traps that a stateful machine does not have:
 - Beyond ids, timings, hashes and addresses, `parallel` step lists come back in
   scheduler order. Mask per-run values before sorting the list pieces, so the sort
   key never depends on a value that differs per run.
+
+Driving an emitter adds traps neither a state machine nor a command handler has:
+
+- A statement or expression chain has branches no maintained program reaches - an empty
+  body, an unsupported node, a bare `try`, `_w_raw`. Feed hand-built AST nodes straight
+  to `_stmt`/`_expr`, bypassing the parser, so statement coverage can reach all of them;
+  the same cases keep the stub-every-import proof honest. Compare the writer's counters
+  and buffer, not only the emitted text, so a lost indent level or temp-numbering state
+  shows up.
+- Some lines no battery can reach: a docstring is an `ast.Expr` statement the compiler
+  emits no line event for, and an `except Exception: pass` around a `sys.stdout` restore
+  cannot raise. Declare them by file and line instead of dropping the check.
+- An import consumed only by a class header runs at import, so stubbing it changes no
+  call - prove that one through the assembled MRO, and split the borrowed-name report
+  into runtime, annotation-only and header-only.
 
 A split must be verbatim and proven, not reviewed: snapshot the registry or
 output before and after, diff handler metadata plus behavior over a call battery,
