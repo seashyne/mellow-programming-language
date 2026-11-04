@@ -240,14 +240,6 @@ FILE_LENGTH_LIMIT = 1_000
 # never raise it to make this test pass - split the file instead.
 LINE_CEILINGS: dict[str, int] = {
     "src/mellowlang/package_manager.py": 1_100,
-    "native/mellowvm/src/mellowvm_exec.inc": 800,
-    "native/mellowvm/src/mellowvm_module.c": 700,
-    "native/mellowvm/src/mellowvm_storage.inc": 800,
-    "native/mellowvm/src/mellowvm_syscalls.inc": 900,
-    "native/standalone/src/mellowrt_core.c": 950,
-    "native/standalone/src/mellowrt_ledger.c": 975,
-    "native/standalone/src/mellowrt_storage.c": 1_000,
-    "native/standalone/src/mellowrt_syscalls.c": 975,
     "tests/native/test_full_native_c_cli.py": 1_375,
     # This gate is one self-contained file on purpose: nothing under tests/ imports a
     # helper in-tree, and every declared boundary reads in one place. Each split adds its
@@ -994,29 +986,61 @@ def test_package_facade_uses_focused_modules() -> None:
         assert f"from .packages.{module} import" in source
 
 
+_PART_RE = re.compile(r"^(?P<stem>.+)_part(?P<index>\d+)$")
+
+
+def _fragment_parent(part: Path) -> Path:
+    """The translation unit that includes a `*_partN.inc` fragment."""
+    match = _PART_RE.match(part.stem)
+    assert match, part
+    for suffix in (".c", ".inc"):
+        candidate = part.with_name(match["stem"] + suffix)
+        if candidate.is_file():
+            return candidate
+    raise AssertionError(f"{part.name} belongs to no translation unit")
+
+
+def test_native_fragments_are_contiguous_parts_of_their_parent() -> None:
+    parts = [p for p in (ROOT / "native").rglob("*_part*.inc") if "build" not in p.parts]
+    assert parts, "the native splits went missing"
+    by_parent: dict[Path, list[Path]] = {}
+    for part in parts:
+        by_parent.setdefault(_fragment_parent(part), []).append(part)
+
+    for parent, fragments in sorted(by_parent.items()):
+        assert _line_count(parent) <= 300, f"{parent.name} is not a header plus includes"
+        base = _PART_RE.match(fragments[0].stem)["stem"]
+        expected = [f"{base}_part{i}.inc" for i in range(1, len(fragments) + 1)]
+        assert sorted(p.name for p in fragments) == expected, (
+            f"{parent.name} has a gap in its fragments: {sorted(p.name for p in fragments)}")
+        included = re.findall(r'^\s*#include "([^"]+_part\d+\.inc)"',
+                              parent.read_text(encoding="utf-8"), re.MULTILINE)
+        assert included == expected, (
+            f"{parent.name} must include {expected} in order, not {included}")
+        for fragment in fragments:
+            assert _line_count(fragment) <= 300, f"{fragment.name} grew past one subject"
+
+
 def test_native_vm_dispatch_and_syscalls_have_explicit_boundaries() -> None:
-    module = NATIVE_VM / "mellowvm_module.c"
     syscalls = NATIVE_VM / "mellowvm_syscalls.inc"
     executor = NATIVE_VM / "mellowvm_exec.inc"
-    assert syscalls.is_file()
-    assert executor.is_file()
-    assert '#include "mellowvm_syscalls.inc"' in module.read_text(encoding="utf-8")
-    assert '#include "mellowvm_exec.inc"' in module.read_text(encoding="utf-8")
-    assert _line_count(module) <= 700
-    assert _line_count(syscalls) <= 900
-    assert _line_count(executor) <= 800
+    storage = NATIVE_VM / "mellowvm_storage.inc"
+    assert syscalls.is_file() and executor.is_file() and storage.is_file()
+    module = "".join(p.read_text(encoding="utf-8")
+                     for p in sorted(NATIVE_VM.glob("mellowvm_module_part*.inc")))
+    for fragment in (storage.name, syscalls.name, executor.name):
+        assert f'#include "{fragment}"' in module, fragment
 
 
 def test_standalone_compiler_keeps_loop_recognizers_separate() -> None:
-    module = STANDALONE / "mellowc.c"
     recognizers = STANDALONE / "mellowc_fastloops.inc"
-    source = module.read_text(encoding="utf-8")
-    assert recognizers.is_file()
+    parts = sorted(STANDALONE.glob("mellowc_part*.inc"))
+    assert recognizers.is_file() and parts
+    source = "".join(p.read_text(encoding="utf-8") for p in parts)
     assert '#include "mellowc_fastloops.inc"' in source
-    assert _line_count(module) <= 700
-    assert _line_count(recognizers) <= 650
     # the recognizers are file-static helpers with a single translation unit
-    fragment = recognizers.read_text(encoding="utf-8")
+    fragment = "".join(p.read_text(encoding="utf-8")
+                       for p in sorted(STANDALONE.glob("mellowc_fastloops_part*.inc")))
     assert "mellowlang" not in fragment, "the standalone engine stays C-only"
     for name in ("expr_is_i64_literal", "emit_fast_i64_sum_loop", "emit_fast_string_append_loop"):
         assert f"static int {name}(" in fragment, f"{name} is defined outside the fragment"

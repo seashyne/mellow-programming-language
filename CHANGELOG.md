@@ -3,6 +3,39 @@
 ## Unreleased
 
 ### Structure
+- Split the 15 native C sources over 300 lines into fragment parents. C cannot split
+  one translation unit across import seams, so each parent keeps everything before
+  the first seam and `#include`s contiguous `*_partN.inc` slices in order; the
+  fragments are never compiled separately, so no CMake or `setup.py` source entry
+  changed. Seams are top-level function starts, `/* ── ` section banners, and - for
+  the giant dispatch loops - `case` labels inside the switch. Seam detection tracks
+  brace, preprocessor, comment and paren depth so a multi-line signature is never
+  cut, and every split proves byte-identical reconstruction from parent plus parts.
+  - `native/standalone/src/`: `mellowc.c` 11 + 3 parts (150/280/191),
+    `mellowc_fastloops.inc` 13 + 3 (274/259/51), `mellowrt_core.c` 31 + 4
+    (289/255/252/103), `mellowrt_ledger.c` 17 + 4 (285/253/168/223),
+    `mellowrt_storage.c` 41 + 4 (290/250/283/111), `mellowrt_syscalls.c` 56 + 4
+    (285/282/290/24) and `mellowrt_main.c` 38 + 2 (194/94).
+  - `native/mellowvm/src/`: `mellowvm_module.c` 139 + 2 (266/234), `mellowvm_exec.inc`
+    17 + 3 (287/261/127), `mellowvm_storage.inc` 16 + 3 (227/261/281) and
+    `mellowvm_syscalls.inc` 12 + 4 (39/255/275/189). The parent keeps the struct,
+    opcode table and forward declarations; the second part carries the includes of
+    the three subject fragments, which are each parents of their own parts.
+  - `native/sm/src/sm_native.c` 20 + 2 (276/106), `native/melv/src/melv_native.c`
+    9 + 3 (223/210/199), `native/mmg_gpu/src/renderer_gl.c` 21 + 2 (229/66) and
+    `native/mellowllm/src/mellowllm_module.c` 8 + 2 (191/113).
+- Every native `.c`/`.h`/`.inc` file is now at most 300 lines. The eight obsolete
+  native ceilings are gone from `LINE_CEILINGS`, and
+  `tests/language/test_source_structure.py` gained a fragment-manifest test: part
+  numbering is contiguous, each parent includes exactly its parts in order, and
+  parent and parts both stay at or below 300 lines. `test_native_vm_dispatch...`
+  and `test_standalone_compiler...` now read the translation unit through its
+  parts instead of the former monolith.
+- Verified: the standalone CMake Release build of `mellow` succeeded and CTest
+  passed 5/5; all four Python extensions rebuilt in place; `tests/native` passed
+  91/91. `native/mmg_gpu` could not be configured on this machine (no pkg-config /
+  SDL2), so its split rests on the byte-identical reconstruction rather than a
+  compile.
 - Split eight more over-long modules along their documented seams, each behind an
   imports-only facade that keeps the old import path and surface:
   - `src/mellowlang/web.py` (510) over `web_groups/`: records, lexing, value helpers,

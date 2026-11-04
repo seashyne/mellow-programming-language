@@ -87,11 +87,20 @@ Established seams, in the tree that owns them:
   `families/<name>.py` for each `register_<name>_functions(h)` group, `runtime.py`
   as a thin assembler that keeps the original registration order, and
   `families/support.py` for predicates shared by more than one family.
-- `native/standalone/src/mellowc.c` - statement dispatch stays; loop-shape
-  recognizers move to `mellowc_fastloops.inc` (included, not compiled, so CMake
-  needs no change and the helpers stay private to that translation unit).
-- `native/mellowvm/src/mellowvm_module.c` - dispatch stays; syscalls, exec, and
-  storage live in their `.inc` fragments.
+- `native/standalone/src/mellowc.c` - an 11-line header plus `mellowc_part1..3.inc`;
+  loop-shape recognizers live in `mellowc_fastloops.inc`, itself three parts
+  (included, not compiled, so CMake needs no change and the helpers stay private
+  to that translation unit).
+- `native/mellowvm/src/mellowvm_module.c` - the `CVM` struct, opcode table and
+  forward declarations only; `mellowvm_module_part1..2.inc` hold the call/syscall
+  helpers, then include `mellowvm_syscalls.inc`, `mellowvm_exec.inc` and
+  `mellowvm_storage.inc`, each a small parent of its own `_part*.inc` fragments.
+- Every native `.c`/`.inc` over 300 lines is now such a parent. A native split is
+  textual, not structural: C cannot split a translation unit at import seams, so
+  cut at a top-level function start, a `/* ── ` section banner, or (inside a giant
+  dispatch function) a `case` label. Reconstruction from parent plus parts must be
+  byte-identical, and the parent must include its parts in order - the fragment
+  test in `tests/language/test_source_structure.py` enforces both plus the budget.
 - `src/mellowlang/package_manager.py` - facade over `packages/*`.
 - `src/mellowlang/ai_core.py` - facade over `ai/`: `state.py` owns every mutable
   store, one module per concern, and only `registration.py` builds `HostFunction`.
