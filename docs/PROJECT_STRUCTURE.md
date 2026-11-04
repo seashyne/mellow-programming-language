@@ -47,6 +47,12 @@ area that matches the task and stay inside it.
 ### Apps
 
 - `apps/deploy/` - Registry and service deployment projects, each with its own manifest.
+  `apps/deploy/cloudflare-public-registry/src/index.ts` is the Worker's route table;
+  `auth.ts` owns token hashing and scope checks, `http.ts` the JSON response helpers,
+  `manifest.ts` package metadata derivation, `pages.ts` the server-rendered HTML,
+  `validation.ts` package-name/version/namespace rules, and `types.ts` the `Env`
+  bindings plus the archive limit. A new endpoint is an `index.ts` branch over those
+  helpers; a new derived package field belongs to `manifest.ts`.
 
 ### Tools And Delivery
 

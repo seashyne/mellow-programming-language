@@ -3,6 +3,22 @@
 ## Unreleased
 
 ### Structure
+- Split the Cloudflare public-registry Worker (`apps/deploy/cloudflare-public-registry/
+  src/index.ts`, 409 lines) into one module per concern behind the same wrangler
+  entry: `types.ts` (the `Env` bindings and `MAX_ARCHIVE_BYTES`), `http.ts` (security
+  headers, JSON response, body reader), `auth.ts` (SHA-256, token lookup, publish
+  scope, requester), `manifest.ts` (visibility/authors/creator/badges/row
+  derivation), `pages.ts` (HTML escaping, page shell, registry and package-detail
+  pages) and `validation.ts` (package name, version, namespace owner). `index.ts`
+  keeps only the fetch route table and is 236 lines; `main` in `wrangler.toml` is
+  unchanged. Every moved declaration is byte-identical to HEAD and so is the fetch
+  body, and the package type-checks under `strict` with the global TypeScript
+  compiler against a minimal `D1Database`/`R2Bucket` shim because the app has no
+  installed `node_modules`.
+- The playground UI script (`src/mellowlang/playground/assets/app.js`, 483 lines) is
+  not split yet: the browser fetches exactly `/app.js`, and the only place that could
+  serve further modules is `playground/server.py`, which still carries uncommitted
+  work.
 - Split the 15 native C sources over 300 lines into fragment parents. C cannot split
   one translation unit across import seams, so each parent keeps everything before
   the first seam and `#include`s contiguous `*_partN.inc` slices in order; the

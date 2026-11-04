@@ -101,6 +101,10 @@ Established seams, in the tree that owns them:
   dispatch function) a `case` label. Reconstruction from parent plus parts must be
   byte-identical, and the parent must include its parts in order - the fragment
   test in `tests/language/test_source_structure.py` enforces both plus the budget.
+- `apps/deploy/cloudflare-public-registry/src/index.ts` - the route table only (and
+  its `fetch` handler); `auth.ts`, `http.ts`, `manifest.ts`, `pages.ts`,
+  `validation.ts` and `types.ts` own the concerns it calls. Wrangler still points at
+  this one entry, so a new endpoint is a branch here, not a new Worker.
 - `src/mellowlang/package_manager.py` - facade over `packages/*`.
 - `src/mellowlang/ai_core.py` - facade over `ai/`: `state.py` owns every mutable
   store, one module per concern, and only `registration.py` builds `HostFunction`.
