@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Structure
+- Split `src/mellowlang/cli/commands/agents.py` (1,137 lines) into
+  `cli/commands/agent_groups/`: `deps.py` keeps the 81 lazy `_lazy_attr` aliases,
+  `support.py` the helpers shared across groups, and one module per subject of
+  `mellow agent ...` - `runtime.py`, `lifecycle.py`, `inspection.py`, `serve.py`,
+  `control_plane.py`, `automation.py` - behind a 52-line imports-only facade. A
+  group imports `deps` and `support`, never a sibling group.
+- Proven against `HEAD`, not reviewed: 43 definitions moved verbatim, the same
+  124-name surface with equal signatures, 127 command invocations with identical
+  scrubbed output, and stubbing each of the 107 borrowed bindings changes that
+  battery. `LINE_CEILINGS` lost the `agents.py` entry in the same commit, and
+  `test_cli_agent_commands_are_split_by_group()` now checks every handler's
+  subject module plus that each lazy alias still names an export its target
+  package provides.
+
+### Removed
+- `src/mellowlang/fast_vm.py` (847 lines, the v1.4.9 compile-to-Python engine).
+  Nothing in the repository imported it - no source, test, script, doc, or
+  dynamic import string referenced `FastVM` or `mellowlang.fast_vm` - and its
+  `FastVM.run()` could not have worked: it catches `_MellowStop`, a class that
+  only exists in the source string the generator emits, so a program using
+  `stop` raised `NameError` in the host. No other module changed, so the engines
+  the project does ship are untouched.
+
 ## 2.9.9 - 2026-11-03
 
 ### Structure
