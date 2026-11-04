@@ -154,6 +154,15 @@ Established seams, in the tree that owns them:
   makes a dataclass field and signature annotation dead at runtime, so a borrowed-name
   audit has to split runtime from annotation-only imports and stub each runtime name
   in the module that drew it.
+- `src/mellowlang/agents/registry.py` - facade over `agents/registry_groups/`: the
+  on-disk layout and the hashing/signing primitives are leaves, then registry auth and
+  the local catalog, then archive building, the dependency graph and the lockfile,
+  then installation, then the HTTP client. The eleven helpers that never left the
+  package are not re-exported - the facade carries exactly the 31-name public surface
+  `agents/__init__.py` and the tests import. A code-signature comparison of module-level
+  functions has one more trap than methods: a `frozenset` constant's `repr` follows
+  string hash order, so normalise sets by sorting their members or the two signatures
+  disagree at random between processes.
 - `src/mellowlang/compiler/ir_lowering.py` - facade over `compiler/lowering/`: the two
   lookup tables, the error, the module-call helpers, the machine (`_LoopCtx` plus the
   instruction list, counters and loop stack), one mixin per dispatch chain, and an

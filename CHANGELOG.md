@@ -3,6 +3,33 @@
 ## Unreleased
 
 ### Structure
+- Split `src/mellowlang/agents/registry.py` (544 lines) into
+  `src/mellowlang/agents/registry_groups/`, behind a 65-line imports-only facade that
+  keeps the `mellowlang.agents.registry` path `agents/__init__.py` and the registry
+  tests use. `layout.py` owns the on-disk constants and name normalisation,
+  `integrity.py` the hashes, canonical JSON, manifest reader and signature pair,
+  `auth.py` the registry URL and read/private tokens, `catalog.py` the manifest reader,
+  local version listing and search, `archive.py` the reproducible archive and local
+  publish, `graph.py` the dependency graph, `lock.py` `agent.lock`, `install.py`
+  extraction and install-from-lock, and `remote.py` the only HTTP client. Imports point
+  only downwards - `layout`/`integrity` (0), `auth`/`catalog` (1),
+  `archive`/`graph`/`lock` (2), `install` (3), `remote` (4) - and the facade re-exports
+  exactly the 31 public names; the 11 helpers stay package-internal rather than
+  widening the old surface.
+- Also proven against `HEAD`: all 42 declarations are byte-identical and keep their AST;
+  every function keeps its code signature (with set constants normalised, since a
+  `frozenset`'s `repr` follows hash order). A 92-step battery - sign/verify, reproducible
+  archives with ignored files, publish twice, local and dir graphs, cycles, unsatisfied
+  dependencies, locks with and without manifests, installs from archive and copy, unsafe
+  and corrupt archives, frozen-lock drift in all three forms, auth through env and
+  config, and a canned HTTP registry with cache reuse, a checksum mismatch, a private
+  scope and a network failure - runs against both the monolith and the split package in
+  fresh temp trees and agrees step for step, 18 refusals and 2 raises included. The
+  battery executes every executable line of all 9 modules; the single exemption is the
+  second archive-path guard in `install.py`, which a zip member with no `..` component
+  cannot reach. `test_agent_registry_structure.py` carries the contract - member homes,
+  module sizes, one-way layering, the exported surface and its excluded helpers - in its
+  own file because `test_source_structure.py` sits at its declared 1,100-line ceiling.
 - Split `src/mellowlang/compiler/ir_lowering.py` (597 lines) into
   `src/mellowlang/compiler/lowering/`, behind a 13-line imports-only facade that keeps
   the `mellowlang.compiler.ir_lowering` path `compiler.py` uses. `tables.py` holds the
