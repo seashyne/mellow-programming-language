@@ -76,6 +76,7 @@ cannot quietly grow back and a new long file has to be declared on purpose.
 | IR optimizer | `src/mellowlang/compiler/optimizer.py` is a facade over `src/mellowlang/compiler/optimizations/`. `ir_data.py` owns the nine shared value types (`BasicBlock`, `ControlFlowGraph`, `DominatorTree`, `DefUseInfo`, `PhiNode`, `SSAProgram`, `OptimizationSummary`, `_StackValue`, `_CONST_TOP`); each pass section is one mixin - `graph.py` (CFG, dominators, def-use, SSA), `folding.py`, `dataflow.py`, `rewrite.py`, `gvn.py`, `sccp.py`, `loops.py`, `cleanup.py`, `exprs.py` - and `optimizations/optimizer.py` assembles them into `IROptimizer`, keeping only the op-set constants and `optimize()`. Because `IROptimizer` holds no instance state, a new pass goes in the module that owns its data (or a new mixin plus one entry in the driver's base list). |
 | Grammar parser | `src/mellowlang/parser.py` is a facade over `src/mellowlang/parsing/`. `errors.py` holds `ParseError`, `line_text.py` the line helpers (`_strip_inline_comment`, `_indent_level`, `_split_top_level_commas`, `_split_top_level_assign`, `_collect_multiline_expr`, `_balance_delta`, `_expr_col`, `_rewrite_modern_aliases`), and `expressions.py` assembles `ExpressionAtomMixin` (`expression_atoms.py`) over `ExpressionPostfixMixin` (`expression_postfix.py`) into `ExprParser`, keeping `PRECEDENCE` and `parse_expr`. `block_core.py` owns the driver state (`lines`, `base_indent`, `i`, `stmts`, `raw_nc`), the `BLOCK_RUNS` order, `parse()`, `sub_block()` and the shared condition helpers (`_extract_cond`, `_consume_end`); each statement group is one `_run_*` mixin - `stmt_loops.py` (do/end, numeric for, `while`/`for` aliases, loop forms), `stmt_definitions.py` (skill/on), `stmt_control.py` (try, repeat, loop count, break, continue, the `if` alias and the check chain), `stmt_bindings.py` (keep, import, assign), `stmt_output.py` (print/show/println/write, precision/stop/wait/put/save/load/return), `stmt_calls.py` (`get`/`call`) - and `blocks.py` assembles them, in `BLOCK_RUNS` order, into `BlockParser` with `_parse_block` and `parse_program`. A new statement joins the run whose keyword prefix it shares, or becomes a new run plus one `BLOCK_RUNS` entry placed after the forms it must beat (`line` is passed on, so an alias rewritten by an earlier run stays visible). A new expression form goes in the atom mixin (prefix) or the postfix mixin (suffix). |
 | Bytecode interpreter | `src/mellowlang/vm/python_vm.py` is a facade over `src/mellowlang/vm/interp/`. `actions.py` owns the four dispatch results (`_PASS`, `_STEP`, `_NEXT`, `_HALT`) and `execute.py` keeps the driver loop plus `ExecuteMixin.OP_HANDLERS`, the 48-entry opcode to family table that `run()` reads. Each family is one `_exec_*(op, instr)` mixin - `op_bindings.py`, `op_math.py`, `op_io.py`, `op_collections.py`, `op_call.py`, `op_control.py`, `op_import.py` - the storage builtin names are walked by `call_storage.py` through its `STORAGE_GROUPS` order over `call_save.py`, `call_net.py`, `call_fs.py`, and `frame.py` / `errors.py` / `syscalls.py` / `events.py` / `invocation.py` hold the state, raise, syscall and call helpers. `vm.py` assembles them into `MellowLangVM` with `DebuggerMixin` and `StorageMixin` last. A new opcode is one `OP_HANDLERS` entry plus a branch in the family that owns its group; a new storage builtin joins the name group that already answers its prefix. |
+| Agent CLI | `src/mellowlang/cli/commands/agents.py` is a facade over `src/mellowlang/cli/commands/agent_groups/`. `deps.py` is the lazy import surface the handlers were written against - one `_lazy_attr(package, name)` alias per agent builtin, nothing else - and `support.py` holds the helpers more than one group needs (`_make_agent_runtime`, `_run_agent_package`, `_agent_prompt_context`, `_resolve_agent_package_ref`, `_load_rag_index`, `_print_graph`, `_parse_jsonish`, `_parse_filters`, `_build_backoff`). Each remaining module is one subject of `mellow agent ...`: `runtime.py` (run, workflow, demo, log), `lifecycle.py` (package init/lock/build/publish/install/graph/search, registry login/logout/whoami, secrets), `inspection.py` (prompt, prompt debug, trace, preview), `serve.py` (playground, serve, marketplace, deploy), `control_plane.py` (the hosted plane plus the policy sign/verify pair), `automation.py` (schedule, trigger, webhook, queue, jobs, runner). A group may import `deps` and `support`, never a sibling group. A new agent command goes in the module that owns its subject; a new agent builtin needs one alias in `deps.py`, which is checked against the exports of `mellowlang.agents`. |
 | Standalone compiler | `native/standalone/src/mellowc.c` scans, parses, and dispatches statements. The while-loop shape recognizers and their fused emitters live in `native/standalone/src/mellowc_fastloops.inc`, included by that one translation unit; a new shape there needs a matching opcode executor in `mellowrt_core.c`. |
 | CPython extension | `native/mellowvm/src/mellowvm_module.c` keeps dispatch thin and includes `mellowvm_syscalls.inc`, `mellowvm_exec.inc`, and `mellowvm_storage.inc`. |
 | Facades | `src/mellowlang/package_manager.py` re-exports `packages/{config,metadata,manifest,lockfile,project}`; `host/registry.py` and `host/modules.py` stay stable import paths for the split host package. |
@@ -144,7 +145,16 @@ src/mellowlang/cli/
   parser.py        argparse definitions
   ux.py            help, guide, ask, aliases
   commands/
-    agents.py      agent runtime, workflow, queue, policy, and marketplace commands
+    agents.py      facade: re-exports the agent command groups below
+    agent_groups/
+      deps.py          the lazy alias each agent builtin command imports through
+      support.py       shared helpers: runtime builder, package runner, parsers
+      runtime.py       run, workflow, demo, and observation-log commands
+      lifecycle.py     package, registry, and secret commands
+      inspection.py    prompt, prompt debug, trace, and preview commands
+      serve.py         playground, serve, marketplace, and deploy commands
+      control_plane.py hosted deployments and the policy sign/verify pair
+      automation.py    schedule, trigger, webhook, queue, jobs, and runner
     compiler.py    compile and pack commands
     media.py       desktop, MMG, MELV, and state-machine commands
     packages.py    package and registry commands
@@ -155,7 +165,9 @@ src/mellowlang/cli/
 ```
 
 `main.py` must not define command handlers. New command families belong in
-`cli/commands/`; parser definitions remain in `cli/parser.py`.
+`cli/commands/`; parser definitions remain in `cli/parser.py`. An agent command
+joins the `agent_groups/` module that owns its subject, and the name is added to
+the `agents.py` facade so the import path `main.py` uses stays the only one.
 
 ## Package System
 

@@ -119,6 +119,33 @@ Established seams, in the tree that owns them:
   `from ...x`) - several of those lazy imports sit in a `try/except`, so a miss
   switches a feature off silently. Assert every relative import resolves with
   `importlib.util.find_spec` from its new depth.
+- `src/mellowlang/cli/commands/agents.py` - facade over `cli/commands/agent_groups/`:
+  `deps.py` keeps the lazy `_lazy_attr` alias block (the handlers were written against
+  it, so it stays one assignment per name and no function body), `support.py` the
+  helpers more than one group needs, and one module per subject of `mellow agent ...`.
+  The layering is one-way - a group imports `deps` and `support`, never a sibling -
+  which is what lets a command group move without a second group noticing.
+
+Command handlers add oracle traps that a stateful machine does not have:
+
+- Stub-based non-vacuity must be computed per module: a stub only bites where the
+  global lives, so a borrowed binding unreachable from its own group's defs reads
+  as "stubbing it changed nothing" unless the reachability closure is walked inside
+  each module separately.
+- Names read only in a nested callback body (the playground/serve `Handler.do_POST`)
+  cannot be reached by a synchronous call. Classify them as callback-only through a
+  shallow free-name scan instead of failing the sweep.
+- Blocking syscalls sink the battery: patch `socketserver.TCPServer.serve_forever`
+  to a no-op and bind port 0, and apply the identical patch on both sides.
+- Module globals frozen at import time ignore a per-case `HOME` redirect. The agent
+  secret store is `Path.home()`-derived, so re-point
+  `mellowlang.agents.secrets.SECRET_FILE` at the run's temp home before each case,
+  or the battery reads and writes the developer's own store.
+- A case whose result is a `TypeError` about arguments is vacuous: it compares two
+  identically wrong calls. Fail loudly on that shape.
+- Beyond ids, timings, hashes and addresses, `parallel` step lists come back in
+  scheduler order. Mask per-run values before sorting the list pieces, so the sort
+  key never depends on a value that differs per run.
 
 A split must be verbatim and proven, not reviewed: snapshot the registry or
 output before and after, diff handler metadata plus behavior over a call battery,

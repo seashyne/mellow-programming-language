@@ -14,6 +14,7 @@ AI_FAMILIES = SRC / "ai"
 OPTIMIZATIONS = SRC / "compiler" / "optimizations"
 PARSING = SRC / "parsing"
 INTERP = SRC / "vm" / "interp"
+AGENT_GROUPS = SRC / "cli" / "commands" / "agent_groups"
 
 # One module per IR pass section, plus the shared value types and the driver.
 PASS_MODULES = ("graph", "folding", "dataflow", "rewrite", "gvn", "sccp", "loops",
@@ -76,6 +77,43 @@ STORAGE_GROUP_HOME = {
     "_call_fs_builtins": "call_fs",
 }
 
+# commands/agents.py is a facade over agent_groups/: deps.py holds the lazy import
+# surface the handlers were written against, support.py the helpers more than one
+# group needs, and the six command modules hold one subject each.
+AGENT_SUPPORT_MODULES = ("deps", "support")
+AGENT_COMMAND_MODULES = ("runtime", "lifecycle", "inspection", "serve",
+                         "control_plane", "automation")
+# Where each command handler must live, so the seams stay meaningful rather than
+# merely small.
+AGENT_COMMAND_HOME = {
+    "_cmd_agent_run": "runtime", "_cmd_agent_workflow": "runtime",
+    "_cmd_agent_demo": "runtime", "_cmd_agent_inspect_log": "runtime",
+    "_cmd_agent_package_init": "lifecycle", "_cmd_agent_package_lock": "lifecycle",
+    "_cmd_agent_package_build": "lifecycle", "_cmd_agent_package_publish": "lifecycle",
+    "_cmd_agent_package_install": "lifecycle", "_cmd_agent_package_graph": "lifecycle",
+    "_cmd_agent_package_search": "lifecycle", "_cmd_agent_registry_login": "lifecycle",
+    "_cmd_agent_registry_logout": "lifecycle", "_cmd_agent_registry_whoami": "lifecycle",
+    "_cmd_agent_secret": "lifecycle",
+    "_cmd_agent_prompt": "inspection", "_cmd_agent_prompt_debug": "inspection",
+    "_cmd_agent_trace": "inspection", "_cmd_agent_preview": "inspection",
+    "_cmd_playground": "serve", "_cmd_agent_playground": "serve", "_cmd_agent_serve": "serve",
+    "_cmd_agent_marketplace": "serve", "_cmd_agent_deploy": "serve",
+    "_cmd_agent_control_plane": "control_plane", "_cmd_agent_policy_sign": "control_plane",
+    "_cmd_agent_policy_verify": "control_plane",
+    "_scheduled_job_callback": "automation", "_cmd_agent_schedule": "automation",
+    "_cmd_agent_trigger": "automation", "_cmd_agent_webhook": "automation",
+    "_cmd_agent_queue": "automation", "_cmd_agent_jobs": "automation",
+    "_cmd_agent_runner": "automation",
+}
+# The helpers are shared, so they have a module of their own instead of a home
+# inside whichever group added them first.
+AGENT_SUPPORT_HOME = {
+    "_load_rag_index": "support", "_make_agent_runtime": "support",
+    "_agent_prompt_context": "support", "_run_agent_package": "support",
+    "_print_graph": "support", "_resolve_agent_package_ref": "support",
+    "_parse_jsonish": "support", "_parse_filters": "support", "_build_backoff": "support",
+}
+
 # Any file longer than this must appear in LINE_CEILINGS, so a new oversized
 # file is a deliberate decision instead of an accident.
 FILE_LENGTH_LIMIT = 1_000
@@ -83,7 +121,6 @@ FILE_LENGTH_LIMIT = 1_000
 # Largest each long file may become. Lower the number when the file shrinks;
 # never raise it to make this test pass - split the file instead.
 LINE_CEILINGS: dict[str, int] = {
-    "src/mellowlang/cli/commands/agents.py": 1_150,
     "src/mellowlang/package_manager.py": 1_100,
     "native/mellowvm/src/mellowvm_exec.inc": 800,
     "native/mellowvm/src/mellowvm_module.c": 700,
@@ -115,6 +152,22 @@ def _top_level_names(path: Path) -> set[str]:
         elif isinstance(node, (ast.Assign, ast.AnnAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             names |= {t.id for t in targets if isinstance(t, ast.Name)}
+    return names
+
+
+def _functions(path: Path) -> list[str]:
+    """The functions a module declares at module level, in source order."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return [n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+
+
+def _surface_names(path: Path) -> set[str]:
+    """Everything a package hands out: its own declarations and its re-exports."""
+    names = _top_level_names(path)
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and not any(a.name == "*" for a in node.names):
+            names |= {alias.asname or alias.name for alias in node.names}
     return names
 
 
@@ -490,6 +543,94 @@ def test_vm_interpreter_is_split_by_family() -> None:
         text = (INTERP / f"{module}.py").read_text(encoding="utf-8")
         assert "from .vm import" not in text and "python_vm" not in text, (
             f"{module}.py reaches back into the assembly")
+
+
+def test_cli_agent_commands_are_split_by_group() -> None:
+    """commands/agents.py is a facade; agent_groups/ holds one module per subject."""
+    facade = SRC / "cli" / "commands" / "agents.py"
+    assert _line_count(facade) <= 60, "the facade re-exports, it does not implement"
+    source = facade.read_text(encoding="utf-8")
+    assert "def " not in source, "the facade holds no logic"
+    assert "class " not in source, "the facade declares no types"
+    assert "from .agent_groups.deps import" in source
+
+    modules = sorted(p.stem for p in AGENT_GROUPS.glob("*.py") if p.stem != "__init__")
+    assert modules == sorted([*AGENT_SUPPORT_MODULES, *AGENT_COMMAND_MODULES]), modules
+    for module in [*modules, "__init__"]:
+        assert _line_count(AGENT_GROUPS / f"{module}.py") <= 300, (
+            f"agent_groups/{module}.py grew past one subject")
+
+    # every handler is declared once, in the group that owns its subject
+    homes: dict[str, str] = {}
+    for module in [*AGENT_SUPPORT_MODULES, *AGENT_COMMAND_MODULES]:
+        for name in _functions(AGENT_GROUPS / f"{module}.py"):
+            assert name not in homes, f"{name} is defined in two agent modules"
+            homes[name] = module
+    expected = {**AGENT_COMMAND_HOME, **AGENT_SUPPORT_HOME}
+    assert homes == expected, (
+        "the agent groups drifted from their declared subjects: "
+        f"{sorted(set(homes.items()) ^ set(expected.items()))}")
+
+    # the facade re-exports the whole surface the split moved, and nothing else, so
+    # `mellowlang.cli.main` and the tests keep importing every name from agents.py
+    exported = {alias.name for node in ast.parse(source).body
+                if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("agent_groups.")
+                for alias in node.names}
+    declared = {name for module in modules
+                for name in _top_level_names(AGENT_GROUPS / f"{module}.py")}
+    assert exported == declared, (
+        f"the facade drifted from the group modules: {sorted(exported ^ declared)}")
+    main = ast.parse((SRC / "cli" / "main.py").read_text(encoding="utf-8"))
+    needed = {alias.name for node in main.body if isinstance(node, ast.ImportFrom)
+              and node.level == 1 and node.module == "commands.agents" for alias in node.names}
+    assert needed and needed <= exported, "the CLI entry point lost an agent handler"
+    handlers = {n for n in AGENT_COMMAND_HOME if n.startswith("_cmd_")}
+    assert handlers <= needed, (
+        f"an agent handler is not wired into the CLI: {sorted(handlers - needed)}")
+
+    # deps.py is the lazy import surface, and nothing else: no handler body lives there
+    assert not _functions(AGENT_GROUPS / "deps.py"), "deps.py holds aliases, not commands"
+
+    # layering: a command group may use deps and support, never a sibling group -
+    # that is what keeps one subject from reaching into another's private state
+    for module in AGENT_COMMAND_MODULES:
+        text = (AGENT_GROUPS / f"{module}.py").read_text(encoding="utf-8")
+        for sibling in AGENT_COMMAND_MODULES:
+            assert f"from .{sibling} import" not in text, (
+                f"{module}.py reaches into the {sibling} group instead of its own subject")
+    deps_text = (AGENT_GROUPS / "deps.py").read_text(encoding="utf-8")
+    for module in [*AGENT_SUPPORT_MODULES, *AGENT_COMMAND_MODULES][1:]:
+        assert f"from .{module} import" not in deps_text, "deps.py is the bottom layer"
+
+    # every alias points at a name the target package still hands out, so a renamed
+    # agent builtin fails here rather than inside a command handler at run time
+    aliases: dict[str, str] = {}
+    body = [n for n in ast.parse(deps_text).body
+            if not isinstance(n, (ast.Import, ast.ImportFrom))]
+    assert isinstance(body[0], ast.Expr), "deps.py opens with a docstring, then aliases only"
+    for node in body[1:]:
+        assert isinstance(node, ast.Assign) and len(node.targets) == 1, (
+            "deps.py holds one assignment per alias")
+        name = node.targets[0]
+        assert isinstance(name, ast.Name), "deps.py aliases are module-level names"
+        if isinstance(node.value, ast.Constant):
+            assert name.id == "_AG", f"deps.py/{name.id} is not an alias"
+            aliases["_AG"] = node.value.value
+            continue
+        call = node.value
+        assert (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                and call.func.id == "_lazy_attr" and len(call.args) == 2), (
+            f"deps.py/{name.id} is not a lazy alias")
+        package = call.args[0]
+        package = (package.value if isinstance(package, ast.Constant)
+                   else aliases.get(getattr(package, "id", ""), ""))
+        attr = ast.literal_eval(call.args[1])
+        assert isinstance(package, str) and isinstance(attr, str), f"deps.py/{name.id}"
+        target = SRC.joinpath(*package.split(".")[1:])
+        init = target / "__init__.py"
+        target = init if init.is_file() else target.with_suffix(".py")
+        assert target.is_file(), f"{package} has no module to check"
+        assert attr in _surface_names(target), f"{package} no longer exports {attr}"
 
 
 def test_package_facade_uses_focused_modules() -> None:
