@@ -163,6 +163,17 @@ Established seams, in the tree that owns them:
   functions has one more trap than methods: a `frozenset` constant's `repr` follows
   string hash order, so normalise sets by sorting their members or the two signatures
   disagree at random between processes.
+- `src/mellowlang/agents/control_plane.py` - facade over `control_plane_groups/`: the
+  state file and the HTTP transport are leaves, then traffic splitting and metrics,
+  then the deployment/inspection/rollout/alert subjects, then observability, whose
+  five handlers compose the lower ones. Only the 15 public names are re-exported. The
+  failure style shapes the oracle: most errors are `{'ok': False}` refusals, not
+  exceptions, so a differential battery must count refusals as well as raises. A step
+  that overwrites the whole state file with a new fixture hides the deployment the
+  later steps address and turns them into refusals; merge fixtures into the loaded
+  state instead. And `_ensure_revision` always fills `current_revision`
+  (`item.get(...) or rev_no`), so the `None` guard in `_upsert_local_deployment` is
+  unreachable defence in depth, not a live branch.
 - `src/mellowlang/compiler/ir_lowering.py` - facade over `compiler/lowering/`: the two
   lookup tables, the error, the module-call helpers, the machine (`_LoopCtx` plus the
   instruction list, counters and loop stack), one mixin per dispatch chain, and an

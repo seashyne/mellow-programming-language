@@ -3,6 +3,35 @@
 ## Unreleased
 
 ### Structure
+- Split `src/mellowlang/agents/control_plane.py` (536 lines) into
+  `src/mellowlang/agents/control_plane_groups/`, behind a 38-line imports-only facade
+  that keeps the `mellowlang.agents.control_plane` path `agents/__init__.py`, the CLI
+  and the tests use. `state.py` owns the state-file path and its JSON read/write pair
+  plus the timestamp/slug helpers, `transport.py` the remote test, URL builder and JSON
+  HTTP call, `traffic.py` traffic-split normalisation and revision labelling,
+  `metrics.py` metric coercion and autoscaling signals, and `alerts.py` alert-rule
+  evaluation. `deploy.py` registers deployments and revisions, `inspection.py` lists
+  deployments, status, revisions and health, `rollout.py` promotes, rebalances and rolls
+  back, and `observability.py` records metrics and manages alert rules. Imports point
+  only downwards - `state`/`transport` (0), `traffic`/`metrics` (1),
+  `deploy`/`inspection`/`rollout`/`alerts` (2), `observability` (3) - and the facade
+  re-exports exactly the 15 public names; the 18 helpers stay package-internal.
+- Also proven against `HEAD`: all 33 declarations are byte-identical with equal code
+  signatures. A 151-step battery - local registration, revision history, health,
+  rollouts with and without a canary, traffic splits including the 0/0 and negative
+  normalisations, rollbacks by default and explicitly, metrics history trimming,
+  autoscaling in and out, every alert operator, malformed and non-dict state files, and
+  a canned remote control plane that answers success, empty body, HTTP JSON error, HTTP
+  text error, bad JSON and a network failure - runs against both the monolith and the
+  split package in fresh temp trees and agrees step for step, 18 refusals included. The
+  battery executes every executable line of all 9 modules; the single exemption is the
+  `None` guard in `_upsert_local_deployment`, which `_ensure_revision` always fills
+  first. `test_control_plane_structure.py` carries the contract - member homes, module
+  sizes, one-way layering, the exported surface and its excluded helpers - in its own
+  file because `test_source_structure.py` sits at its declared 1,100-line ceiling.
+- Deleted the orphaned `src/mellowlang/core.py` (411 lines): nothing imported its
+  `MellowLangEngine`, an early `frinds/core.py` leftover referenced only inside its own
+  file, so it was removed rather than split.
 - Split `src/mellowlang/agents/registry.py` (544 lines) into
   `src/mellowlang/agents/registry_groups/`, behind a 65-line imports-only facade that
   keeps the `mellowlang.agents.registry` path `agents/__init__.py` and the registry
