@@ -3,6 +3,38 @@
 ## Unreleased
 
 ### Structure
+- Split eight more over-long modules along their documented seams, each behind an
+  imports-only facade that keeps the old import path and surface:
+  - `src/mellowlang/web.py` (510) over `web_groups/`: records, lexing, value helpers,
+    parsing, TSX emission, dev-app scaffold and dev server. 115 oracle checks, a
+    64-step battery (47 results, 17 refusals) and complete group coverage.
+  - `src/mellowlang/desktop_host.py` (471) over `desktop_host_groups/`: parsing, window
+    files, Tk actions, runtime/launcher, portable bundle and status. 66 checks, 49 steps.
+    `bundle.py` re-anchors `__file__` to the facade - the split's one authored line.
+  - `src/mellowlang/mmg_runtime.py` (464) over `mmg_groups/`: parsing, render graph,
+    spec entry points, status and the window loop. 57 checks, 31 steps, no exemptions.
+  - `src/mellowlang/registry/server.py` (446) over `registry/server_groups/`: manifest
+    helpers, `RegistryStore`, `Handler` and the launcher. 68 checks; the 79-step battery
+    drives a real `ThreadingHTTPServer` on `127.0.0.1:0`, 16 refusals included.
+  - `src/mellowlang/lint.py` (350) over `lint_groups/`: issues/scope chain, visitor and
+    API. 69 checks, 138 steps, no refusals or exemptions.
+  - `src/mellowlang/ast.py` (332) over `ast_nodes/`: containers, statements and
+    expressions, the two node families never importing each other. 260 checks, full
+    executable-line coverage of all three modules, and the facade still re-exports the
+    `dataclass`/`field`/typing names the historical star-import surface handed out.
+  - `src/mellowlang/vm/debugger.py` (366) over `debugger_groups/`: one peer mixin per
+    subject, assembled by a `DebuggerMixin` whose body is only the four bases. 105 checks.
+  - `src/mellowlang/vm/cbridge.py` (363) over `cbridge_groups/`: the native vocabulary
+    and loader, the host adapter and the storage guards. 54 checks and a 105-step battery
+    (71 results, 34 refusals). The capability reporters and both runners deliberately
+    stay in the facade because callers and tests patch `_load_ext` there; the loader's
+    `from ... import _mellowvm` is the split's one authored token, pinned by
+    `test_cbridge_structure.py`.
+- Each split carries its own `tests/language/test_<name>_structure.py` - member homes,
+  module sizes, one-way layering, exported surface and no outside importers - because
+  `test_source_structure.py` sits at its declared 1,100-line ceiling. The language,
+  native-parity, workspace-boundary and quality gates pass; the only failure is the
+  pre-existing `package_manager.py` ceiling owned by uncommitted work.
 - Split `src/mellowlang/agents/control_plane.py` (536 lines) into
   `src/mellowlang/agents/control_plane_groups/`, behind a 38-line imports-only facade
   that keeps the `mellowlang.agents.control_plane` path `agents/__init__.py`, the CLI

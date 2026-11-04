@@ -174,6 +174,44 @@ Established seams, in the tree that owns them:
   state instead. And `_ensure_revision` always fills `current_revision`
   (`item.get(...) or rev_no`), so the `None` guard in `_upsert_local_deployment` is
   unreachable defence in depth, not a live branch.
+- `src/mellowlang/web.py` - facade over `web_groups/`: the records (`model.py`), the
+  regex/token tables and splitters (`lexing.py`), the value helpers (`values.py`),
+  parsing, TSX emission, the dev-app scaffold and the dev server. A line-oriented
+  compiler is naturally staged, so each stage is a leaf-to-surface module and the
+  facade exports only the public entry points.
+- `src/mellowlang/desktop_host.py` - facade over `desktop_host_groups/`: parsing, the
+  window file entry points, the action dispatch the Tk runtime calls, the runtime and
+  launcher, the portable bundle and the status report. `bundle.py` re-anchors `__file__`
+  to the facade so a built bundle still names `desktop_host.py`; that is the split's one
+  authored line and it belongs in the oracle as a declared rewrite.
+- `src/mellowlang/mmg_runtime.py` - facade over `mmg_groups/`: parsing, the render graph,
+  the spec entry points, status and the window loop. `launch.py` is the only module that
+  reaches the graph, so the graph stays a leaf a renderer can test without Tk.
+- `src/mellowlang/registry/server.py` - facade over `registry/server_groups/`: manifest
+  helpers, the on-disk `RegistryStore`, the HTTP `Handler`, and the launcher. The
+  `if __name__ == "__main__"` guard stays on the facade because
+  `python -m mellowlang.registry.server` executes it there; a battery can bind a real
+  `ThreadingHTTPServer` on `127.0.0.1:0` and drive refusals over HTTP.
+- `src/mellowlang/lint.py` - facade over `lint_groups/`: the issue record, builtin table
+  and scope chain (`issues.py`), the visitor (`linter.py`) and the entry points
+  (`api.py`). Ranks are strict (`issues` 0, `linter` 1, `api` 2); a rule that needs a
+  builtin adds a `_BUILTINS` row rather than a private table in the visitor.
+- `src/mellowlang/ast.py` - facade over `ast_nodes/`: the three containers and one
+  module per node family, with neither family importing the other. The historical
+  `from mellowlang.ast import *` surface also handed out `dataclass`, `field` and the
+  typing names, so the facade re-exports those too; dropping them turns a star import in
+  a downstream module into a `NameError`.
+- `src/mellowlang/vm/debugger.py` - facade over `debugger_groups/`: one peer mixin per
+  subject (breakpoints, stepping, inspection, rendering) and a `DebuggerMixin` whose
+  body is only the four bases. Cross-subject calls go through `self`, so the mixins are
+  reorderable only at the assembler and the gate asserts the assembled MRO.
+- `src/mellowlang/vm/cbridge.py` - facade over `cbridge_groups/`: the native vocabulary
+  and loader (`native.py`), the host adapter (`host.py`) and the storage guards
+  (`storage.py`). The capability reporters and the two runners stay in the facade
+  because callers and tests patch `_load_ext` on this module; moving them into a group
+  silently detaches that patch point. `native.py` needs `from ... import _mellowvm`
+  (the group is one package deeper than the monolith), and that single token is the
+  split's documented authored rewrite.
 - `src/mellowlang/compiler/ir_lowering.py` - facade over `compiler/lowering/`: the two
   lookup tables, the error, the module-call helpers, the machine (`_LoopCtx` plus the
   instruction list, counters and loop stack), one mixin per dispatch chain, and an
