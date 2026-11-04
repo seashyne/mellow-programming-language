@@ -3,6 +3,19 @@
 ## Unreleased
 
 ### Structure
+- Split the two benchmark entry points into concern packages behind unchanged
+  command lines. `benchmarks/run_all.py` (423 lines) now holds only argument
+  parsing, `main`, and the two JSON helpers and delegates to `bench_suite/`:
+  `config.py` (paths, `Profile`, `PROFILES`), `environment.py` (tool versions,
+  git commit, environment block), `suite.py` (section runners and `run_suite`)
+  and `report.py` (`SUMMARY_METRICS` and the Markdown renderer).
+  `benchmarks/native_vs_zig/run_compare.py` (399 lines) keeps only `main` and
+  delegates to `native_compare/`: `workloads.py`, `process.py`, `builders.py`,
+  `runners.py` and `compare.py`. Every moved definition is source-identical, both
+  scripts keep their `--help` and `ROOT`-relative defaults, and a quick-profile
+  run with `--skip-cross-language` still produces all four measured sections plus
+  the skipped cross-language marker. `tests/language/test_benchmark_layout.py`
+  pins the facades and the module sets.
 - Split the Cloudflare public-registry Worker (`apps/deploy/cloudflare-public-registry/
   src/index.ts`, 409 lines) into one module per concern behind the same wrangler
   entry: `types.ts` (the `Env` bindings and `MAX_ARCHIVE_BYTES`), `http.ts` (security

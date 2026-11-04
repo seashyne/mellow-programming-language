@@ -105,6 +105,13 @@ Established seams, in the tree that owns them:
   its `fetch` handler); `auth.ts`, `http.ts`, `manifest.ts`, `pages.ts`,
   `validation.ts` and `types.ts` own the concerns it calls. Wrangler still points at
   this one entry, so a new endpoint is a branch here, not a new Worker.
+- `benchmarks/run_all.py` - `main` plus the JSON helpers only, over `bench_suite/`:
+  `config.py` (paths, `Profile`, `PROFILES`), `environment.py`, `suite.py`
+  (section runners) and `report.py` (Markdown). The benchmark job still calls this
+  one script, so a new section belongs in `suite.py` and its metric in `report.py`.
+- `benchmarks/native_vs_zig/run_compare.py` - `main` only, over `native_compare/`:
+  `workloads.py`, `process.py` (timing), `builders.py` (Zig/C builds), `runners.py`
+  (per-runtime slots) and `compare.py` (`run_compare`).
 - `src/mellowlang/package_manager.py` - facade over `packages/*`.
 - `src/mellowlang/ai_core.py` - facade over `ai/`: `state.py` owns every mutable
   store, one module per concern, and only `registration.py` builds `HostFunction`.

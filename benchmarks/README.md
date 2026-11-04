@@ -4,6 +4,15 @@ Use `benchmarks/run_all.py` as the standard entry point for performance runs.
 It orchestrates the existing focused benchmarks, records environment metadata,
 writes a machine-readable JSON payload, and generates a Markdown summary.
 
+## Layout
+
+`run_all.py` and `native_vs_zig/run_compare.py` are entry points only.
+`bench_suite/` carries the standard suite (`config.py`, `environment.py`,
+`suite.py`, `report.py`), and `native_vs_zig/native_compare/` carries the
+cross-language comparison (`workloads.py`, `process.py`, `builders.py`,
+`runners.py`, `compare.py`). Add a section in `bench_suite/suite.py`, not in the
+entry script.
+
 ## Profiles
 
 | Profile | Use | Notes |

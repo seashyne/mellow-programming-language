@@ -36,6 +36,11 @@ area that matches the task and stay inside it.
 
 - `tests/` - Core, native parity, package, CLI, and integration tests.
 - `benchmarks/` - Benchmark programs, runners, raw results, and reports.
+  - `run_all.py` - standard-suite entry point; `bench_suite/` holds `config.py`,
+    `environment.py`, `suite.py` and `report.py`.
+  - `native_vs_zig/run_compare.py` - cross-language entry point; `native_compare/`
+    holds `workloads.py`, `process.py`, `builders.py`, `runners.py` and
+    `compare.py`.
 
 ### Ecosystem
 
