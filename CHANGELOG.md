@@ -3,6 +3,38 @@
 ## Unreleased
 
 ### Structure
+- Split `src/mellowlang/cli/commands/runtime.py` (661 lines) into
+  `src/mellowlang/cli/commands/runtime_groups/`, behind a 12-line imports-only
+  facade that keeps the import path `cli/main.py` already uses. `deps.py` holds the
+  lazy `pkg_auto_fetch_for_run` alias, `standalone.py` the standalone-binary lookup
+  and the guard that picks it, `run_config.py` `RunSettings` and
+  `build_run_config`, `run.py` `_cmd_run`, `suite.py` the per-script runner,
+  discovery and golden output, and `golden.py` record/replay/diff, the only module
+  that calls back into `run`. Imports only point downwards - `deps` (0),
+  `standalone`/`run_config`/`suite` (1), `run` (2), `golden` (3) - and no module
+  outside the facade may import the package. The 180-line `RunConfig` assembly
+  inside `_cmd_run` became the body of `build_run_config(s: RunSettings)`, opened by
+  one `name = s.name` line per field and closed by `return cfg`, so the assembly
+  text is byte-identical and the handler now calls it once with every field by
+  keyword. `_project_root` was dropped rather than moved: nothing in `src/` or
+  `tests/` referenced it.
+- Also proven against `HEAD`: the 9 moved definitions are byte-identical with equal
+  code signatures, and exactly one copied handler line differs - the lazy
+  `from ...fast_compiler` import, which sits a level deeper
+  (`from ....fast_compiler`). 97 differential cases agree on both sides (exit code,
+  stdout, stderr, escaping error, and `repr` of every constructed config), covering
+  34 distinct `RunConfig`s, 5 exit codes, 34 distinct outputs, 94 returned exit
+  codes, 3 escaping errors and 79 runs that reached the VM. Statement coverage
+  executed every line of all 7 modules; 4 lines are declared unreachable with
+  executable proofs - the native guard refuses `json_out`, so its own json branch
+  cannot run, and `FastRunner.run` swallows `SystemExit`, so the handler's `except`
+  is dead - and stubbing each of the 28 runtime imports, or patching the provider of
+  `dataclass`, changes that battery (4 more are annotation-only). Because
+  `test_source_structure.py` sits at its declared 1,100-line ceiling,
+  `tests/language/test_cli_runtime_structure.py` carries this unit's contract: each
+  member's home, the prologue/field/keyword agreement, every module at 300 lines or
+  fewer, the one-way layering, the exported surface, and that no other module
+  imports the package.
 - Split `src/mellowlang/fast_compiler.py` (662 lines) into `src/mellowlang/fastlang/`,
   one module per concern of the compile-to-Python fast path: `builtins.py` holds
   `_MELLOW_BUILTINS_SRC`, the Python prelude every transpiled program starts with,

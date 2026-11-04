@@ -125,6 +125,16 @@ Established seams, in the tree that owns them:
   helpers more than one group needs, and one module per subject of `mellow agent ...`.
   The layering is one-way - a group imports `deps` and `support`, never a sibling -
   which is what lets a command group move without a second group noticing.
+- `src/mellowlang/cli/commands/runtime.py` - facade over `cli/commands/runtime_groups/`:
+  `deps.py` keeps the one lazy `pkg_auto_fetch_for_run` alias, `standalone.py` the
+  native-binary lookup and its guard, `run_config.py` `RunSettings` plus
+  `build_run_config`, `run.py` the run handler, `suite.py` the test runner, and
+  `golden.py` record/replay/diff. A 180-line prologue that computes a config from
+  locals becomes a settings dataclass plus a builder: one `name = s.name` line per
+  field, then `return cfg`, so the assembly body stays byte-identical and the
+  handler keeps one call. The gate has to check three lists agree - dataclass
+  fields, prologue assignments, and the handler's call keywords - or a field can
+  silently default instead of being forwarded.
 - `src/mellowlang/agents/scheduler.py` - facade over `agents/scheduling/`: `paths.py`
   owns `SCHEDULER_HOME`, the state-file paths and the time/JSON primitives, `state.py`
   the paired `_load_*`/`_save_*` readers, `cron.py` and `backoff.py` stay pure, then
