@@ -108,6 +108,17 @@ Established seams, in the tree that owns them:
   the possibly-rewritten `line` from run to run so an alias rewritten by an earlier
   run still reaches the later ones. Nested blocks recurse through `type(self)`, so
   they keep the whole mixin set without importing the assembly.
+- `src/mellowlang/vm/python_vm.py` - facade over `vm/interp/`: the giant `if op ==
+  ...` chain inside `run()` became the `OP_HANDLERS` table (opcode to family) plus
+  one `_exec_*(op, instr)` mixin per family, the builtin-name walk became the
+  `STORAGE_GROUPS` tuple over `call_save.py` / `call_net.py` / `call_fs.py`, and all
+  instance state stays in `frame.py` so a family holds no state of its own. Two
+  traps: `STORAGE_GROUPS` is read as a module global at call time, so patching it on
+  a subclass is inert and a non-vacuity check must patch the module; and a relative
+  import written inside a moved method body needs one more dot (`from ..x` to
+  `from ...x`) - several of those lazy imports sit in a `try/except`, so a miss
+  switches a feature off silently. Assert every relative import resolves with
+  `importlib.util.find_spec` from its new depth.
 
 A split must be verbatim and proven, not reviewed: snapshot the registry or
 output before and after, diff handler metadata plus behavior over a call battery,
@@ -135,6 +146,16 @@ annotations), then diff both sides. Two fingerprint traps:
 - `frozenset` literals print in iteration order, and a `__pycache__` copy keeps the
   order the writing process had. Compare containers as sorted sets and mask object
   addresses and timestamps, or the diff reports noise.
+
+For a stateful machine such as the bytecode interpreter, stdout and the return
+value are not enough - compare the whole VM: capture the instance attributes
+(`pc`, `stack`, `variables`, the call/frame/try stacks, `budget`, `opcounts`) after
+each run, give each side its own temp sandbox and scrub the sandbox name out of the
+text, and reset process-wide singletons (`net_core._WS_MANAGER` hands out
+connection ids that count up) or the second run differs for a reason that has
+nothing to do with the split. Cover the dispatch table by hand-assembling bytecode:
+the compiler cannot reach every opcode (13 of 48 in the Python VM), so a source-only
+battery leaves families unexercised while still reporting green.
 
 ## Moving trees
 

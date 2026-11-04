@@ -75,6 +75,7 @@ cannot quietly grow back and a new long file has to be declared on purpose.
 | AI engine | `src/mellowlang/ai_core.py` is a facade over `src/mellowlang/ai/`. One concern per module: `state.py` owns every mutable store (`_MODELS`, `_LLM_MODELS`, `_SESSIONS`, `_RUNTIME_STATE`, `_API_CONFIG`), then `numerics.py`, `network.py`, `language_model.py`, `models.py`, `sessions.py`, `llm_api.py`, `llm_service.py`, and `providers.py` hold the handlers, and only `registration.py` builds `HostFunction` entries. A new AI syscall goes in the module that owns its data plus one line in `registration.py`. |
 | IR optimizer | `src/mellowlang/compiler/optimizer.py` is a facade over `src/mellowlang/compiler/optimizations/`. `ir_data.py` owns the nine shared value types (`BasicBlock`, `ControlFlowGraph`, `DominatorTree`, `DefUseInfo`, `PhiNode`, `SSAProgram`, `OptimizationSummary`, `_StackValue`, `_CONST_TOP`); each pass section is one mixin - `graph.py` (CFG, dominators, def-use, SSA), `folding.py`, `dataflow.py`, `rewrite.py`, `gvn.py`, `sccp.py`, `loops.py`, `cleanup.py`, `exprs.py` - and `optimizations/optimizer.py` assembles them into `IROptimizer`, keeping only the op-set constants and `optimize()`. Because `IROptimizer` holds no instance state, a new pass goes in the module that owns its data (or a new mixin plus one entry in the driver's base list). |
 | Grammar parser | `src/mellowlang/parser.py` is a facade over `src/mellowlang/parsing/`. `errors.py` holds `ParseError`, `line_text.py` the line helpers (`_strip_inline_comment`, `_indent_level`, `_split_top_level_commas`, `_split_top_level_assign`, `_collect_multiline_expr`, `_balance_delta`, `_expr_col`, `_rewrite_modern_aliases`), and `expressions.py` assembles `ExpressionAtomMixin` (`expression_atoms.py`) over `ExpressionPostfixMixin` (`expression_postfix.py`) into `ExprParser`, keeping `PRECEDENCE` and `parse_expr`. `block_core.py` owns the driver state (`lines`, `base_indent`, `i`, `stmts`, `raw_nc`), the `BLOCK_RUNS` order, `parse()`, `sub_block()` and the shared condition helpers (`_extract_cond`, `_consume_end`); each statement group is one `_run_*` mixin - `stmt_loops.py` (do/end, numeric for, `while`/`for` aliases, loop forms), `stmt_definitions.py` (skill/on), `stmt_control.py` (try, repeat, loop count, break, continue, the `if` alias and the check chain), `stmt_bindings.py` (keep, import, assign), `stmt_output.py` (print/show/println/write, precision/stop/wait/put/save/load/return), `stmt_calls.py` (`get`/`call`) - and `blocks.py` assembles them, in `BLOCK_RUNS` order, into `BlockParser` with `_parse_block` and `parse_program`. A new statement joins the run whose keyword prefix it shares, or becomes a new run plus one `BLOCK_RUNS` entry placed after the forms it must beat (`line` is passed on, so an alias rewritten by an earlier run stays visible). A new expression form goes in the atom mixin (prefix) or the postfix mixin (suffix). |
+| Bytecode interpreter | `src/mellowlang/vm/python_vm.py` is a facade over `src/mellowlang/vm/interp/`. `actions.py` owns the four dispatch results (`_PASS`, `_STEP`, `_NEXT`, `_HALT`) and `execute.py` keeps the driver loop plus `ExecuteMixin.OP_HANDLERS`, the 48-entry opcode to family table that `run()` reads. Each family is one `_exec_*(op, instr)` mixin - `op_bindings.py`, `op_math.py`, `op_io.py`, `op_collections.py`, `op_call.py`, `op_control.py`, `op_import.py` - the storage builtin names are walked by `call_storage.py` through its `STORAGE_GROUPS` order over `call_save.py`, `call_net.py`, `call_fs.py`, and `frame.py` / `errors.py` / `syscalls.py` / `events.py` / `invocation.py` hold the state, raise, syscall and call helpers. `vm.py` assembles them into `MellowLangVM` with `DebuggerMixin` and `StorageMixin` last. A new opcode is one `OP_HANDLERS` entry plus a branch in the family that owns its group; a new storage builtin joins the name group that already answers its prefix. |
 | Standalone compiler | `native/standalone/src/mellowc.c` scans, parses, and dispatches statements. The while-loop shape recognizers and their fused emitters live in `native/standalone/src/mellowc_fastloops.inc`, included by that one translation unit; a new shape there needs a matching opcode executor in `mellowrt_core.c`. |
 | CPython extension | `native/mellowvm/src/mellowvm_module.c` keeps dispatch thin and includes `mellowvm_syscalls.inc`, `mellowvm_exec.inc`, and `mellowvm_storage.inc`. |
 | Facades | `src/mellowlang/package_manager.py` re-exports `packages/{config,metadata,manifest,lockfile,project}`; `host/registry.py` and `host/modules.py` stay stable import paths for the split host package. |
@@ -175,14 +176,44 @@ through `package_manager.py` only when compatibility requires it.
 
 ## VM Code
 
-The Python VM keeps execution and opcode dispatch in `vm/python_vm.py`. Services
-with a separate concern are mixed in without changing the public VM class:
+`vm/python_vm.py` is a facade: it keeps the import path and the module-level
+names consumers already use. The interpreter itself is assembled in `vm/interp/`,
+one module per opcode family, and services with a separate concern are still
+mixed in without changing the public VM class:
+
+```
+vm/interp/
+  actions.py        the four dispatch results: _PASS _STEP _NEXT _HALT
+  execute.py        the driver loop and OP_HANDLERS, the opcode -> family table
+  op_bindings.py    PUSH STORE STORE_AUTO STORE_KEEP LOAD SEED GLOBAL_SEED
+  op_math.py        ADD SUB MUL DIV, COMPARE BOOL_*, MOD POW
+  op_io.py          PRINT PRINTN SHOW_PREC, ASK WAIT RANDOM RANDFLOAT, SAVE SAVE_VAL LOAD_F
+  op_collections.py BUILD_LIST BUILD_MAP GETITEM LEN, LIST_HAS LIST_PUT POP
+  op_call.py        CALL, SYSCALL, PUSH_FUNC CALL_VAL SLICE
+  op_control.py     TRY ENDTRY HALT STOP, JUMP JIF, RETURN ARG
+  op_import.py      IMPORT
+  call_storage.py   the builtin-name walk and its STORAGE_GROUPS order
+  call_save.py      save/load slot builtins      call_net.py  net and websocket builtins
+  call_fs.py        directory and file builtins
+  frame.py          VM state, value limits, truthiness, sub-VMs
+  errors.py         raise, sandbox, trace, exception handling
+  syscalls.py       syscall dispatch and budget
+  events.py         bt/fsm ticks and emit
+  invocation.py     nested call entry (_call_fn) and one-step execution
+  vm.py             assembles the mixins into MellowLangVM
+```
+
+A new opcode is one `OP_HANDLERS` entry plus a branch in the family that owns
+its group; a new storage builtin goes in the name group that already answers
+that prefix. `vm.py` keeps `DebuggerMixin` and `StorageMixin` last, so a name
+declared by the interpreter always wins over the host mixins beside it.
 
 - `vm/debugger.py` - breakpoints, snapshots, stepping, and watch expressions.
 - `vm/storage.py` - sandboxed paths, filesystem permissions, and JSON storage.
 
-Keep hot opcode execution in the VM core unless profiling proves a different
-boundary is better.
+Keep the dispatch loop and the family bodies together in `vm/interp/`; move an
+opcode out of a family only when it becomes its own group, not because a file
+grew.
 
 ## Cleanup Rules
 

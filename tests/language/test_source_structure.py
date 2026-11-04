@@ -13,6 +13,7 @@ HOST_FAMILIES = SRC / "host" / "families"
 AI_FAMILIES = SRC / "ai"
 OPTIMIZATIONS = SRC / "compiler" / "optimizations"
 PARSING = SRC / "parsing"
+INTERP = SRC / "vm" / "interp"
 
 # One module per IR pass section, plus the shared value types and the driver.
 PASS_MODULES = ("graph", "folding", "dataflow", "rewrite", "gvn", "sccp", "loops",
@@ -48,6 +49,33 @@ PARSE_RUN_HOME = {
     "_run_module_calls": "stmt_calls",
 }
 
+# python_vm.py is a facade over vm/interp/: the driver dispatches every opcode
+# through the OP_HANDLERS table to one _exec_* family method, the CALL arm walks
+# the storage builtins through STORAGE_GROUPS, and the frame/error/syscall/event
+# helpers live beside them.
+OP_FAMILY_MODULES = ("op_bindings", "op_math", "op_io", "op_collections",
+                     "op_call", "op_control", "op_import")
+STORAGE_GROUP_MODULES = ("call_save", "call_net", "call_fs")
+INTERP_SUPPORT_MODULES = ("actions", "call_storage", "errors", "events", "execute",
+                          "frame", "invocation", "syscalls", "vm")
+# Where each dispatched family must live, so the seams stay meaningful rather
+# than merely small.
+OP_FAMILY_HOME = {
+    "_exec_bindings": "op_bindings",
+    "_exec_arithmetic": "op_math", "_exec_comparisons": "op_math", "_exec_mod_pow": "op_math",
+    "_exec_output": "op_io", "_exec_interaction": "op_io", "_exec_persistence": "op_io",
+    "_exec_collections": "op_collections", "_exec_list_ops": "op_collections",
+    "_exec_call": "op_call", "_exec_syscall": "op_call", "_exec_first_class": "op_call",
+    "_exec_try_frames": "op_control", "_exec_jumps": "op_control",
+    "_exec_skill_return": "op_control",
+    "_exec_import": "op_import",
+}
+STORAGE_GROUP_HOME = {
+    "_call_save_builtins": "call_save",
+    "_call_net_builtins": "call_net",
+    "_call_fs_builtins": "call_fs",
+}
+
 # Any file longer than this must appear in LINE_CEILINGS, so a new oversized
 # file is a deliberate decision instead of an accident.
 FILE_LENGTH_LIMIT = 1_000
@@ -57,7 +85,6 @@ FILE_LENGTH_LIMIT = 1_000
 LINE_CEILINGS: dict[str, int] = {
     "src/mellowlang/cli/commands/agents.py": 1_150,
     "src/mellowlang/package_manager.py": 1_100,
-    "src/mellowlang/vm/python_vm.py": 2_000,
     "native/mellowvm/src/mellowvm_exec.inc": 800,
     "native/mellowvm/src/mellowvm_module.c": 700,
     "native/mellowvm/src/mellowvm_storage.inc": 800,
@@ -345,6 +372,124 @@ def test_parser_grammar_is_split_by_layer() -> None:
                     if isinstance(n, ast.ClassDef) and n.name == "ExprParser")
     assert sorted(ast.unparse(b) for b in expr_cls.bases) == [
         "ExpressionAtomMixin", "ExpressionPostfixMixin"], "the two expression halves assemble"
+
+
+def test_vm_interpreter_is_split_by_family() -> None:
+    """python_vm.py is a facade; vm/interp/ holds one module per opcode family."""
+    facade = SRC / "vm" / "python_vm.py"
+    assert _line_count(facade) <= 60, "the facade re-exports, it does not interpret"
+    source = facade.read_text(encoding="utf-8")
+    assert "def " not in source, "the facade holds no logic"
+    assert "class " not in source, "the facade declares no types"
+    assert "from .interp import MellowLangVM" in source
+
+    modules = sorted(p.stem for p in INTERP.glob("*.py") if p.stem != "__init__")
+    assert modules == sorted([*OP_FAMILY_MODULES, *STORAGE_GROUP_MODULES,
+                              *INTERP_SUPPORT_MODULES]), modules
+    for module in [*modules, "__init__"]:
+        assert _line_count(INTERP / f"{module}.py") <= 300, (
+            f"vm/interp/{module}.py grew past one family")
+
+    # OP_HANDLERS is data: it fixes which family owns which opcode.
+    execute = ast.parse((INTERP / "execute.py").read_text(encoding="utf-8"))
+    execute_cls = next(n for n in execute.body
+                       if isinstance(n, ast.ClassDef) and n.name == "ExecuteMixin")
+    table = next(
+        node.value for node in execute_cls.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "OP_HANDLERS" for t in node.targets)
+    )
+    assert isinstance(table, ast.Dict), "dispatch has to stay a table, not code"
+    dispatch = {ast.unparse(key): ast.literal_eval(value)
+                for key, value in zip(table.keys, table.values)}
+    constants = ast.parse((SRC / "constants.py").read_text(encoding="utf-8"))
+    op_cls = next(n for n in constants.body
+                  if isinstance(n, ast.ClassDef) and n.name == "Op")
+    op_names = {t.id for node in op_cls.body if isinstance(node, ast.Assign)
+                for t in node.targets if isinstance(t, ast.Name)}
+    assert all(key.startswith("Op.") for key in dispatch), "keys are opcodes"
+    assert {key[3:] for key in dispatch} <= op_names, "dispatch invented an opcode"
+
+    # every family is declared once, in the module that owns it, and dispatched
+    homes: dict[str, str] = {}
+    for module in [*OP_FAMILY_MODULES, *STORAGE_GROUP_MODULES]:
+        tree = ast.parse((INTERP / f"{module}.py").read_text(encoding="utf-8"))
+        for cls in [n for n in tree.body if isinstance(n, ast.ClassDef)]:
+            methods = [n.name for n in cls.body if isinstance(n, ast.FunctionDef)]
+            assert "__init__" not in methods, (
+                f"{module}.py carries interpreter state, not just a family")
+            for name in methods:
+                if name.startswith("_exec_") or name.startswith("_call_"):
+                    assert name not in homes, f"{name} is defined in two modules"
+                    homes[name] = module
+    assert homes == {**OP_FAMILY_HOME, **STORAGE_GROUP_HOME}, (
+        f"the family modules drifted from their declared homes: "
+        f"{set(homes.items()) ^ set({**OP_FAMILY_HOME, **STORAGE_GROUP_HOME}.items())}")
+    assert set(dispatch.values()) == set(OP_FAMILY_HOME), (
+        "a family method is declared but never dispatched, or dispatched but missing")
+    assert len(table.keys) == len(dispatch), "an opcode is dispatched twice"
+    for family, module in OP_FAMILY_HOME.items():
+        cls = next(n for n in ast.parse((INTERP / f"{module}.py").read_text(encoding="utf-8")).body
+                   if isinstance(n, ast.ClassDef))
+        node = next(n for n in cls.body
+                    if isinstance(n, ast.FunctionDef) and n.name == family)
+        assert [a.arg for a in node.args.args] == ["self", "op", "instr"], (
+            f"{family} must take the instruction the driver hands it")
+
+    # the driver dispatches through the table and owns no opcode body
+    driver = next(n for n in execute_cls.body
+                  if isinstance(n, ast.FunctionDef) and n.name == "run")
+    assert "self.OP_HANDLERS" in ast.unparse(driver), "run() must dispatch, not branch"
+    assert not any(node.name.startswith("_exec_") for node in execute_cls.body
+                   if isinstance(node, ast.FunctionDef)), (
+        "execute.py drives the loop, the families hold the bodies")
+
+    # STORAGE_GROUPS is data too: the order the CALL arm tests the name groups in
+    storage = ast.parse((INTERP / "call_storage.py").read_text(encoding="utf-8"))
+    groups = next(
+        ast.literal_eval(node.value) for node in storage.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        and any(isinstance(t, ast.Name) and t.id == "STORAGE_GROUPS"
+                for t in ([node.target] if isinstance(node, ast.AnnAssign) else node.targets))
+    )
+    assert groups == tuple(STORAGE_GROUP_HOME), "the storage walk order changed"
+
+    # vm.py assembles the mixins; the host mixins stay behind the interpreter's own
+    assembly = ast.parse((INTERP / "vm.py").read_text(encoding="utf-8"))
+    vm_cls = next(n for n in assembly.body
+                  if isinstance(n, ast.ClassDef) and n.name == "MellowLangVM")
+    bases = [ast.unparse(b) for b in vm_cls.bases]
+    assert bases[-2:] == ["DebuggerMixin", "StorageMixin"], (
+        "the vm/ mixins the host already ships must stay last in the MRO")
+    declared_mixins = {}
+    for module in [*OP_FAMILY_MODULES, *STORAGE_GROUP_MODULES, *INTERP_SUPPORT_MODULES]:
+        if module in ("vm", "actions"):
+            continue        # vm.py assembles, actions.py holds the sentinels
+        tree = ast.parse((INTERP / f"{module}.py").read_text(encoding="utf-8"))
+        classes = [n.name for n in tree.body if isinstance(n, ast.ClassDef)]
+        assert len(classes) == 1, f"{module}.py declares {classes}, one class was expected"
+        assert classes[0].endswith("Mixin"), f"{module}.py is not a mixin"
+        declared_mixins[classes[0]] = module
+    assert sorted(bases[:-2]) == sorted(declared_mixins), (
+        "the assembly imports exactly the mixins the modules declare")
+    assert len(bases) == len(set(bases)), "a mixin is assembled twice"
+    for name, module in STORAGE_GROUP_HOME.items():
+        cls = next(n for n in ast.parse((INTERP / f"{module}.py").read_text(encoding="utf-8")).body
+                   if isinstance(n, ast.ClassDef))
+        node = next(n for n in cls.body
+                    if isinstance(n, ast.FunctionDef) and n.name == name)
+        assert [a.arg for a in node.args.args] == ["self", "f_name", "args", "kwargs"], (
+            f"{name} must take the name the storage walk is testing")
+
+    # the action sentinels are shared values, defined once, never re-created
+    for sentinel in ("_PASS", "_STEP", "_NEXT", "_HALT"):
+        declared = [m for m in modules if sentinel in _top_level_names(INTERP / f"{m}.py")]
+        assert declared == ["actions"], f"{sentinel} is declared in {declared}"
+    assert "MellowLangVM" in _top_level_names(INTERP / "vm.py")
+    for module in [*OP_FAMILY_MODULES, *STORAGE_GROUP_MODULES]:
+        text = (INTERP / f"{module}.py").read_text(encoding="utf-8")
+        assert "from .vm import" not in text and "python_vm" not in text, (
+            f"{module}.py reaches back into the assembly")
 
 
 def test_package_facade_uses_focused_modules() -> None:
