@@ -16,6 +16,25 @@
   `test_cli_agent_commands_are_split_by_group()` now checks every handler's
   subject module plus that each lazy alias still names an export its target
   package provides.
+- Split `src/mellowlang/agents/scheduler.py` (789 lines) into
+  `src/mellowlang/agents/scheduling/`: `paths.py` owns `SCHEDULER_HOME`, the
+  state-file paths and the time and JSON primitives, `state.py` every paired
+  `_load_*`/`_save_*` reader of those files, `cron.py` and `backoff.py` stay pure,
+  and `jobs.py`, `webhooks.py`, `queue.py`, `drain.py`, `runner.py`, `http_api.py`
+  hold one subject each - behind a 93-line imports-only facade. Imports may only
+  point at a lower layer, so no subject can reach into the driver that calls it.
+- Also proven against `HEAD`: the 66 functions are byte-identical to the monolith
+  (code, names, consts, line spans, source text, signature) with only `__module__`
+  and each def's own line changed, the facade still hands out all 67 names the
+  monolith owned, 156 scheduler calls match on both sides with the 21 files left in
+  the state dir identical byte for byte, 64 of the 66 defs are named by a case and
+  the last two reached through one that is, and stubbing each of the 57 sibling
+  imports changes that battery. Proving it needed a frozen clock per module and a
+  stub `ThreadingHTTPServer` that captures the nested handler and pins
+  `date_time_string()`, because the HTTP surface otherwise reads the real wall
+  clock. `test_agents_scheduler_is_split_by_subject()` now locks each function's
+  home, the whole re-exported surface against `agents/__init__.py` and the tests,
+  and the one-way layering.
 
 ### Removed
 - `src/mellowlang/fast_vm.py` (847 lines, the v1.4.9 compile-to-Python engine).

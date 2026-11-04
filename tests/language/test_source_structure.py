@@ -15,6 +15,7 @@ OPTIMIZATIONS = SRC / "compiler" / "optimizations"
 PARSING = SRC / "parsing"
 INTERP = SRC / "vm" / "interp"
 AGENT_GROUPS = SRC / "cli" / "commands" / "agent_groups"
+SCHEDULING = SRC / "agents" / "scheduling"
 
 # One module per IR pass section, plus the shared value types and the driver.
 PASS_MODULES = ("graph", "folding", "dataflow", "rewrite", "gvn", "sccp", "loops",
@@ -114,10 +115,52 @@ AGENT_SUPPORT_HOME = {
     "_parse_jsonish": "support", "_parse_filters": "support", "_build_backoff": "support",
 }
 
+# agents/scheduler.py is a facade over scheduling/: paths.py owns the state dir and
+# the small serialisation helpers, state.py owns every read and write of a scheduler
+# file, cron.py and backoff.py are pure functions, then one module per subject.
+SCHED_SUPPORT_MODULES = ("paths", "state", "cron", "backoff")
+SCHED_SUBJECT_MODULES = ("jobs", "webhooks", "queue")
+SCHED_DRIVER_MODULES = ("runner", "drain", "http_api")
+# Where each function must live, so the seams stay meaningful rather than merely small.
+SCHED_SUBJECT_HOME = {
+    "_root": "paths", "_jobs_path": "paths", "_runner_path": "paths",
+    "_triggers_path": "paths", "_queue_path": "paths", "_queue_log_path": "paths",
+    "_dead_letter_path": "paths", "_webhooks_path": "paths", "_server_path": "paths",
+    "_job_api_path": "paths", "_now_iso": "paths", "_parse_iso": "paths",
+    "_append_jsonl": "paths", "_load_json": "paths", "_save_json": "paths",
+    "_load_jobs": "state", "_save_jobs": "state", "_load_triggers": "state",
+    "_save_triggers": "state", "_load_queue": "state", "_save_queue": "state",
+    "_load_dead_letter": "state", "_save_dead_letter": "state",
+    "_load_webhooks": "state", "_save_webhooks": "state",
+    "_load_server_state": "state", "_save_server_state": "state",
+    "_load_job_api_state": "state", "_save_job_api_state": "state",
+    "_parse_field": "cron", "cron_matches": "cron", "next_run": "cron",
+    "_normalize_backoff": "backoff", "_compute_backoff_delay_ms": "backoff",
+    "add_job": "jobs", "list_jobs": "jobs", "add_trigger": "jobs",
+    "list_triggers": "jobs",
+    "add_webhook": "webhooks", "list_webhooks": "webhooks", "_filter_match": "webhooks",
+    "emit_event": "webhooks", "receive_webhook": "webhooks",
+    "_queue_item_from_trigger": "queue", "enqueue_job": "queue", "submit_job": "queue",
+    "get_queue_item": "queue", "list_queue": "queue", "list_dead_letter": "queue",
+    "_should_run": "runner", "run_due_jobs": "runner", "write_runner_status": "runner",
+    "read_runner_status": "runner", "run_background_runner": "runner",
+    "_move_to_dead_letter": "drain", "retry_queue_item": "drain",
+    "_is_available": "drain", "_process_queue_item": "drain", "drain_queue": "drain",
+    "read_queue_log": "drain", "queue_stats": "drain",
+    "_read_request_payload": "http_api", "_json_response": "http_api",
+    "start_webhook_server": "http_api", "read_webhook_server_status": "http_api",
+    "read_job_api_status": "http_api",
+}
+# How far above the state dir each module sits. An import may only point downwards,
+# which is what keeps a webhook from reaching into the runner that fires it.
+SCHED_LAYER_RANK = {
+    "paths": 0, "backoff": 0, "state": 1, "cron": 1, "jobs": 2, "queue": 2,
+    "drain": 3, "webhooks": 3, "runner": 4, "http_api": 4,
+}
+
 # Any file longer than this must appear in LINE_CEILINGS, so a new oversized
 # file is a deliberate decision instead of an accident.
 FILE_LENGTH_LIMIT = 1_000
-
 # Largest each long file may become. Lower the number when the file shrinks;
 # never raise it to make this test pass - split the file instead.
 LINE_CEILINGS: dict[str, int] = {
@@ -631,6 +674,72 @@ def test_cli_agent_commands_are_split_by_group() -> None:
         target = init if init.is_file() else target.with_suffix(".py")
         assert target.is_file(), f"{package} has no module to check"
         assert attr in _surface_names(target), f"{package} no longer exports {attr}"
+
+
+def test_agents_scheduler_is_split_by_subject() -> None:
+    """agents/scheduler.py is a facade; scheduling/ holds one module per subject."""
+    facade = SRC / "agents" / "scheduler.py"
+    assert _line_count(facade) <= 120, "the facade re-exports, it does not schedule"
+    source = facade.read_text(encoding="utf-8")
+    assert "def " not in source, "the facade holds no logic"
+    assert "class " not in source, "the facade declares no types"
+    assert "from .scheduling." in source
+
+    modules = sorted(p.stem for p in SCHEDULING.glob("*.py") if p.stem != "__init__")
+    assert modules == sorted([*SCHED_SUPPORT_MODULES, *SCHED_SUBJECT_MODULES,
+                              *SCHED_DRIVER_MODULES]), modules
+    for module in [*modules, "__init__"]:
+        assert _line_count(SCHEDULING / f"{module}.py") <= 300, (
+            f"agents/scheduling/{module}.py grew past one subject")
+
+    # every function is declared once, in the module that owns its subject
+    homes: dict[str, str] = {}
+    for module in modules:
+        for name in _functions(SCHEDULING / f"{module}.py"):
+            assert name not in homes, f"{name} is defined in two scheduling modules"
+            homes[name] = module
+    assert homes == SCHED_SUBJECT_HOME, (
+        "the scheduling modules drifted from their declared subjects: "
+        f"{sorted(set(homes.items()) ^ set(SCHED_SUBJECT_HOME.items()))}")
+
+    # the state dir is a fact of one module, so a subject cannot invent a second one
+    where = [m for m in modules if "SCHEDULER_HOME" in _top_level_names(SCHEDULING / f"{m}.py")]
+    assert where == ["paths"], f"SCHEDULER_HOME is declared in {where}"
+
+    # the facade re-exports the whole surface the split moved, and nothing else, so
+    # `mellowlang.agents` and the tests keep importing every name from scheduler.py
+    exported = {alias.name for node in ast.parse(source).body
+                if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("scheduling.")
+                for alias in node.names}
+    declared = {name for module in modules
+                for name in _top_level_names(SCHEDULING / f"{module}.py")}
+    assert exported == declared, (
+        f"the facade drifted from the subject modules: {sorted(exported ^ declared)}")
+
+    init = ast.parse((SRC / "agents" / "__init__.py").read_text(encoding="utf-8"))
+    needed = {alias.name for node in init.body if isinstance(node, ast.ImportFrom)
+              and node.level == 1 and node.module == "scheduler" for alias in node.names}
+    assert needed and needed <= exported, "the agents package lost a scheduler entry point"
+    for test in sorted((ROOT / "tests").rglob("test_*.py")):
+        tree = ast.parse(test.read_text(encoding="utf-8"))
+        imported = {alias.name for node in tree.body if isinstance(node, ast.ImportFrom)
+                    and node.module == "mellowlang.agents.scheduler" for alias in node.names}
+        assert imported <= exported, (
+            f"{test.name} imports {sorted(imported - exported)} from the facade")
+
+    # layering: a module may only import from a layer below it, never a peer or the
+    # driver above it - that is what stops a webhook from reaching into the runner
+    # that fires it, and what keeps the package free of import cycles
+    for module in modules:
+        tree = ast.parse((SCHEDULING / f"{module}.py").read_text(encoding="utf-8"))
+        for node in tree.body:
+            if not (isinstance(node, ast.ImportFrom) and node.level == 1):
+                continue
+            dep = (node.module or "").split(".")[0]
+            assert dep in SCHED_LAYER_RANK, (
+                f"{module}.py imports .{node.module}, which is not a subject module")
+            assert SCHED_LAYER_RANK[dep] < SCHED_LAYER_RANK[module], (
+                f"{module}.py imports {dep}, which is not a layer below it")
 
 
 def test_package_facade_uses_focused_modules() -> None:

@@ -125,6 +125,47 @@ Established seams, in the tree that owns them:
   helpers more than one group needs, and one module per subject of `mellow agent ...`.
   The layering is one-way - a group imports `deps` and `support`, never a sibling -
   which is what lets a command group move without a second group noticing.
+- `src/mellowlang/agents/scheduler.py` - facade over `agents/scheduling/`: `paths.py`
+  owns `SCHEDULER_HOME`, the state-file paths and the time/JSON primitives, `state.py`
+  the paired `_load_*`/`_save_*` readers, `cron.py` and `backoff.py` stay pure, then
+  one module per subject (`jobs`, `webhooks`, `queue`, `drain`, `runner`, `http_api`).
+  Ranks make the direction checkable: an import may only point at a lower rank, so a
+  subject cannot reach into the driver that calls it and the package stays cycle-free.
+
+A battery that drives an HTTP handler and a clock adds traps the stateful-machine
+check does not hit:
+
+- Python 3.14 compiles a class body's `__firstlineno__` as a *real constant*, so
+  moving a nested class changes that const, the mnemonic that loads it
+  (`LOAD_CONST` vs `LOAD_SMALL_INT`), the code width, every offset after it, and even
+  the number of consts. Compare disassembly with jumps and the exception table mapped
+  to labelled-block ordinals, fold both const opcodes together, and compare consts as
+  a multiset with the def's own line replaced by a marker.
+- Purge `__pycache__` of the package and its new subpackage before importing: a split
+  file and its stale `.pyc` can share mtime and size, and then every line number the
+  comparison prints is a lie that only flakes.
+- Replace `ThreadingHTTPServer` in the owning module with a stub that captures the
+  nested `Handler`, then drive requests through `handler.__new__(handler)` with
+  `path`, `command`, `headers`, `requestline` and a `BytesIO` `rfile`/`wfile`.
+  `BaseHTTPRequestHandler.date_time_string()` reads the real clock, so pin it - and
+  `version_string`, `log_message` - or the two sides differ by one second.
+- `datetime` is imported per module, so freeze it per module (a `datetime` subclass
+  whose `now()` returns a fixed instant) rather than patching the stdlib, which would
+  freeze the oracle's own timing too. On-disk JSON then matches byte for byte instead
+  of matching only after scrubbing.
+- Derive ids from what earlier cases wrote on disk. An invented id returns "not
+  found" on both sides and agrees for a reason unrelated to the split.
+- A `sort` flag that cannot parse its outcome must fail loudly: the outcome is a
+  Python repr, so `json.loads` raises, a silent fallthrough leaves the list in
+  scheduler order, and the thread cases stop testing anything. Use `ast.literal_eval`.
+  Pin thread-backed cases to `workers=1`, keep one deliberate multi-worker case whose
+  items all succeed, and compare `.jsonl` as sorted lines.
+- Build case inputs through a factory called per side. An object created once in the
+  case list is consumed by the first side, and the second side then sees an exhausted
+  stream.
+- Scratch oracles are one flat module scope: a non-vacuity loop that restores a
+  binding with `real = module.__dict__[name]` silently rebinds the script's own
+  `real(text, mapping)` scrubbing helper. Name restore targets distinctly.
 
 Command handlers add oracle traps that a stateful machine does not have:
 
