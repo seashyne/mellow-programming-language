@@ -54,6 +54,9 @@ def register_ai_functions(registry: Any) -> None:
     """Register all AI host functions into a HostRegistry."""
     from ..host.runtime import HostFunction
 
+    def _api_complete(args: Any) -> Any:
+        return ai_api_complete(args, runtime_config=registry.runtime_config)
+
     funcs = [
         HostFunction("std.ai.model_create",  ai_model_create,  cost=5,  min_args=1, max_args=3),
         HostFunction("std.ai.train",         ai_train,          cost=50, min_args=3, max_args=5),
@@ -75,7 +78,7 @@ def register_ai_functions(registry: Any) -> None:
         HostFunction("std.ai.models_list",   ai_models_list,    cost=1,  min_args=0, max_args=0),
         HostFunction("std.ai.api_providers", ai_api_providers,  cost=1,  min_args=0, max_args=0),
         HostFunction("std.ai.api_configure", ai_api_configure,  cost=1,  min_args=1, max_args=2),
-        HostFunction("std.ai.api_complete",  ai_api_complete,   cost=2,  min_args=1, max_args=3),
+        HostFunction("std.ai.api_complete",  _api_complete,     cost=2,  min_args=1, max_args=3),
         HostFunction("std.ai.api_embed",     ai_api_embed,      cost=1,  min_args=1, max_args=2),
         HostFunction("std.ai.llm_create",    ai_llm_create,     cost=5,  min_args=1, max_args=2),
         HostFunction("std.ai.llm_train",     ai_llm_train,      cost=80, min_args=2, max_args=3),

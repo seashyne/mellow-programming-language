@@ -264,6 +264,32 @@ call(ai["decide"], "tag", "event")
 
 When running with `--ai-timeline path.jsonl`, decisions are written as JSONL.
 
+### OpenAI-compatible completions
+
+`ai.api_complete(provider, prompt, options?)` answers from the built-in offline
+providers unless the provider is configured with a `base_url`:
+
+```mellow
+call ai.api_configure("openai", {
+  "base_url": "https://api.openai.com/v1",
+  "model": "gpt-4o-mini",
+  "api_key_env": "OPENAI_API_KEY"
+})
+let reply = call ai.api_complete("openai", "Summarize MellowLang", {"temperature": 0.2})
+print(reply["response"])
+```
+
+- `api_complete` POSTs to `{base_url}/chat/completions` with `model` and
+  `messages`; `options.system` becomes the system message and `options.messages`
+  replaces the generated ones.
+- The key is read from `api_key` or the environment variable named by
+  `api_key_env`. Returned configs and `api_providers()` redact it.
+- Networking is deny-by-default like `net_http_*`: set `allow_net` and put the
+  base URL under `net_http_allow` in project `permissions`. Timeouts are clamped
+  to 0.1-120 s and responses are capped by `net_max_bytes`.
+- Provider state is per host process, so `api_configure` must run before
+  `api_complete` in the same run.
+
 ---
 
 ## Game module (v1.4.0, allowlisted)

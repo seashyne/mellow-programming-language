@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+- `std.ai.api_complete` can talk to any OpenAI-compatible endpoint instead of
+  only returning the offline stub. Configure a provider with `base_url`,
+  `model`, and `api_key` or `api_key_env`; the call POSTs to
+  `{base_url}/chat/completions` and returns `response`, `model`, and `usage`.
+  Keys are never echoed: `api_providers()` and returned configs redact them.
+  The client reuses the `net_http_*` sandbox rules (`allow_net` plus
+  `net_http_allow`), the 0.1-120 s timeout clamp and `net_max_bytes`, and leaves
+  offline providers byte-identical. `tests/core/test_ai_provider.py` covers the
+  request shape, environment-variable keys, redaction, and both sandbox
+  refusals; `docs/STDLIB_REFERENCE.md` documents the configuration.
+
 ### Performance
 - The standalone runtime heap now finds a tracked pointer in constant time.
   `heap_find` used to scan the global block list, and every value release and GC
