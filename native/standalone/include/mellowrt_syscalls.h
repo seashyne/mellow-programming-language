@@ -51,6 +51,9 @@ int mellowrt_default_syscall(
     MValue *out_result
 );
 
+/* Resolve a syscall name (behaviour-tree leaves) to its runtime id. */
+int mellowrt_builtin_lookup(const char *name, size_t len);
+
 void mellowrt_collect_garbage(MellowRuntimeContext *ctx);
 
 #endif

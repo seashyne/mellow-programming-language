@@ -13,5 +13,6 @@
 #include "mellowrt_game_part3.inc"
 #include "mellowrt_game_part4.inc"
 #include "mellowrt_game_part5.inc"
+#include "mellowrt_game_part6.inc"
 
 #endif /* MELLOWRT_GAME_INC */

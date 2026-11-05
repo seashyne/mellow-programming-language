@@ -93,6 +93,7 @@ static int builtin_id(const char *name, size_t len) {
         {"ai.in_sight",162},{"ai.perception.in_sight",162},
         {"ai.nearest",163},{"ai.perception.nearest",163},
         {"ai.filter_range",164},{"ai.perception.filter_range",164},
+        {"ai.utility_choose",165},{"ai.bt_tick",166},{"ai.fsm_tick",167},
         {"string.len",200},{"string.lower",201},{"string.upper",202},
         {"string.trim",203},{"string.replace",204},{"string.find",205},
         {"string.split",206},{"string.join",207},
@@ -152,6 +153,12 @@ static int builtin_id(const char *name, size_t len) {
         if (strlen(builtins[i].name)==len && memcmp(name,builtins[i].name,len)==0) return builtins[i].id;
     if (len > 4 && memcmp(name, "std.", 4) == 0) return builtin_id(name + 4, len - 4);
     return 0;
+}
+
+/* Behaviour trees name a syscall as a string; resolve it through the same
+ * table the compiler uses for static calls. */
+int mellowrt_builtin_lookup(const char *name, size_t len) {
+    return builtin_id(name, len);
 }
 
 static int module_is_builtin(const char *module) {

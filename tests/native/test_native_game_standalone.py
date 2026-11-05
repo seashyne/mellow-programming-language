@@ -249,6 +249,29 @@ def test_perception_helpers_match_python(native_binary: Path, tmp_path: Path) ->
     _parity(native_binary, source, tmp_path)
 
 
+def test_decision_helpers_match_python(native_binary: Path, tmp_path: Path) -> None:
+    source = """
+        println(get json.encode(get ai.utility_choose([{"score":1,"value":"a"},{"score":3,"value":"b"},{"score":3,"value":"c"}])))
+        println(get json.encode(get ai.utility_choose([{"value":"x"}])))
+        println(get json.encode(get ai.utility_choose([{"score":"9","value":5},{"score":2}])))
+        println(get json.encode(get ai.utility_choose([])))
+        println(get json.encode(get ai.utility_choose([5, {"score":2,"value":"v"}])))
+        println(get ai.bt_tick({"type":"selector","children":[{"type":"condition","sys":"std.ai.perception.in_range","args":[[0,0],[1,1],5]},{"type":"action","sys":"std.game.anim.frame","args":[2]}]}))
+        println(get ai.bt_tick({"type":"sequence","children":[{"type":"condition","sys":"std.ai.perception.in_range","args":[[0,0],[1,1],5]},{"type":"action","sys":"std.game.anim.frame","args":[2]}]}))
+        println(get ai.bt_tick({"type":"sequence","children":[{"type":"condition","sys":"std.ai.perception.in_range","args":[[0,0],[9,9],5]},{"type":"action","sys":"std.game.anim.frame","args":[2]}]}))
+        println(get ai.bt_tick({"type":"condition","sys":"std.ai.perception.in_sight","args":[[0,0],0,[10,0]]}))
+        println(get ai.bt_tick({"type":"action","sys":"std.game.entity.move","args":{"pos":[5,6]}}))
+        println(get ai.bt_tick({"type":"bogus"}))
+        println(get ai.bt_tick())
+        println(get json.encode(get ai.fsm_tick({"state":"idle","on_tick":{"idle":"std.game.anim.frame"}}, 7)))
+        println(get json.encode(get ai.fsm_tick({"state":"idle","on_tick":{"idle":"std.game.entity.move"}}, {"pos":[5,6]})))
+        println(get json.encode(get ai.fsm_tick({"state":"walk","on_tick":{"idle":"std.game.anim.frame"}}, 7)))
+        println(get json.encode(get ai.fsm_tick({"on_tick":{"idle":"std.game.anim.frame"}}, 7)))
+        println(get json.encode(get ai.fsm_tick({"state":"idle","on_tick":[1]}, 7)))
+    """
+    _parity(native_binary, source, tmp_path)
+
+
 def test_astar_tie_breaking_matches_python(native_binary: Path, tmp_path: Path) -> None:
     grids = [
         [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],

@@ -26,6 +26,14 @@
   and `tests/native/test_native_game_standalone.py` confirm byte-identical
   output against the Python VM; only function-callback helpers remain
   Python-only.
+- The same runtime implements `ai.utility_choose`, `ai.bt_tick`, and
+  `ai.fsm_tick` in native C. `bt_tick` and `fsm_tick` resolve the syscall named
+  by their node or state map through the compiler's builtin table and re-enter
+  the default dispatcher, so selector/sequence ordering, `success`/`fail`/
+  `running` passthrough, `None`-context zero-arg calls, and the Python VM's
+  `[value]` vs list-expansion argument rules all match. Unknown syscall names
+  fail with the same `SANDBOX: syscall not allowed` message, and the parity
+  cases live in `tests/native/test_native_game_standalone.py`.
 - `std.ai.api_complete` can talk to any OpenAI-compatible endpoint instead of
   only returning the offline stub. Configure a provider with `base_url`,
   `model`, and `api_key` or `api_key_env`; the call POSTs to

@@ -82,7 +82,7 @@ which implements the whole family in native C.
 | `std.time` | native `unix`, `ms`, and monotonic `now` |
 | `std.assert`, `std.event` | native; `AssertionError` messages match the Python VM |
 | `std.game` | native easing, tween, grid neighbors, A*, scene/entity, AABB, animation |
-| `std.ai` steering and perception | native `seek`, `flee`, `arrive`, `wander`, `patrol`, `in_range`, `in_sight`, `nearest`, `filter_range` |
+| `std.ai` steering, perception, and decisions | native `seek`, `flee`, `arrive`, `wander`, `patrol`, `in_range`, `in_sight`, `nearest`, `filter_range`, `utility_choose`, `bt_tick`, `fsm_tick` |
 
 Native lists and maps are value types: `list.push`, `list.insert`, `list.remove`,
 `list.pop`, `list.sort`, and `map.set` return new collections and leave the
@@ -94,6 +94,12 @@ path list.
 Callbacks stay Python-only for now: `list.map`, `list.filter`, `list.reduce`,
 `list.map_fn`, and `list.filter_fn` need to invoke a Mellow function and remain a
 compile error in the standalone runtime.
+
+`ai.bt_tick` and `ai.fsm_tick` invoke the syscall named in their tree or state
+map, so the standalone runtime resolves that name through the same builtin table
+the compiler uses. Unknown names fail with `SANDBOX: syscall not allowed: <name>`,
+and a missing `args` value means zero arguments while a non-list value is passed
+as the single argument, matching the Python VM.
 
 ## Money / decimal-safe rules
 
