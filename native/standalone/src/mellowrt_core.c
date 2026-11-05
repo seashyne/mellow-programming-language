@@ -21,10 +21,15 @@ typedef struct MHeapBlock {
     int marked;
     MVM *owner;
     struct MHeapBlock *next;
+    struct MHeapBlock *index_next;
 } MHeapBlock;
 
 static MHeapBlock *g_heap_blocks = NULL;
+static MHeapBlock **g_heap_index = NULL;
+static size_t g_heap_index_cap = 0;
+static size_t g_heap_index_len = 0;
 
+#include "mellowrt_heap.inc"
 #include "mellowrt_core_part1.inc"
 #include "mellowrt_core_part2.inc"
 #include "mellowrt_core_part3.inc"

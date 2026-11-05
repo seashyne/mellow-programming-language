@@ -1,11 +1,3 @@
-static MHeapBlock *heap_find(const void *ptr) {
-    MHeapBlock *block;
-    if (!ptr) return NULL;
-    for (block = g_heap_blocks; block; block = block->next)
-        if (block->ptr == ptr) return block;
-    return NULL;
-}
-
 static void *heap_alloc(MVM *vm, size_t count, size_t item_size, MHeapKind kind) {
     size_t bytes = count * item_size;
     void *ptr;
@@ -19,6 +11,9 @@ static void *heap_alloc(MVM *vm, size_t count, size_t item_size, MHeapKind kind)
     block->bytes = bytes;
     block->kind = kind;
     block->owner = vm;
+    /* Index before linking: a table grow rehashes g_heap_blocks, and the new
+       block must not be inserted twice. */
+    heap_index_insert(block);
     block->next = g_heap_blocks;
     g_heap_blocks = block;
     vm->heap_allocated++;
@@ -97,6 +92,7 @@ uint64_t mvm_gc_collect_with_marker(MVM *vm, void (*marker)(void *user, MVM *vm)
             }
             if (prev) prev->next = next;
             else g_heap_blocks = next;
+            heap_index_remove(block);
             free(block->ptr);
             free(block);
             freed++;

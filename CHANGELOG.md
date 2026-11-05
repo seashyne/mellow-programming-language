@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Performance
+- The standalone runtime heap now finds a tracked pointer in constant time.
+  `heap_find` used to scan the global block list, and every value release and GC
+  mark calls it, so loops that churn containers paid O(heap) per free and became
+  quadratic. The list stays for sweep iteration; a pointer-keyed bucket index
+  (`mellowrt_heap.inc`) answers the lookup, grows at a 3/4 load factor and drops
+  entries during the sweep. Measured on the Release standalone binary: money
+  1,000 steps 188.4 ms -> 9.5 ms, 4,000 steps 3,438.4 ms -> 21.1 ms; ledger 80
+  posts 15,128.4 ms -> 29.9 ms, and 160 posts, which did not finish before,
+  now takes 129.9 ms. The remainder of the ledger curve is the per-post clone of
+  the whole book, not the heap.
+
 ### Structure
 - Split the two benchmark entry points into concern packages behind unchanged
   command lines. `benchmarks/run_all.py` (423 lines) now holds only argument

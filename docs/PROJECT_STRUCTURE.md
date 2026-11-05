@@ -117,6 +117,15 @@ reconstruction from parent plus parts must be byte-identical.
 `tests/language/test_source_structure.py` enforces the ≤300-line budget, contiguous
 part numbering, and that each parent includes exactly its parts in order.
 
+`native/standalone/src/mellowrt_core.c` also includes one non-fragment file:
+`mellowrt_heap.inc` holds the pointer-keyed index behind `heap_find`
+(`heap_hash_ptr`, `heap_index_grow`/`_insert`/`_remove`). It is included before
+the parts because `heap_alloc` and the GC sweep in `mellowrt_core_part1.inc`
+call it, and it stays out of the parts so neither side grows past the budget.
+The index is an optimisation of the same ownership model, not a second one: the
+`g_heap_blocks` list remains the sweep order and the index only answers whether
+a pointer is tracked.
+
 `native/**/*.inc` fragments are part of the C surface: like the `.c` and `.h`
 files beside them, they must not mention `mellowlang` or reach the Python layer
 (`tests/test_workspace_boundaries.py`).
