@@ -9,6 +9,7 @@
 #define MELLOWRT_STD_INC
 
 #include "mellowrt_std_part1.inc"
+#include "mellowrt_game.inc"
 #include "mellowrt_std_part2.inc"
 #include "mellowrt_std_part3.inc"
 #include "mellowrt_std_part4.inc"

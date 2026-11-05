@@ -9,13 +9,23 @@
   (including vectors, `distance`, `angle_between`, and `sum`), `std.time`,
   `std.assert`, and `std.event`. No Python process is involved. Async and
   callback helpers remain Python-only: `list.map/filter/reduce/map_fn/filter_fn`
-  must call a Mellow function, and `std.game` plus the `ai.*` behaviour helpers
-  are not ported yet. Native lists and maps are value types, so `list.push`,
+  must call a Mellow function. Native lists and maps are value types, so `list.push`,
   `list.insert`, `list.remove`, `list.pop`, `list.sort`, and `map.set` return
   new collections instead of mutating the receiver; the Python VM still mutates.
   `tests/native/test_native_std_standalone.py` diffs native stdout against the
   Python VM for every family and pins the value-semantics difference;
   `docs/STDLIB_REFERENCE.md` records the coverage table.
+- The same standalone runtime now implements `std.game` in native C: all eleven
+  easing curves, `tween.step`, bounds-aware `grid.neighbors4`/`neighbors8`,
+  `path.astar` (Manhattan or Chebyshev heuristic, `1.41421356237` diagonal cost,
+  Python heap tie-breaking), `scene.create`, `entity.create`, `entity.move`,
+  `physics.collide_aabb`, and `anim.frame`. The `ai.*` behaviour helpers also run
+  natively: `steering.seek/flee/arrive/wander/patrol` and
+  `perception.in_range/in_sight/nearest/filter_range`, including Python's
+  `float()`/`int()` coercions and non-negative modulo. A 120-grid A* fuzz run
+  and `tests/native/test_native_game_standalone.py` confirm byte-identical
+  output against the Python VM; only function-callback helpers remain
+  Python-only.
 - `std.ai.api_complete` can talk to any OpenAI-compatible endpoint instead of
   only returning the offline stub. Configure a provider with `base_url`,
   `model`, and `api_key` or `api_key_env`; the call POSTs to

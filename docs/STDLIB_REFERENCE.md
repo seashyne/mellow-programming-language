@@ -81,16 +81,19 @@ which implements the whole family in native C.
 | `std.math` | native, including vectors, `distance`, `angle_between`, `sum` |
 | `std.time` | native `unix`, `ms`, and monotonic `now` |
 | `std.assert`, `std.event` | native; `AssertionError` messages match the Python VM |
+| `std.game` | native easing, tween, grid neighbors, A*, scene/entity, AABB, animation |
+| `std.ai` steering and perception | native `seek`, `flee`, `arrive`, `wander`, `patrol`, `in_range`, `in_sight`, `nearest`, `filter_range` |
 
 Native lists and maps are value types: `list.push`, `list.insert`, `list.remove`,
 `list.pop`, `list.sort`, and `map.set` return new collections and leave the
 receiver unchanged, while the Python VM mutates it. Code that uses the return
-value behaves the same on both engines.
+value behaves the same on both engines. Game helpers follow the same rule: the
+native `entity.move` returns the updated entity map and `astar` returns a new
+path list.
 
 Callbacks stay Python-only for now: `list.map`, `list.filter`, `list.reduce`,
 `list.map_fn`, and `list.filter_fn` need to invoke a Mellow function and remain a
-compile error in the standalone runtime. `std.game` and the `ai.*` behaviour
-helpers are also still Python-only.
+compile error in the standalone runtime.
 
 ## Money / decimal-safe rules
 
@@ -393,6 +396,14 @@ grid = [
 path = call(g["astar"], grid, [0,0], [3,2], false)
 print(path)
 ```
+
+The standalone `mellow` runtime implements these helpers in native C, together
+with `scene_create`, `entity_create`, `entity_move`, `collide_aabb`,
+`anim_frame`, and the allowlisted `ai.*` behaviour functions:
+`ai.seek`, `ai.flee`, `ai.arrive`, `ai.wander`, `ai.patrol`, `ai.in_range`,
+`ai.in_sight`, `ai.nearest`, and `ai.filter_range`. Results match the Python VM;
+`tests/native/test_native_game_standalone.py` diffs native stdout against the
+reference engine.
 
 ---
 

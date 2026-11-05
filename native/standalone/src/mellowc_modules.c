@@ -84,6 +84,15 @@ static int builtin_id(const char *name, size_t len) {
         {"ai.llm_models",149},{"ai.llm_backends",150},{"ai.llm_device_plan",151},
         {"ai.llm_tensor",152},{"ai.llm_tensor_batch",153},{"ai.llm_save",154},
         {"ai.llm_load",155},
+        {"ai.seek",156},{"ai.steering.seek",156},
+        {"ai.flee",157},{"ai.steering.flee",157},
+        {"ai.arrive",158},{"ai.steering.arrive",158},
+        {"ai.wander",159},{"ai.steering.wander",159},
+        {"ai.patrol",160},{"ai.steering.patrol",160},
+        {"ai.in_range",161},{"ai.perception.in_range",161},
+        {"ai.in_sight",162},{"ai.perception.in_sight",162},
+        {"ai.nearest",163},{"ai.perception.nearest",163},
+        {"ai.filter_range",164},{"ai.perception.filter_range",164},
         {"string.len",200},{"string.lower",201},{"string.upper",202},
         {"string.trim",203},{"string.replace",204},{"string.find",205},
         {"string.split",206},{"string.join",207},
@@ -116,7 +125,27 @@ static int builtin_id(const char *name, size_t len) {
         {"math.vec_axis",295},{"math.vec_lerp",296},{"math.vec_limit",297},
         {"time.unix",320},{"time.ms",321},{"time.now",322},
         {"assert.check",330},{"assert.eq",331},{"assert.ne",332},
-        {"event.emit",333}
+        {"event.emit",333},
+        {"game.ease_linear",340},{"game.easing.linear",340},
+        {"game.ease_in_quad",341},{"game.easing.in_quad",341},
+        {"game.ease_out_quad",342},{"game.easing.out_quad",342},
+        {"game.ease_in_out_quad",343},{"game.easing.in_out_quad",343},
+        {"game.ease_in_cubic",344},{"game.easing.in_cubic",344},
+        {"game.ease_out_cubic",345},{"game.easing.out_cubic",345},
+        {"game.ease_in_out_cubic",346},{"game.easing.in_out_cubic",346},
+        {"game.ease_in_back",347},{"game.easing.in_back",347},
+        {"game.ease_out_back",348},{"game.easing.out_back",348},
+        {"game.ease_out_bounce",349},{"game.easing.out_bounce",349},
+        {"game.ease_out_elastic",350},{"game.easing.out_elastic",350},
+        {"game.tween",351},{"game.tween.step",351},
+        {"game.neighbors4",352},{"game.grid.neighbors4",352},
+        {"game.neighbors8",353},{"game.grid.neighbors8",353},
+        {"game.astar",354},{"game.path.astar",354},
+        {"game.scene_create",355},{"game.scene.create",355},
+        {"game.entity_create",356},{"game.entity.create",356},
+        {"game.entity_move",357},{"game.entity.move",357},
+        {"game.collide_aabb",358},{"game.physics.collide_aabb",358},
+        {"game.anim_frame",359},{"game.anim.frame",359}
     };
     size_t i;
     for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)
@@ -141,7 +170,8 @@ static int module_is_builtin(const char *module) {
            strcmp(module, "type") == 0 || strcmp(module, "std.type") == 0 ||
            strcmp(module, "json") == 0 || strcmp(module, "std.json") == 0 ||
            strcmp(module, "assert") == 0 || strcmp(module, "std.assert") == 0 ||
-           strcmp(module, "event") == 0 || strcmp(module, "std.event") == 0;
+           strcmp(module, "event") == 0 || strcmp(module, "std.event") == 0 ||
+           strcmp(module, "game") == 0 || strcmp(module, "std.game") == 0;
 }
 
 static int add_module_alias(Compiler *c, const char *module, const char *alias) {
