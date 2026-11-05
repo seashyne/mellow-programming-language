@@ -14,6 +14,16 @@
   now takes 129.9 ms. The remainder of the ledger curve is the per-post clone of
   the whole book, not the heap.
 
+### Docs
+- The README now publishes measured performance instead of leaving speed
+  unstated: 6.4 ms startup floor, 8.2-8.9 million rows/second and 3.2-3.4x the
+  Python VM for in-memory data transforms, 58 ms for 9,000 `money_add` calls,
+  and the honest interpreter position (about 2x CPython, about 4.7x slower than
+  Lua 5.4). `benchmarks/native_vs_zig/RESULTS_2026-11-05_HEAP-INDEX.md` records
+  the post-heap-fix re-measurement, the 2026-11-02 cross-language report gains a
+  dated addendum, and `docs/DATA_PROCESSING_CORE.md` replaces its v2.7.1
+  figures with the current measured range.
+
 ### Structure
 - Split the two benchmark entry points into concern packages behind unchanged
   command lines. `benchmarks/run_all.py` (423 lines) now holds only argument

@@ -1,6 +1,6 @@
 # Native Mellow comparison benchmark
 
-This benchmark compares Mellow 2.9.7 Full Native C with Zig ReleaseFast, C,
+This benchmark compares the current Full Native C build with Zig ReleaseFast, C,
 Python, and Lua across several small workloads:
 
 - `sum_loop`: integer while-loop sum.
@@ -29,3 +29,15 @@ startup plus script execution.
 
 Results are emitted as JSON with one section per workload and a `summary`
 object containing median timings and ratios.
+
+## Published results
+
+Each file is a dated measurement on the host named inside it, not a standing
+claim about the language. Re-run the command above before quoting numbers.
+
+- `RESULTS_2026-11-02_CROSS-LANGUAGE-HONEST.md` - whole-process timings, startup
+  floor, fast-loop shape cliff, serialized-chain throughput, and the
+  business-arithmetic probe. It found the heap-registry quadratic.
+- `RESULTS_2026-11-05_HEAP-INDEX.md` - re-measurement after the heap index
+  (`13b67178`): 9,000 `money_add` calls 17,130 ms -> 57.8 ms, with block growth
+  and the missing automatic collection unchanged.

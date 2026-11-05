@@ -236,6 +236,27 @@ is only for bridge commands that import/export common video files.
 
 `mellow doctor` reports which optional features are available in the current Python environment.
 
+## Performance
+
+Numbers here are dated measurements on one host, not guarantees. Each linked
+report names its machine and the command to reproduce it. Measured on Windows 11
+(Intel64, Python 3.14.3) with the 2.9.9 Release standalone binary:
+
+- Startup: 6.4 ms median for a script that does no work (`mellow --version` is
+  6.3 ms); the same host measured Node 24 at 43.75 ms and CPython at 55.65 ms.
+- In-memory data transforms: 8.2-8.9 million rows/second and 3.2-3.4x the
+  Python VM on the same where+project+sum workload.
+- Business arithmetic: 9,000 `money_add` calls take 58 ms; the heap fix removed
+  the quadratic free path (17,130 ms before).
+- General interpreter throughput remains modest: about 2x CPython, about 4.7x
+  slower than Lua 5.4 and about 11x slower than `gcc -O3` on a loop-carried
+  chain. The five loop shapes in the cross-language suite are compiler fast
+  paths, not general speed.
+
+Raw data, probes, and the startup-floor caveats:
+[`RESULTS_2026-11-02_CROSS-LANGUAGE-HONEST.md`](benchmarks/native_vs_zig/RESULTS_2026-11-02_CROSS-LANGUAGE-HONEST.md)
+and [`RESULTS_2026-11-05_HEAP-INDEX.md`](benchmarks/native_vs_zig/RESULTS_2026-11-05_HEAP-INDEX.md).
+
 ## Testing
 
 Core language gate:
