@@ -240,7 +240,8 @@ is only for bridge commands that import/export common video files.
 
 Numbers here are dated measurements on one host, not guarantees. Each linked
 report names its machine and the command to reproduce it. Measured on Windows 11
-(Intel64, Python 3.14.3) with the 2.9.9 Release standalone binary:
+(Intel64, Python 3.14.3) with the 2.9.9 native runtime - the standalone binary for
+startup, money, and interpreter numbers, the C extension for data transforms:
 
 - Startup: 6.4 ms median for a script that does no work (`mellow --version` is
   6.3 ms); the same host measured Node 24 at 43.75 ms and CPython at 55.65 ms.
