@@ -83,7 +83,40 @@ static int builtin_id(const char *name, size_t len) {
         {"ai.llm_eval",146},{"ai.llm_complete",147},{"ai.llm_chat",148},
         {"ai.llm_models",149},{"ai.llm_backends",150},{"ai.llm_device_plan",151},
         {"ai.llm_tensor",152},{"ai.llm_tensor_batch",153},{"ai.llm_save",154},
-        {"ai.llm_load",155}
+        {"ai.llm_load",155},
+        {"string.len",200},{"string.lower",201},{"string.upper",202},
+        {"string.trim",203},{"string.replace",204},{"string.find",205},
+        {"string.split",206},{"string.join",207},
+        {"string.starts_with",208},{"string.ends_with",209},{"string.contains",210},
+        {"string.repeat",211},{"string.pad_left",212},{"string.pad_right",213},
+        {"string.format",214},{"string.chr",215},{"string.ord",216},
+        {"string.tostr",217},
+        {"list.push",220},{"list.pop",221},{"list.len",222},
+        {"list.insert",223},{"list.remove",224},{"list.has",225},
+        {"list.sort",226},{"list.find",229},{"list.slice",230},
+        {"list.reverse",231},{"list.count",233},{"list.enumerate",234},
+        {"list.zip",235},{"list.sorted",236},{"list.reversed",237},
+        {"list.any",238},{"list.all",239},
+        {"list._extend",240},{"list._append_to_top",241},
+        {"map.get",245},{"map.set",246},{"map.keys",247},
+        {"map.values",248},{"map.has",249},
+        {"type.is_number",252},{"type.is_string",253},{"type.is_bool",254},
+        {"type.is_list",255},{"type.is_map",256},{"type.is_none",257},
+        {"type.of",258},{"type.to_int",259},{"type.to_float",260},
+        {"type.to_str",261},{"type.to_bool",262},{"type.to_list",263},
+        {"json.encode",266},{"json.decode",267},
+        {"math.round",270},{"math.pow",271},{"math.sin",272},{"math.cos",273},
+        {"math.tan",274},{"math.atan2",275},{"math.pi",276},{"math.sign",277},
+        {"math.fmod",278},{"math.deg_to_rad",279},{"math.rad_to_deg",280},
+        {"math.distance",281},{"math.angle_between",282},{"math.sum",283},
+        {"math.vec2",284},{"math.vec3",285},{"math.vector",286},
+        {"math.vec",286},{"math.vec_add",287},{"math.vec_sub",288},
+        {"math.vec_mul",289},{"math.vec_dot",290},{"math.vec_len",291},
+        {"math.vec_norm",292},{"math.vec_dist",293},{"math.vec_dim",294},
+        {"math.vec_axis",295},{"math.vec_lerp",296},{"math.vec_limit",297},
+        {"time.unix",320},{"time.ms",321},{"time.now",322},
+        {"assert.check",330},{"assert.eq",331},{"assert.ne",332},
+        {"event.emit",333}
     };
     size_t i;
     for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)
@@ -101,7 +134,14 @@ static int module_is_builtin(const char *module) {
            strcmp(module, "ledger") == 0 || strcmp(module, "storage") == 0 ||
            strcmp(module, "fs") == 0 || strcmp(module, "file") == 0 ||
            strcmp(module, "ai") == 0 || strcmp(module, "std.ai") == 0 ||
-           strcmp(module, "random") == 0 || strcmp(module, "std.random") == 0;
+           strcmp(module, "random") == 0 || strcmp(module, "std.random") == 0 ||
+           strcmp(module, "string") == 0 || strcmp(module, "std.string") == 0 ||
+           strcmp(module, "list") == 0 || strcmp(module, "std.list") == 0 ||
+           strcmp(module, "map") == 0 || strcmp(module, "std.map") == 0 ||
+           strcmp(module, "type") == 0 || strcmp(module, "std.type") == 0 ||
+           strcmp(module, "json") == 0 || strcmp(module, "std.json") == 0 ||
+           strcmp(module, "assert") == 0 || strcmp(module, "std.assert") == 0 ||
+           strcmp(module, "event") == 0 || strcmp(module, "std.event") == 0;
 }
 
 static int add_module_alias(Compiler *c, const char *module, const char *alias) {

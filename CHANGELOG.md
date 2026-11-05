@@ -3,6 +3,19 @@
 ## Unreleased
 
 ### Added
+- The standalone `mellow` executable now implements the data standard library
+  in native C: `std.string` (UTF-8 `len`/`chr`/`ord`, padding, `format`),
+  `std.list`, `std.map`, `std.type`, `std.json` encode/decode, `std.math`
+  (including vectors, `distance`, `angle_between`, and `sum`), `std.time`,
+  `std.assert`, and `std.event`. No Python process is involved. Async and
+  callback helpers remain Python-only: `list.map/filter/reduce/map_fn/filter_fn`
+  must call a Mellow function, and `std.game` plus the `ai.*` behaviour helpers
+  are not ported yet. Native lists and maps are value types, so `list.push`,
+  `list.insert`, `list.remove`, `list.pop`, `list.sort`, and `map.set` return
+  new collections instead of mutating the receiver; the Python VM still mutates.
+  `tests/native/test_native_std_standalone.py` diffs native stdout against the
+  Python VM for every family and pins the value-semantics difference;
+  `docs/STDLIB_REFERENCE.md` records the coverage table.
 - `std.ai.api_complete` can talk to any OpenAI-compatible endpoint instead of
   only returning the offline stub. Configure a provider with `base_url`,
   `model`, and `api_key` or `api_key_env`; the call POSTs to

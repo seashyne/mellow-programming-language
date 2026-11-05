@@ -53,6 +53,7 @@ static void mark_channel_queue_values(void *user, MVM *vm);
 #include "mellowrt_syscalls_part1.inc"
 #include "mellowrt_random.inc"
 #include "mellowrt_ai.inc"
+#include "mellowrt_std.inc"
 #include "mellowrt_syscalls_part2.inc"
 #include "mellowrt_syscalls_part3.inc"
 #include "mellowrt_syscalls_part4.inc"

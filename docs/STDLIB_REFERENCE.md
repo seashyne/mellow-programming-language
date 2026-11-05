@@ -65,9 +65,32 @@ print(thread.scheduler_mode())
 - `vec_add(a, b)`, `vec_sub(a, b)`
 - `vec_len(v)`
 
-The vector family resolves through `std.math.*` host services, so it runs on the
-Python VM and the `--engine=c` extension. The standalone `mellow` executable has
-no native vector syscalls yet; `vec(...)` there is still a compile error.
+The vector family resolves through `std.math.*` host services and runs on the
+Python VM, the `--engine=c` extension, and the standalone `mellow` executable,
+which implements the whole family in native C.
+
+### Standalone host coverage
+
+| Family | Standalone `mellow` |
+| --- | --- |
+| `std.string` | native and UTF-8 aware (`len`, `chr`, `ord`, padding, `format`) |
+| `std.list` | native; mutators return new lists |
+| `std.map` | native; `set` returns a new map |
+| `std.type` | native |
+| `std.json` | native encode/decode with Python-compatible separators |
+| `std.math` | native, including vectors, `distance`, `angle_between`, `sum` |
+| `std.time` | native `unix`, `ms`, and monotonic `now` |
+| `std.assert`, `std.event` | native; `AssertionError` messages match the Python VM |
+
+Native lists and maps are value types: `list.push`, `list.insert`, `list.remove`,
+`list.pop`, `list.sort`, and `map.set` return new collections and leave the
+receiver unchanged, while the Python VM mutates it. Code that uses the return
+value behaves the same on both engines.
+
+Callbacks stay Python-only for now: `list.map`, `list.filter`, `list.reduce`,
+`list.map_fn`, and `list.filter_fn` need to invoke a Mellow function and remain a
+compile error in the standalone runtime. `std.game` and the `ai.*` behaviour
+helpers are also still Python-only.
 
 ## Money / decimal-safe rules
 

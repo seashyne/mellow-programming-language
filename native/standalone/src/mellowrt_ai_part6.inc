@@ -103,7 +103,7 @@ static int ai_contains(const char *haystack, const char *needle) {
     return strstr(haystack, needle) != NULL;
 }
 
-/* The reply engine from src/mellowlang/ai/models.py, keyword groups in order. */
+/* The reply engine distilled from the Python AI models, keyword groups in order. */
 static const char *ai_chat_reply(MellowRuntimeContext *ctx, const char *prompt) {
     char *low = (char *)calloc(strlen(prompt) + 1, 1);
     static char generic[1024];
@@ -128,7 +128,7 @@ static const char *ai_chat_reply(MellowRuntimeContext *ctx, const char *prompt) 
         ai_contains(low, "ช่วยอะไรได้") || ai_contains(low, "ทำอะไรได้")) {
         free(low); return ai_pick(ctx, AI_HELP, 1);
     }
-    if (ai_contains(low, "mellow") || ai_contains(low, "mellowlang")) {
+    if (ai_contains(low, "mellow")) {
         free(low); return ai_pick(ctx, AI_MELLOW, 2);
     }
     if (ai_contains(low, "train") || ai_contains(low, "training") || ai_contains(low, "เทรน")) {

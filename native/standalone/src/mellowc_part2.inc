@@ -248,7 +248,14 @@ static int line_module_is_builtin(const char *module) {
            strcmp(module, "chan") == 0 || strcmp(module, "canvas") == 0 ||
            strcmp(module, "money") == 0 || strcmp(module, "server") == 0 ||
            strcmp(module, "ai") == 0 || strcmp(module, "std.ai") == 0 ||
-           strcmp(module, "random") == 0 || strcmp(module, "std.random") == 0;
+           strcmp(module, "random") == 0 || strcmp(module, "std.random") == 0 ||
+           strcmp(module, "string") == 0 || strcmp(module, "std.string") == 0 ||
+           strcmp(module, "list") == 0 || strcmp(module, "std.list") == 0 ||
+           strcmp(module, "map") == 0 || strcmp(module, "std.map") == 0 ||
+           strcmp(module, "type") == 0 || strcmp(module, "std.type") == 0 ||
+           strcmp(module, "json") == 0 || strcmp(module, "std.json") == 0 ||
+           strcmp(module, "assert") == 0 || strcmp(module, "std.assert") == 0 ||
+           strcmp(module, "event") == 0 || strcmp(module, "std.event") == 0;
 }
 
 static int parse_import_module_name(const char *line, char *module, size_t module_cap) {

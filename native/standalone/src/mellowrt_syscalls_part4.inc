@@ -19,6 +19,6 @@
                                         ctx?sizeof(ctx->storage_dir):0,
                                         ctx?ctx->syscall_error:NULL,
                                         ctx?sizeof(ctx->syscall_error):0);
-    default: return mellowrt_ai_syscall(ctx, id, args, argc, out_result);
+    default: return mellowrt_std_syscall(ctx, id, args, argc, out_result);
     }
 }
