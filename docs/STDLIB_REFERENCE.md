@@ -189,8 +189,26 @@ JavaScript, Go, Rust, Java, C++, C#, TypeScript, COBOL, and other runtimes.
 
 `std.random.range` is seeded from `RunConfig(seed=...)` per run, so the same seed
 gives the same sequence on the Python VM and on `--engine=c`. Record/replay
-capture is Python-VM only. The standalone `mellow` executable has no native
-random syscall yet, so `random(...)` there is still a compile error.
+capture is Python-VM only.
+
+The standalone `mellow` executable implements the same generator in native C:
+CPython's MT19937 with `random()`, `random(n)` (an inclusive `[0, n]` integer)
+and `random(a, b)` (swapping the bounds when `a > b`). Seed it with
+`--seed N` or `--seed=N` anywhere on the command line; the flag is stripped
+before argument dispatch, so the script never sees it.
+
+```mellow
+print(random())        # float in [0, 1)
+print(random(10))      # int in [0, 10]
+print(random(5, 15))   # int in [5, 15]
+```
+
+```bash
+mellow --seed 42 run game.mellow
+mellow run game.mellow --seed=42
+```
+
+The three engines produce byte-identical sequences for the same seed.
 
 ## Storage statements
 
@@ -289,6 +307,41 @@ print(reply["response"])
   to 0.1-120 s and responses are capped by `net_max_bytes`.
 - Provider state is per host process, so `api_configure` must run before
   `api_complete` in the same run.
+
+### Standalone C runtime
+
+The standalone `mellow` executable implements the `std.ai` surface in native C
+with no Python dependency. Calls use either the direct dotted form
+(`ai.train(...)`) or the `call` keyword (`call ai.train(...)`); the Python VM
+reaches the same functions through `get ai.train(...)`.
+
+- Models: `ai.model_create`, `ai.train`, `ai.predict`, `ai.model_save`,
+  `ai.model_load`, `ai.loss_history`, `ai.model_info`, `ai.models_list`,
+  `ai.embed`
+- LLMs: `ai.llm_create`, `ai.llm_train`, `ai.llm_eval`, `ai.llm_generate`,
+  `ai.llm_tokenize`, `ai.llm_complete`, `ai.llm_chat`, `ai.llm_dataset`,
+  `ai.llm_info`, `ai.llm_models`, `ai.llm_backends`, `ai.llm_device_plan`,
+  `ai.llm_save`, `ai.llm_load`
+- Retrieval, prompts and sessions: `ai.vector_search`, `ai.rag_answer`,
+  `ai.prompt_template`, `ai.session_open`, `ai.session_message`,
+  `ai.session_history`, `ai.chat`, `ai.decide`
+- Runtime and providers: `ai.runtime_boot`, `ai.runtime_info`,
+  `ai.api_providers`, `ai.api_configure`, `ai.api_complete`, `ai.api_embed`
+- Tensor kernels: `ai.llm_tensor` and `ai.llm_tensor_batch`, reported under the
+  `mellow-native-c` backend
+
+Trained checkpoints land in `mellow_models/` and are interchangeable across
+engines: a `.mmodel` trained by the Python VM loads in the standalone runtime
+and a `.mllm` trained by the standalone runtime loads in the Python VM. Model
+training draws from CPython's MT19937, so `--seed 42` reproduces Python's
+weights exactly. Container values that `ai.decide` or `prompt_template` render
+use Python's `str()`/`repr()` spelling (`['a', 'b']`, `{'k': v}`, `True`,
+`None`), so logs match across engines.
+
+`api_complete` uses the same offline providers and `local-rag` strategy as the
+Python VM. Only the network transport needs the Python host: in the standalone
+runtime an `openai`-configured provider fails with
+`AI_PROVIDER_ERROR: network transport is not available in the standalone runtime`.
 
 ---
 

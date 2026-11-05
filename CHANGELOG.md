@@ -13,6 +13,23 @@
   offline providers byte-identical. `tests/core/test_ai_provider.py` covers the
   request shape, environment-variable keys, redaction, and both sandbox
   refusals; `docs/STDLIB_REFERENCE.md` documents the configuration.
+- The standalone `mellow` executable now runs the whole `std.ai` surface in
+  native C: neural models (`model_create`, `train`, `predict`, `model_save`,
+  `model_load`, `loss_history`, `model_info`), tiny causal LLMs (`llm_create`,
+  `llm_train`, `llm_eval`, `llm_generate`, `llm_complete`, `llm_chat`,
+  `llm_dataset`, `llm_tokenize`, `llm_save`, `llm_load`), embeddings, vector
+  search, RAG answers, prompt templates, sessions, runtime/provider reports, and
+  the tensor kernels, reported under the `mellow-native-c` backend. No Python
+  process is involved. Randomness matches CPython MT19937: `random()`,
+  `random(n)`, `random(a, b)` and model training reproduce the Python VM for the
+  same seed. `--seed N` and `--seed=N` are accepted anywhere on the command line
+  and stripped before dispatch, so scripts never see the flag. `ai.decide`,
+  `prompt_template` and errors render containers with Python's `str()`/`repr()`
+  spelling, and `.mmodel`/`.mllm` checkpoints load across engines. The only gap
+  is `api_complete`'s OpenAI network transport, which needs the Python host;
+  offline and `local-rag` providers behave identically.
+  `tests/native/test_native_ai_standalone.py` diffs native stdout against the
+  Python VM for every call family.
 
 ### Performance
 - The standalone runtime heap now finds a tracked pointer in constant time.
@@ -35,6 +52,9 @@
   the post-heap-fix re-measurement, the 2026-11-02 cross-language report gains a
   dated addendum, and `docs/DATA_PROCESSING_CORE.md` replaces its v2.7.1
   figures with the current measured range.
+- `docs/STDLIB_REFERENCE.md` documents the standalone `std.ai` surface, the
+  `--seed` flag with three-engine random parity, and the offline limit on
+  OpenAI transport instead of calling `random(...)` a compile error.
 
 ### Structure
 - Split the two benchmark entry points into concern packages behind unchanged

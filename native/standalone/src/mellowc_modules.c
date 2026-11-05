@@ -68,11 +68,27 @@ static int builtin_id(const char *name, size_t len) {
         {"file_write",75},{"file.write",75},
         {"file_append",76},{"file.append",76},
         {"file_exists",77},{"file.exists",77},
-        {"file_delete",78},{"file.delete",78}
+        {"file_delete",78},{"file.delete",78},
+        {"random",100},{"random.range",100},
+        {"ai.model_create",110},{"ai.train",111},{"ai.predict",112},
+        {"ai.model_save",113},{"ai.model_load",114},{"ai.embed",115},
+        {"ai.chat",116},{"ai.runtime_boot",117},{"ai.runtime_info",118},
+        {"ai.session_open",119},{"ai.session_message",120},{"ai.session_history",121},
+        {"ai.prompt_template",122},{"ai.vector_search",123},{"ai.rag_answer",124},
+        {"ai.loss_history",125},{"ai.model_info",126},{"ai.models_list",127},
+        {"ai.api_providers",128},{"ai.api_configure",129},{"ai.api_complete",130},
+        {"ai.api_embed",131},{"ai.decide",132},
+        {"ai.llm_create",140},{"ai.llm_train",141},{"ai.llm_generate",142},
+        {"ai.llm_tokenize",143},{"ai.llm_info",144},{"ai.llm_dataset",145},
+        {"ai.llm_eval",146},{"ai.llm_complete",147},{"ai.llm_chat",148},
+        {"ai.llm_models",149},{"ai.llm_backends",150},{"ai.llm_device_plan",151},
+        {"ai.llm_tensor",152},{"ai.llm_tensor_batch",153},{"ai.llm_save",154},
+        {"ai.llm_load",155}
     };
     size_t i;
     for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)
         if (strlen(builtins[i].name)==len && memcmp(name,builtins[i].name,len)==0) return builtins[i].id;
+    if (len > 4 && memcmp(name, "std.", 4) == 0) return builtin_id(name + 4, len - 4);
     return 0;
 }
 
@@ -83,7 +99,9 @@ static int module_is_builtin(const char *module) {
            strcmp(module, "chan") == 0 || strcmp(module, "canvas") == 0 ||
            strcmp(module, "money") == 0 || strcmp(module, "server") == 0 ||
            strcmp(module, "ledger") == 0 || strcmp(module, "storage") == 0 ||
-           strcmp(module, "fs") == 0 || strcmp(module, "file") == 0;
+           strcmp(module, "fs") == 0 || strcmp(module, "file") == 0 ||
+           strcmp(module, "ai") == 0 || strcmp(module, "std.ai") == 0 ||
+           strcmp(module, "random") == 0 || strcmp(module, "std.random") == 0;
 }
 
 static int add_module_alias(Compiler *c, const char *module, const char *alias) {

@@ -1009,9 +1009,10 @@ def test_native_fragments_are_contiguous_parts_of_their_parent() -> None:
 
     for parent, fragments in sorted(by_parent.items()):
         assert _line_count(parent) <= 300, f"{parent.name} is not a header plus includes"
+        fragments = sorted(fragments, key=lambda p: int(_PART_RE.match(p.stem)["index"]))
         base = _PART_RE.match(fragments[0].stem)["stem"]
         expected = [f"{base}_part{i}.inc" for i in range(1, len(fragments) + 1)]
-        assert sorted(p.name for p in fragments) == expected, (
+        assert [p.name for p in fragments] == expected, (
             f"{parent.name} has a gap in its fragments: {sorted(p.name for p in fragments)}")
         included = re.findall(r'^\s*#include "([^"]+_part\d+\.inc)"',
                               parent.read_text(encoding="utf-8"), re.MULTILINE)

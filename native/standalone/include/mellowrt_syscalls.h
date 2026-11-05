@@ -3,10 +3,24 @@
 
 #include "mellowrt.h"
 
+/* MT19937 state, seeded the same way CPython's random.Random(seed) is, so a
+ * Mellow program gets the same sequence on the standalone runtime without
+ * linking a Python host. */
+typedef struct {
+    uint32_t state[624];
+    int index;
+    int gauss_valid;
+    double gauss_next;
+} MRngState;
+
 typedef struct {
     int argc;
     char **argv;
     int script_arg_start;
+    int64_t rng_seed;
+    int rng_seed_set;
+    int rng_ready;
+    MRngState rng;
     MVM *vm;
     uint64_t gc_collections;
     uint64_t gc_freed;

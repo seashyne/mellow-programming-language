@@ -6,6 +6,26 @@ int main(int argc, char **argv){
     ctx.argc=argc;
     ctx.argv=argv;
     ctx.script_arg_start=2;
+    /* --seed N / --seed=N may appear anywhere; strip it before command dispatch
+     * so script arguments never see the flag. */
+    {
+        int i, out=1;
+        for(i=1;i<argc;++i){
+            if(!strcmp(argv[i],"--seed")&&i+1<argc){
+                ctx.rng_seed=(int64_t)strtoll(argv[++i],NULL,10);
+                ctx.rng_seed_set=1;
+                continue;
+            }
+            if(!strncmp(argv[i],"--seed=",7)){
+                ctx.rng_seed=(int64_t)strtoll(argv[i]+7,NULL,10);
+                ctx.rng_seed_set=1;
+                continue;
+            }
+            argv[out++]=argv[i];
+        }
+        argc=out;
+        ctx.argc=argc;
+    }
     if(argc<2){usage(argv[0]);return 0;}
     if(!strcmp(argv[1],"--help")||!strcmp(argv[1],"-h")||!strcmp(argv[1],"help")){
         usage(argv[0]);

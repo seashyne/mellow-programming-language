@@ -246,7 +246,9 @@ static int line_module_is_builtin(const char *module) {
            strcmp(module, "math") == 0 || strcmp(module, "time") == 0 ||
            strcmp(module, "gc") == 0 || strcmp(module, "thread") == 0 ||
            strcmp(module, "chan") == 0 || strcmp(module, "canvas") == 0 ||
-           strcmp(module, "money") == 0 || strcmp(module, "server") == 0;
+           strcmp(module, "money") == 0 || strcmp(module, "server") == 0 ||
+           strcmp(module, "ai") == 0 || strcmp(module, "std.ai") == 0 ||
+           strcmp(module, "random") == 0 || strcmp(module, "std.random") == 0;
 }
 
 static int parse_import_module_name(const char *line, char *module, size_t module_cap) {
