@@ -256,7 +256,8 @@ static int line_module_is_builtin(const char *module) {
            strcmp(module, "json") == 0 || strcmp(module, "std.json") == 0 ||
            strcmp(module, "assert") == 0 || strcmp(module, "std.assert") == 0 ||
            strcmp(module, "event") == 0 || strcmp(module, "std.event") == 0 ||
-           strcmp(module, "game") == 0 || strcmp(module, "std.game") == 0;
+           strcmp(module, "game") == 0 || strcmp(module, "std.game") == 0 ||
+           strcmp(module, "data") == 0 || strcmp(module, "std.data") == 0;
 }
 
 static int parse_import_module_name(const char *line, char *module, size_t module_cap) {

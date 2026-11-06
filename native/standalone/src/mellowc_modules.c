@@ -146,7 +146,16 @@ static int builtin_id(const char *name, size_t len) {
         {"game.entity_create",356},{"game.entity.create",356},
         {"game.entity_move",357},{"game.entity.move",357},
         {"game.collide_aabb",358},{"game.physics.collide_aabb",358},
-        {"game.anim_frame",359},{"game.anim.frame",359}
+        {"game.anim_frame",359},{"game.anim.frame",359},
+        {"data_open_jsonl",360},{"data.open_jsonl",360},
+        {"data_open_csv",361},{"data.open_csv",361},
+        {"data_next",362},{"data.next",362},
+        {"data_close",363},{"data.close",363},
+        {"data_cancel",364},{"data.cancel",364},
+        {"data_info",365},{"data.info",365},
+        {"data_project",366},{"data.project",366},
+        {"data_where",367},{"data.where",367},
+        {"data_sum",368},{"data.sum",368}
     };
     size_t i;
     for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)
@@ -178,7 +187,8 @@ static int module_is_builtin(const char *module) {
            strcmp(module, "json") == 0 || strcmp(module, "std.json") == 0 ||
            strcmp(module, "assert") == 0 || strcmp(module, "std.assert") == 0 ||
            strcmp(module, "event") == 0 || strcmp(module, "std.event") == 0 ||
-           strcmp(module, "game") == 0 || strcmp(module, "std.game") == 0;
+           strcmp(module, "game") == 0 || strcmp(module, "std.game") == 0 ||
+           strcmp(module, "data") == 0 || strcmp(module, "std.data") == 0;
 }
 
 static int add_module_alias(Compiler *c, const char *module, const char *alias) {

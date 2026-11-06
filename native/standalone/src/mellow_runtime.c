@@ -26,6 +26,7 @@ MellowRuntime *mellow_runtime_new(void) {
 
 void mellow_runtime_free(MellowRuntime *runtime) {
     if (!runtime) return;
+    mellowrt_data_release(&runtime->ctx);
     mellowrt_collect_garbage(&runtime->ctx);
     free(runtime);
 }

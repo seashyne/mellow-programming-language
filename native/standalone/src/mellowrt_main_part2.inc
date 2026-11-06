@@ -89,9 +89,9 @@ int main(int argc, char **argv){
             mvm_init(&vm);ctx.vm=&vm;vm.syscall.fn=mellowrt_default_syscall;vm.syscall.user=&ctx;memset(&rr,0,sizeof(rr));
             if(!mvm_run(&vm,&prog,&rr)||rr.failed){
                 print_runtime_error(prog.source_name,&rr);
-                free_run_result(&rr);mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx);mellow_native_program_free(&native);return 1;
+                free_run_result(&rr);mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx);mellow_native_program_free(&native);mellowrt_data_release(&ctx);return 1;
             }
-            free_run_result(&rr);mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx);mellow_native_program_free(&native);return 0;
+            free_run_result(&rr);mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx);mellow_native_program_free(&native);mellowrt_data_release(&ctx);return 0;
         }
     }
     MLoadedProgram lp;
@@ -107,8 +107,8 @@ int main(int argc, char **argv){
     int ok=mvm_run(&vm,&prog,&rr);
     if(!ok||rr.failed){
         print_runtime_error(prog.source_name,&rr);
-        free_run_result(&rr);mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx); free_loaded_program(&lp); return 1;
+        free_run_result(&rr);mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx); free_loaded_program(&lp); mellowrt_data_release(&ctx); return 1;
     }
-    free_run_result(&rr);mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx); free_loaded_program(&lp);
+    free_run_result(&rr);mellowrt_collect_garbage(&ctx);ctx.vm=NULL;mvm_free(&vm);mellowrt_collect_garbage(&ctx); free_loaded_program(&lp); mellowrt_data_release(&ctx);
     return 0;
 }

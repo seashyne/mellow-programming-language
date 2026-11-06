@@ -17,6 +17,7 @@
 #include "mellowrt_std_part6.inc"
 #include "mellowrt_std_part7.inc"
 #include "mellowrt_std_part8.inc"
+#include "mellowrt_data.inc"
 #include "mellowrt_std_part9.inc"
 
 #endif /* MELLOWRT_STD_INC */

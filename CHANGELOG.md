@@ -34,6 +34,15 @@
   `[value]` vs list-expansion argument rules all match. Unknown syscall names
   fail with the same `SANDBOX: syscall not allowed` message, and the parity
   cases live in `tests/native/test_native_game_standalone.py`.
+- The standalone runtime implements the `std.data` read side in native C:
+  `open_jsonl`, `open_csv`, `next`, `info`, `close`, `cancel`, `project`,
+  `where`, and `sum`. CSV parsing follows `csv.DictReader` for quoting,
+  embedded newlines, blank lines, duplicate headers, missing columns, and extra
+  values (under the `null` key). Limits match the Python defaults (batch 1-1000,
+  eight open streams, 1 MiB records), paths obey the `fs` sandbox, and the
+  Python reader's auto-close on `StopIteration` is preserved.
+  `tests/native/test_native_data_standalone.py` diffs the output against the
+  Python VM. `data_sqlite_*` still requires the Python runtime.
 - `std.ai.api_complete` can talk to any OpenAI-compatible endpoint instead of
   only returning the offline stub. Configure a provider with `base_url`,
   `model`, and `api_key` or `api_key_env`; the call POSTs to

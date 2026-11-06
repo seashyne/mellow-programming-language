@@ -41,6 +41,7 @@ typedef struct {
     int server_response_status;
     char server_response_content_type[64];
     char syscall_error[256];
+    void *data_state;
 } MellowRuntimeContext;
 
 int mellowrt_default_syscall(
@@ -55,5 +56,8 @@ int mellowrt_default_syscall(
 int mellowrt_builtin_lookup(const char *name, size_t len);
 
 void mellowrt_collect_garbage(MellowRuntimeContext *ctx);
+
+/* Free open std.data streams when a runtime context is torn down. */
+void mellowrt_data_release(MellowRuntimeContext *ctx);
 
 #endif

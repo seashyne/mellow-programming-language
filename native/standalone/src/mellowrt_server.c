@@ -177,6 +177,7 @@ static int run_app(const MNativeProgram *native, const MValue *req, SBuf *body, 
     }
     mvalue_free(&ctx.server_response_body);
     mvalue_free(&rr.result);
+    mellowrt_data_release(&ctx);
     ctx.vm=NULL;
     mvm_free(&vm);
     return 1;

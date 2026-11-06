@@ -128,5 +128,6 @@ static int mellowrt_std_syscall(MellowRuntimeContext *ctx, int id, const MValue 
     if (id >= 320 && id <= 333) return std_misc_syscall(ctx, id, args, argc, out_result);
     if ((id >= 156 && id <= 167) || (id >= 340 && id <= 359))
         return std_game_syscall(ctx, id, args, argc, out_result);
+    if (id >= 360 && id <= 368) return std_data_syscall(ctx, id, args, argc, out_result);
     return mellowrt_ai_syscall(ctx, id, args, argc, out_result);
 }
