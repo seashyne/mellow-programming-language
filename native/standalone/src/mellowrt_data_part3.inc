@@ -5,11 +5,14 @@ static int std_data_batch_size(MellowRuntimeContext *ctx, const MValue *args,
     long long size = 100;
     if (argc > 1) {
         MValue value = args[1];
+        int64_t wanted = 100;
         if (value.tag == MVAL_NONE ||
             (value.tag == MVAL_STR && value.as.str.len == 0)) {
             size = 100;
-        } else if (!std_game_integer(&value, &size)) {
+        } else if (!std_game_integer(&value, &wanted)) {
             return std_data_error(ctx, "data batch size must be 1-%d", DATA_MAX_BATCH_SIZE);
+        } else {
+            size = (long long)wanted;
         }
         if (size == 0) size = 100;
     }

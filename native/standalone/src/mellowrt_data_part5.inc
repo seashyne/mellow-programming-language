@@ -38,10 +38,12 @@ static long long std_data_sqlite_limit(MellowRuntimeContext *ctx, const MValue *
     long long limit = max_rows;
     int given = 0;
     if (argc > 3 && std_data_truthy(&args[3])) {
-        if (!std_game_integer(&args[3], &limit)) {
+        int64_t wanted = 0;
+        if (!std_game_integer(&args[3], &wanted)) {
             std_data_error(ctx, "data sqlite query limit must be an integer");
             return -1;
         }
+        limit = (long long)wanted;
         given = 1;
     }
     if (!given) limit = max_rows;
