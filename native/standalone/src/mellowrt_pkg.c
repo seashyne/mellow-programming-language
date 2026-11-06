@@ -12,6 +12,7 @@
 #include "mellowrt_pkg.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,14 +20,23 @@
 #include <sys/types.h>
 
 #ifdef _WIN32
-#include <direct.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
+#include <direct.h>
 #define PKG_MKDIR(path) _mkdir(path)
 #define PKG_RMDIR(path) _rmdir(path)
 #define PKG_GETCWD(buf, cap) (_getcwd((buf), (int)(cap)) != NULL)
 #define PKG_SEP '\\'
 #else
 #include <dirent.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 #define PKG_MKDIR(path) mkdir((path), 0777)
 #define PKG_RMDIR(path) rmdir(path)
@@ -42,4 +52,6 @@
 #include "mellowrt_pkg_json.inc"
 #include "mellowrt_pkg_manifest.inc"
 #include "mellowrt_pkg_store.inc"
+#include "mellowrt_pkg_net.inc"
+#include "mellowrt_pkg_remote.inc"
 #include "mellowrt_pkg_cli.inc"

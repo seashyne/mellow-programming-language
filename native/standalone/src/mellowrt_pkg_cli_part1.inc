@@ -174,12 +174,13 @@ static void pk_usage(void) {
     puts("  mellow pkg publish <dir>");
     puts("  mellow pkg install <name>[@version] [--project-dir DIR] [--no-deps]");
     puts("  mellow pkg list [--project-dir DIR]");
-    puts("  mellow pkg search <query>");
-    puts("  mellow pkg info <name>");
+    puts("  mellow pkg search <query> [--registry URL]");
+    puts("  mellow pkg info <name> [--registry URL]");
     puts("  mellow pkg remove <name> [--project-dir DIR]");
     puts("  mellow add <name> [--project-dir DIR] [--alias A]");
     puts("  mellow remove <name> [--project-dir DIR]");
     puts("Local registry: mellow_packages/registry, mellow_packages/installed");
+    puts("Remote registry: --registry, MELLOW_REGISTRY_URL, or ~/.mellow/config.json");
 }
 
 int mellowrt_pkg_cli(int argc, char **argv) {

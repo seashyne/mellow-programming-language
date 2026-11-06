@@ -206,6 +206,8 @@ typedef struct {
     char description[512];
     char path[PKG_PATH_MAX];
     char versions[512];
+    char badges[128];
+    int downloads;
 } PkgRow;
 
 static int pk_read_installed_row(const char *installed_root, const char *name, PkgRow *row) {

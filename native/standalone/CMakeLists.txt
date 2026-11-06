@@ -67,6 +67,13 @@ if(NOT MSVC)
 endif()
 if(WIN32)
   target_link_libraries(mellowrt_core PUBLIC ws2_32)
+elseif(NOT CMAKE_CROSSCOMPILING)
+  # HTTPS for the package client; http:// works without any TLS library.
+  find_package(CURL QUIET)
+  if(CURL_FOUND)
+    target_compile_definitions(mellowrt_core PRIVATE MELLOW_HAVE_LIBCURL=1)
+    target_link_libraries(mellowrt_core PUBLIC CURL::libcurl)
+  endif()
 endif()
 
 add_executable(mellowrt src/mellowrt_main.c)

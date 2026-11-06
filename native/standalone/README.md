@@ -57,7 +57,12 @@ Extended systems that remain outside the native runtime:
 - import/module loader parity
 - closures/upvalues
 - native workflow/event runtime parity
-- package manager, registry, LSP, playground, and deployment tooling
+- remote package publishing, `.mpkg` extraction, LSP, playground, and deployment tooling
+
+The native CLI already runs the package commands (`mellow pkg init|publish|
+install|list|search|info|remove|uninstall`) and reads remote registries over
+HTTPS: WinHTTP on Windows, libcurl on POSIX when CMake finds it, and raw
+sockets for `http://` everywhere.
 
 The migration plan for moving old Python-backed systems into C and Mellow
 runtime packages is tracked in `../../docs/PY_TO_C_RUNTIME_MIGRATION.md`.

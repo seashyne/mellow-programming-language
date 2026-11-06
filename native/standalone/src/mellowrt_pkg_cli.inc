@@ -8,8 +8,12 @@ typedef struct {
     const char *alias;
     const char *entry;
     const char *author;
+    const char *registry;
     int no_deps;
 } PkgArgs;
+
+static int pk_cmd_search(int argc, char **argv, int start);
+static int pk_cmd_info(int argc, char **argv, int start);
 
 static void pk_args_parse(int argc, char **argv, int start, PkgArgs *args) {
     int i;
@@ -42,6 +46,7 @@ static void pk_args_parse(int argc, char **argv, int start, PkgArgs *args) {
             else if (!strcmp(key, "--alias")) args->alias = value;
             else if (!strcmp(key, "--entry")) args->entry = value;
             else if (!strcmp(key, "--author")) args->author = value;
+            else if (!strcmp(key, "--registry")) args->registry = value;
             continue;
         }
         if (positionals == 0) args->first = arg;
@@ -180,75 +185,5 @@ static int pk_cmd_list(int argc, char **argv, int start) {
     return 0;
 }
 
-static int pk_cmd_search(int argc, char **argv, int start) {
-    PkgArgs args;
-    PkgCtx ctx;
-    PkgRow rows[PKG_MAX_ROWS];
-    int count;
-    int i;
-    pk_args_parse(argc, argv, start, &args);
-    if (!args.first) {
-        fprintf(stderr, "usage: mellow pkg search <query>\n");
-        return 2;
-    }
-    pk_ctx_init(&ctx);
-    count = pk_search_rows(&ctx, args.first, rows, PKG_MAX_ROWS);
-    if (!count) {
-        printf("No packages found for '%s'.\n", args.first);
-        return 0;
-    }
-    printf("Found %d package(s) for '%s'\n", count, args.first);
-    for (i = 0; i < count; ++i) {
-        printf("- %s  latest=%s  creator=%s  downloads=0  badges=-  versions=%s\n",
-               rows[i].name, rows[i].version, rows[i].creator,
-               rows[i].versions[0] ? rows[i].versions : "-");
-        if (rows[i].description[0]) printf("    %s\n", rows[i].description);
-    }
-    return 0;
-}
-
-static void pk_print_versions(const char *versions) {
-    const char *p = versions;
-    if (!p || !*p) {
-        printf("-");
-        return;
-    }
-    while (*p) {
-        const char *comma = strchr(p, ',');
-        if (!comma) {
-            fputs(p, stdout);
-            break;
-        }
-        fwrite(p, 1, (size_t)(comma - p), stdout);
-        fputs(", ", stdout);
-        p = comma + 1;
-    }
-}
-
-static int pk_cmd_info(int argc, char **argv, int start) {
-    PkgArgs args;
-    PkgCtx ctx;
-    PkgRow row;
-    pk_args_parse(argc, argv, start, &args);
-    if (!args.first) {
-        fprintf(stderr, "usage: mellow pkg info <name>\n");
-        return 2;
-    }
-    pk_ctx_init(&ctx);
-    if (!pk_info_row(&ctx, args.first, &row)) {
-        fprintf(stderr, "package not found in local registry: %s\n", args.first);
-        return 2;
-    }
-    printf("name       : %s\n", row.name);
-    printf("latest     : %s\n", row.version);
-    printf("versions   : ");
-    pk_print_versions(row.versions);
-    printf("\n");
-    printf("creator    : %s\n", row.creator);
-    printf("downloads  : 0\n");
-    if (row.description[0]) printf("description: %s\n", row.description);
-    printf("install    : mellow install %s\n", row.name);
-    return 0;
-}
-
 #include "mellowrt_pkg_cli_part1.inc"
+#include "mellowrt_pkg_cli_part2.inc"

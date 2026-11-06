@@ -150,18 +150,18 @@ The scoped standard-library package set contains:
 `@mellow/std-ai`, `@mellow/std-console`, `@mellow/std-game`,
 `@mellow/std-http`, `@mellow/std-json`, and `@mellow/std-storage`.
 
-## Native local package tooling
+## Native package tooling
 
 The standalone C binary (`native/standalone/src/mellowrt_pkg.c`) implements the
-local half of this workflow with no Python dependency:
+local workflow and the remote read path with no Python dependency:
 
 ```bash
 mellow pkg init ./my-package --name my-package --author "Your Name"
 mellow pkg publish ./my-package
 mellow pkg install my-package[@version] [--project-dir DIR] [--no-deps]
 mellow pkg list [--project-dir DIR]
-mellow pkg search QUERY
-mellow pkg info NAME
+mellow pkg search QUERY [--registry URL]
+mellow pkg info NAME [--registry URL]
 mellow pkg add NAME [--alias A] [--project-dir DIR] [--no-deps]
 mellow pkg remove NAME [--project-dir DIR]
 mellow pkg uninstall NAME [--project-dir DIR]
@@ -173,9 +173,22 @@ top-level verbs. The native commands read and write the same `mellow.toml`,
 Python reference, including recursive dependency installs, `^`/`~`/range
 version selection, and creator metadata.
 
-Remote registry access is not part of the native surface yet: publishing writes
-to `mellow_packages/registry/` under the current directory, and installs resolve
-from that local registry plus bundled `starter_packages/`.
+`search` and `info` check the local registry first and then query the configured
+registry over HTTP(S). The registry URL resolves in this order:
+`--registry`, `MELLOW_REGISTRY_URL`, the `registry` key in
+`$MELLOW_CONFIG_DIR/config.json` (default `~/.mellow/config.json`), then the
+public registry. Tokens come from `MELLOW_PUBLISH_TOKEN` /
+`MELLOW_REGISTRY_TOKEN` or the `auth` map in the same config file.
+
+Transport is native on every build: plain HTTP uses a raw-socket HTTP/1.1
+client, HTTPS uses WinHTTP on Windows (loaded at call time) or libcurl on POSIX
+when CMake finds it. A POSIX build without libcurl still serves `http://`
+registries and reports a clear error for `https://`; `MELLOW_HTTP_TIMEOUT`
+bounds connects and reads.
+
+Installs still resolve from the local registry plus bundled `starter_packages/`.
+Remote installs need the `.mpkg` ZIP reader, so `pkg install --online` and
+remote publishing remain Python-only for now.
 
 ## Publishing an update
 
@@ -197,8 +210,9 @@ or major version instead.
 ## Known boundaries
 
 - Package tooling is split: local init/publish/install/list/search/info/add/
-  remove run natively in the standalone C binary, while remote registry
-  fetches, `.mpkg` ZIP archives, and manifest signing remain Python-only.
+  remove run natively in the standalone C binary, and native search/info also
+  read remote registries over HTTP(S). Remote installs, `.mpkg` ZIP archives,
+  remote publishing, and manifest signing remain Python-only.
 - The repository registry server is suitable for development and self-hosting;
   production deployment still needs durable database/object storage,
   operational monitoring, backups, rate limiting, and key rotation.
