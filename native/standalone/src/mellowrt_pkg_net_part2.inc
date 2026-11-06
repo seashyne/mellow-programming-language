@@ -14,23 +14,45 @@ static const char *pk_ci_find(const char *hay, const char *end, const char *need
     return NULL;
 }
 
+/* Header names are matched at the start of a line so that, for example,
+   Content-Location cannot be mistaken for Location. */
+static int pk_header_name_match(const char *start, const char *stop, const char *name) {
+    size_t len = (size_t)(stop - start);
+    size_t i;
+    while (len && (start[len - 1] == ' ' || start[len - 1] == '\t')) --len;
+    if (len != strlen(name)) return 0;
+    for (i = 0; i < len; ++i) {
+        if (tolower((unsigned char)start[i]) != tolower((unsigned char)name[i])) return 0;
+    }
+    return 1;
+}
+
 static int pk_header_value(const char *headers, const char *end, const char *name,
                            char *out, size_t cap) {
-    const char *found = pk_ci_find(headers, end, name);
-    const char *line_end;
-    const char *start;
-    size_t len;
-    if (!found || !cap) return 0;
-    start = found + strlen(name);
-    line_end = (const char *)memchr(start, '\n', (size_t)(end - start));
-    if (!line_end) line_end = end;
-    while (start < line_end && (*start == ':' || *start == ' ' || *start == '\t')) ++start;
-    len = (size_t)(line_end - start);
-    while (len && (start[len - 1] == '\r' || start[len - 1] == ' ' || start[len - 1] == '\t')) --len;
-    if (len >= cap) len = cap - 1;
-    memcpy(out, start, len);
-    out[len] = '\0';
-    return 1;
+    const char *p = headers;
+    if (!out || !cap) return 0;
+    out[0] = '\0';
+    while (p < end) {
+        const char *line_end = (const char *)memchr(p, '\n', (size_t)(end - p));
+        const char *colon;
+        const char *start;
+        size_t len;
+        if (!line_end) line_end = end;
+        colon = (const char *)memchr(p, ':', (size_t)(line_end - p));
+        if (colon && pk_header_name_match(p, colon, name)) {
+            start = colon + 1;
+            while (start < line_end && (*start == ' ' || *start == '\t' || *start == '\r')) ++start;
+            len = (size_t)(line_end - start);
+            while (len && (start[len - 1] == '\r' || start[len - 1] == ' ' || start[len - 1] == '\t')) --len;
+            if (len >= cap) len = cap - 1;
+            memcpy(out, start, len);
+            out[len] = '\0';
+            return 1;
+        }
+        if (line_end == end) break;
+        p = line_end + 1;
+    }
+    return 0;
 }
 
 static int pk_http_dechunk(const char *p, const char *end, PkgBuf *out) {

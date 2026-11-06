@@ -184,7 +184,9 @@ Transport is native on every build: plain HTTP uses a raw-socket HTTP/1.1
 client, HTTPS uses WinHTTP on Windows (loaded at call time) or libcurl on POSIX
 when CMake finds it. A POSIX build without libcurl still serves `http://`
 registries and reports a clear error for `https://`; `MELLOW_HTTP_TIMEOUT`
-bounds connects and reads.
+bounds connects and reads. The plain HTTP client decodes chunked bodies and
+follows up to three absolute redirects, matching header names from the start of
+each line so `Content-Location` cannot be read as `Location`.
 
 Installs still resolve from the local registry plus bundled `starter_packages/`.
 Remote installs need the `.mpkg` ZIP reader, so `pkg install --online` and

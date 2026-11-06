@@ -96,15 +96,23 @@ static int pk_remote_info(const char *registry, const char *ref, PkgRow *row, ch
             return 0;
         }
         snprintf(row->version, sizeof row->version, "%s", chosen);
-        snprintf(row->creator, sizeof row->creator, "%s",
-                 pj_str(detail, "creator", row->creator));
-        snprintf(row->description, sizeof row->description, "%s",
-                 pj_str(detail, "description",
-                        pj_str(pj_obj_get(detail, "manifest"), "description", row->description)));
-        if (pj_obj_get(detail, "badges") && pj_obj_get(detail, "badges")->type == PJ_ARRAY)
-            pk_join_string_array(pj_obj_get(detail, "badges"), row->badges, sizeof row->badges, ",");
-        if (pj_obj_get(detail, "downloads") && pj_obj_get(detail, "downloads")->type == PJ_NUMBER)
-            row->downloads = (int)pj_obj_get(detail, "downloads")->number;
+        {
+            const PjValue *manifest = pj_obj_get(detail, "manifest");
+            const PjValue *badges = pj_obj_get(detail, "badges");
+            const PjValue *downloads = pj_obj_get(detail, "downloads");
+            const char *text = pj_str(detail, "creator", row->creator);
+            char held[512];
+            snprintf(held, sizeof held, "%s", text);
+            snprintf(row->creator, sizeof row->creator, "%s", held);
+            text = pj_str(detail, "description", NULL);
+            if (!text) text = pj_str(manifest, "description", NULL);
+            snprintf(held, sizeof held, "%s", text ? text : row->description);
+            snprintf(row->description, sizeof row->description, "%s", held);
+            if (badges && badges->type == PJ_ARRAY)
+                pk_join_string_array(badges, row->badges, sizeof row->badges, ",");
+            if (downloads && downloads->type == PJ_NUMBER)
+                row->downloads = (int)downloads->number;
+        }
         pj_free(detail);
     }
     pj_free(root);
