@@ -2,6 +2,7 @@
 #define MELLOWC_INTERNAL_H
 
 #include "mellowrt.h"
+#include "mellowrt_packages.h"
 
 #include <stddef.h>
 #include <stdint.h>
