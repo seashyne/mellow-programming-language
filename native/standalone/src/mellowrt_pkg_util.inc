@@ -149,8 +149,19 @@ static int pk_exists(const char *path) {
 }
 
 static int pk_isdir(const char *path) {
-    struct stat info;
-    return path && stat(path, &info) == 0 && (info.st_mode & S_IFDIR) != 0;
+#ifdef _WIN32
+    DWORD attrs;
+    if (!path) return 0;
+    attrs = GetFileAttributesA(path);
+    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+#else
+    DIR *dir;
+    if (!path) return 0;
+    dir = opendir(path);
+    if (!dir) return 0;
+    closedir(dir);
+    return 1;
+#endif
 }
 
 static int pk_read_file(const char *path, PkgBuf *out) {
