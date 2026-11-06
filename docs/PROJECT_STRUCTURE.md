@@ -105,7 +105,7 @@ cannot quietly grow back and a new long file has to be declared on purpose.
 | Standalone image | `src/mellowlang/standalone_image.py` is a facade over `src/mellowlang/mvi/`, one module per concern of the `.mvi` file. `ops.py` owns the three lookup tables (`_STANDALONE_OPS`, `_COMPARE_MAP`, `_SYSCALL_NAME_MAP`), `format.py` the magic and version header, the four entry records and `StandaloneImage.to_bytes`, `binary.py` the project-root anchor and the two paths that find the standalone executable, and `consts.py` the constant-pool and span helpers. The pass is `state.py` (`Lowering`, the 19 accumulators the 391-line monolith shared, plus `slot_for` and `enter_scope`), `scopes.py` (the `func_table` rebuild and the per-function slot scan), `emit.py` (`emit_instruction`, one source opcode in and one image opcode out), `entries.py` (function entries, the core-module seed, and the address, jump and module fix-ups) and `lowering.py`, which only runs them in that order. `compile.py` holds the three ways in: compile a source string, compile a file, run an image. Imports point only at a module earlier in that order, so the byte format knows nothing about the pass that fills it, and no module outside the facade may import the package. A new opcode is one `_STANDALONE_OPS` entry plus a branch in `emit_instruction`; a new accumulator is a field on `Lowering`, never a module-level global. |
 | Standalone compiler | `native/standalone/src/mellowc.c` is an 11-line header that includes `mellowc_part1..3.inc`. The parts are contiguous slices of one translation unit, not separate subjects: helpers and scanning, the statement/block emitters, then file loading, imports and the driver. The while-loop shape recognizers and their fused emitters live in `mellowc_fastloops.inc` (itself three parts), included by the emitter fragment; a new shape there needs a matching opcode executor in a `mellowrt_core_part*.inc`. |
 | CPython extension | `native/mellowvm/src/mellowvm_module.c` keeps the `CVM` struct, the opcode table and the forward declarations, then includes `mellowvm_module_part1..2.inc`. The parts hold the call/syscall helpers and end by including `mellowvm_syscalls.inc`, `mellowvm_exec.inc` and `mellowvm_storage.inc`; each of those is in turn a small parent of its own `_part*.inc` fragments. |
-| Facades | `src/mellowlang/package_manager.py` re-exports `packages/{config,metadata,manifest,lockfile,project}`; `host/registry.py` and `host/modules.py` stay stable import paths for the split host package. |
+| Facades | `src/mellowlang/package_manager.py` re-exports `packages/{config,metadata,manifest,lockfile,project,audit,signing}`; `host/registry.py` and `host/modules.py` stay stable import paths for the split host package. |
 
 Native C cannot split a translation unit across import seams, so a native split is a
 textual one: the parent keeps everything before the first seam and `#include`s the
@@ -241,6 +241,8 @@ packages/
   manifest.py      manifest discovery and TOML serialization
   lockfile.py      lockfile, import map, and runtime map handling
   project.py       project roots, presets, local packages, and scaffolding
+  audit.py         registry/starter package audit and native-readiness checks
+  signing.py       Ed25519 manifest signing, keypair setup, and verification
 ```
 
 New package features should be implemented in the focused module and exported

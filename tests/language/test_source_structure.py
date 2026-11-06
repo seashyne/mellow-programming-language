@@ -239,7 +239,7 @@ FILE_LENGTH_LIMIT = 1_000
 # Largest each long file may become. Lower the number when the file shrinks;
 # never raise it to make this test pass - split the file instead.
 LINE_CEILINGS: dict[str, int] = {
-    "src/mellowlang/package_manager.py": 1_100,
+    "src/mellowlang/package_manager.py": 1_050,
     "tests/native/test_full_native_c_cli.py": 1_375,
     # This gate is one self-contained file on purpose: nothing under tests/ imports a
     # helper in-tree, and every declared boundary reads in one place. Each split adds its
