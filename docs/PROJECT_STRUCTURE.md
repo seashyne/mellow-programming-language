@@ -67,7 +67,6 @@ area that matches the task and stay inside it.
 - `.github/` - CI and GitHub configuration.
 - `packaging/` - Native/distribution packaging configuration.
 - `packages/npm/` - npm installer wrapper that downloads a built distribution.
-- `.qoder/skills/` - Project skills that encode these layout and verification rules for agents.
 
 ### Documentation
 

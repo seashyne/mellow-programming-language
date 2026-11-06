@@ -29,6 +29,7 @@ packages/npm/mellowlang/.native-build/
 packages/npm/mellowlang/native/
 .vscode/
 .idea/
+.qoder/
 .DS_Store
 *.log
 *.vsix
