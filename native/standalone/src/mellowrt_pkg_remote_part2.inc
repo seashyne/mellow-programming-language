@@ -101,13 +101,14 @@ static int pk_remote_info(const char *registry, const char *ref, PkgRow *row, ch
             const PjValue *badges = pj_obj_get(detail, "badges");
             const PjValue *downloads = pj_obj_get(detail, "downloads");
             const char *text = pj_str(detail, "creator", row->creator);
-            char held[512];
-            snprintf(held, sizeof held, "%s", text);
-            snprintf(row->creator, sizeof row->creator, "%s", held);
+            char creator[128];
+            char description[512];
+            snprintf(creator, sizeof creator, "%s", text);
+            snprintf(row->creator, sizeof row->creator, "%s", creator);
             text = pj_str(detail, "description", NULL);
             if (!text) text = pj_str(manifest, "description", NULL);
-            snprintf(held, sizeof held, "%s", text ? text : row->description);
-            snprintf(row->description, sizeof row->description, "%s", held);
+            snprintf(description, sizeof description, "%s", text ? text : row->description);
+            snprintf(row->description, sizeof row->description, "%s", description);
             if (badges && badges->type == PJ_ARRAY)
                 pk_join_string_array(badges, row->badges, sizeof row->badges, ",");
             if (downloads && downloads->type == PJ_NUMBER)
