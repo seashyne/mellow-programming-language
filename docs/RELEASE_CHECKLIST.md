@@ -105,6 +105,22 @@ sh scripts/package-native-release.sh --version X.Y.Z --target linux-x64
 sh scripts/package-native-release.sh --version X.Y.Z --target linux-arm64 --cc aarch64-linux-gnu-gcc --cmake-system-processor aarch64
 ```
 
+## Branches
+
+`main` is the integration branch. Each release gets its own short-lived
+`dev/<version>` branch, created at the version bump:
+
+```powershell
+git switch main
+git pull
+git switch -c dev/2.9.11
+```
+
+- Open the release PR from `dev/<version>` into `main`.
+- Delete the branch after it is merged, locally and on `origin`.
+- Never rename a dev branch to follow the version and never carry one across
+  releases; a branch per version keeps the PR diff scoped to that release.
+
 ## Git
 
 - [ ] Working tree is clean.
