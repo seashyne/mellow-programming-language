@@ -18,6 +18,11 @@ static MValue std_clone(const MValue *src) {
     switch (src->tag) {
     case MVAL_STR:
         return mval_owned_copy(src->as.str.ptr, src->as.str.len);
+    case MVAL_BYTES: {
+        MValue bytes = mval_owned_copy(src->as.str.ptr, src->as.str.len);
+        bytes.tag = MVAL_BYTES;
+        return bytes;
+    }
     case MVAL_LIST:
         if (!ai_list_new(&out, src->as.list.len)) return mval_none();
         for (i = 0; i < src->as.list.len; ++i)

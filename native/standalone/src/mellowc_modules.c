@@ -155,7 +155,11 @@ static int builtin_id(const char *name, size_t len) {
         {"data_info",365},{"data.info",365},
         {"data_project",366},{"data.project",366},
         {"data_where",367},{"data.where",367},
-        {"data_sum",368},{"data.sum",368}
+        {"data_sum",368},{"data.sum",368},
+        {"data_sqlite_open",369},{"data.sqlite_open",369},
+        {"data_sqlite_close",370},{"data.sqlite_close",370},
+        {"data_sqlite_query",371},{"data.sqlite_query",371},
+        {"data_sqlite_execute",372},{"data.sqlite_execute",372}
     };
     size_t i;
     for (i=0;i<sizeof(builtins)/sizeof(builtins[0]);++i)

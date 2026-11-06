@@ -83,7 +83,7 @@ which implements the whole family in native C.
 | `std.assert`, `std.event` | native; `AssertionError` messages match the Python VM |
 | `std.game` | native easing, tween, grid neighbors, A*, scene/entity, AABB, animation |
 | `std.ai` steering, perception, and decisions | native `seek`, `flee`, `arrive`, `wander`, `patrol`, `in_range`, `in_sight`, `nearest`, `filter_range`, `utility_choose`, `bt_tick`, `fsm_tick` |
-| `std.data` | native JSONL/CSV streams plus `project`, `where`, and `sum`; SQLite stays Python-only |
+| `std.data` | native JSONL/CSV streams, `project`/`where`/`sum`, and SQLite through the vendored amalgamation |
 
 Native lists and maps are value types: `list.push`, `list.insert`, `list.remove`,
 `list.pop`, `list.sort`, and `map.set` return new collections and leave the
@@ -192,13 +192,15 @@ Parameterized SQLite:
 
 Writes require `--data-write`. Query values must use `?` or named placeholders.
 
-The standalone `mellow` executable implements the streaming helpers and the row
-transforms in native C; `tests/native/test_native_data_standalone.py` diffs
-JSONL/CSV output against the Python VM, including quoted CSV fields, blank
-lines, missing columns, and extra values. Standalone limits mirror the defaults:
-batch sizes 1-1000, at most eight open streams, and 1 MiB per record. Paths obey
-the `fs` sandbox (relative only, no `..`). SQLite needs the Python runtime, so
-`data_sqlite_*` remains a compile error in the standalone binary.
+The standalone `mellow` executable implements the streaming helpers, the row
+transforms, and SQLite in native C; `tests/native/test_native_data_standalone.py`
+diffs the output against the Python VM, including quoted CSV fields, blank
+lines, missing columns, extra values, parameter binding, DDL row counts, and
+query row limits. Standalone limits mirror the defaults: batch sizes 1-1000, at
+most eight open streams, and 1 MiB per record. Paths obey the `fs` sandbox
+(relative only, no `..`). SQLite uses the vendored amalgamation under
+`native/standalone/vendor/sqlite/`; writes still require `--data-write` and
+`--data-max-rows N` overrides the 5000-row query limit.
 
 ## Interop
 

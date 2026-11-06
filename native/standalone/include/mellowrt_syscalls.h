@@ -41,6 +41,8 @@ typedef struct {
     int server_response_status;
     char server_response_content_type[64];
     char syscall_error[256];
+    int allow_data_write;
+    long long data_max_query_rows;
     void *data_state;
 } MellowRuntimeContext;
 

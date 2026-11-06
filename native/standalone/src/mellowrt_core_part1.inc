@@ -156,7 +156,7 @@ void mvalue_free(MValue *v) {
     if (!v) return;
     if (v->tag == MVAL_LIST) mlist_free(&v->as.list);
     else if (v->tag == MVAL_MAP) mmap_free(&v->as.map);
-    else if (v->tag == MVAL_STR && (v->flags & 1u) && v->as.str.ptr && !heap_find(v->as.str.ptr)) free((void *)v->as.str.ptr);
+    else if ((v->tag == MVAL_STR || v->tag == MVAL_BYTES) && (v->flags & 1u) && v->as.str.ptr && !heap_find(v->as.str.ptr)) free((void *)v->as.str.ptr);
     *v = mval_none();
 }
 void mvm_free(MVM *vm) {

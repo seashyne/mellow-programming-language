@@ -130,6 +130,12 @@ a pointer is tracked.
 files beside them, they must not mention `mellowlang` or reach the Python layer
 (`tests/test_workspace_boundaries.py`).
 
+`native/standalone/vendor/sqlite/` holds the upstream SQLite 3.54.1
+amalgamation (`sqlite3.c`, `sqlite3.h`) that backs the native `data_sqlite_*`
+syscalls. It is vendored, generated third-party code: the source-length gate
+skips every `vendor` path, and the files are not edited in place. Upgrading
+SQLite means replacing both files and re-running the standalone data tests.
+
 ## Root Files
 
 - `README.md`, `SPEC.md`, `CHANGELOG.md`, `LICENSE` - public project documents.

@@ -3,6 +3,7 @@
 #define DATA_MAX_OPEN_STREAMS 8
 #define DATA_MAX_BATCH_SIZE 1000
 #define DATA_MAX_RECORD_BYTES 1048576
+#define DATA_DEFAULT_MAX_QUERY_ROWS 5000
 
 #define DATA_KIND_JSONL 1
 #define DATA_KIND_CSV 2
@@ -25,6 +26,8 @@ typedef struct StdDataStream {
 
 typedef struct StdDataState {
     StdDataStream streams[DATA_MAX_OPEN_STREAMS];
+    sqlite3 *databases[DATA_MAX_OPEN_STREAMS];
+    int database_ids[DATA_MAX_OPEN_STREAMS];
     int next_id;
 } StdDataState;
 
@@ -54,14 +57,17 @@ static void std_data_stream_free(StdDataStream *stream) {
     memset(stream, 0, sizeof(*stream));
 }
 
-/* Release every open stream. Called from the runtime teardown paths. */
+/* Release every open stream and database. Called from the runtime teardown paths. */
 void mellowrt_data_release(MellowRuntimeContext *ctx) {
     StdDataState *state;
     size_t i;
     if (!ctx) return;
     state = (StdDataState *)ctx->data_state;
     if (!state) return;
-    for (i = 0; i < DATA_MAX_OPEN_STREAMS; ++i) std_data_stream_free(&state->streams[i]);
+    for (i = 0; i < DATA_MAX_OPEN_STREAMS; ++i) {
+        std_data_stream_free(&state->streams[i]);
+        if (state->databases[i]) sqlite3_close(state->databases[i]);
+    }
     free(state);
     ctx->data_state = NULL;
 }

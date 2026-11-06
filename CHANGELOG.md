@@ -42,7 +42,12 @@
   eight open streams, 1 MiB records), paths obey the `fs` sandbox, and the
   Python reader's auto-close on `StopIteration` is preserved.
   `tests/native/test_native_data_standalone.py` diffs the output against the
-  Python VM. `data_sqlite_*` still requires the Python runtime.
+  Python VM.
+- `data_sqlite_open`, `data_sqlite_close`, `data_sqlite_query`, and
+  `data_sqlite_execute` run in the standalone C runtime through the vendored
+  SQLite 3.54.1 amalgamation (`native/standalone/vendor/sqlite/`). Statement
+  classification, parameter binding, row limits, read-only opens, and
+  `--data-write` gating match `DataCoreError` behavior in the Python VM.
 - `std.ai.api_complete` can talk to any OpenAI-compatible endpoint instead of
   only returning the offline stub. Configure a provider with `base_url`,
   `model`, and `api_key` or `api_key_env`; the call POSTs to

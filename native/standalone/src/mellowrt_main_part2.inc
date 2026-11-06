@@ -6,8 +6,8 @@ int main(int argc, char **argv){
     ctx.argc=argc;
     ctx.argv=argv;
     ctx.script_arg_start=2;
-    /* --seed N / --seed=N may appear anywhere; strip it before command dispatch
-     * so script arguments never see the flag. */
+    /* --seed N / --seed=N and the data switches may appear anywhere; strip
+     * them before command dispatch so script arguments never see the flags. */
     {
         int i, out=1;
         for(i=1;i<argc;++i){
@@ -19,6 +19,18 @@ int main(int argc, char **argv){
             if(!strncmp(argv[i],"--seed=",7)){
                 ctx.rng_seed=(int64_t)strtoll(argv[i]+7,NULL,10);
                 ctx.rng_seed_set=1;
+                continue;
+            }
+            if(!strcmp(argv[i],"--data-write")){
+                ctx.allow_data_write=1;
+                continue;
+            }
+            if(!strcmp(argv[i],"--data-max-rows")&&i+1<argc){
+                ctx.data_max_query_rows=strtoll(argv[++i],NULL,10);
+                continue;
+            }
+            if(!strncmp(argv[i],"--data-max-rows=",16)){
+                ctx.data_max_query_rows=strtoll(argv[i]+16,NULL,10);
                 continue;
             }
             argv[out++]=argv[i];

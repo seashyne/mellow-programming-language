@@ -46,6 +46,8 @@ def native_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
         str(NATIVE / "include"),
         "-I",
         str(ROOT / "native" / "sm" / "include"),
+        "-I",
+        str(NATIVE / "vendor" / "sqlite"),
         str(NATIVE / "src" / "mellowrt_core.c"),
         str(NATIVE / "src" / "mellowrt_debug.c"),
         str(NATIVE / "src" / "mellowrt_ledger.c"),
@@ -62,6 +64,7 @@ def native_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
         str(NATIVE / "src" / "mellowc_modules.c"),
         str(NATIVE / "src" / "mellowc_parser.c"),
         str(ROOT / "native" / "sm" / "src" / "sm_native.c"),
+        str(NATIVE / "vendor" / "sqlite" / "sqlite3.c"),
         str(NATIVE / "src" / "mellowrt_main.c"),
         "-o",
         str(binary),
@@ -94,10 +97,12 @@ def _write_case(source: str, cwd: Path) -> Path:
     return script
 
 
-def _run_native(binary: Path, source: str, cwd: Path, seed: int = 42) -> str:
+def _run_native(
+    binary: Path, source: str, cwd: Path, seed: int = 42, flags: tuple[str, ...] = ()
+) -> str:
     script = _write_case(source, cwd)
     result = subprocess.run(
-        [str(binary), "run", str(script), "--seed", str(seed)],
+        [str(binary), "run", str(script), "--seed", str(seed), *flags],
         capture_output=True,
         text=True,
         cwd=cwd,
@@ -107,7 +112,14 @@ def _run_native(binary: Path, source: str, cwd: Path, seed: int = 42) -> str:
     return result.stdout
 
 
-def _run_python(source: str, cwd: Path, *, seed: int = 42) -> str:
+def _run_python(
+    source: str,
+    cwd: Path,
+    *,
+    seed: int = 42,
+    allow_data_write: bool = False,
+    max_query_rows: int | None = None,
+) -> str:
     program = Compiler().compile(textwrap.dedent(source).lstrip("\n"), filename="<native-data>")
     vm = MellowVM()
     output = io.StringIO()
@@ -116,7 +128,15 @@ def _run_python(source: str, cwd: Path, *, seed: int = 42) -> str:
     random.seed(seed)
     try:
         with contextlib.redirect_stdout(output):
-            vm.run(program, config=RunConfig(engine="py", seed=seed))
+            vm.run(
+                program,
+                config=RunConfig(
+                    engine="py",
+                    seed=seed,
+                    allow_data_write=allow_data_write,
+                    data_max_query_rows=max_query_rows,
+                ),
+            )
     finally:
         os.chdir(previous)
     return output.getvalue()
@@ -150,8 +170,39 @@ def _assert_equivalent(native_output: str, python_output: str) -> None:
         assert _same_json(left, right), (native_line, python_line)
 
 
-def _parity(binary: Path, source: str, cwd: Path) -> None:
-    _assert_equivalent(_run_native(binary, source, cwd), _run_python(source, cwd))
+def _parity(
+    binary: Path,
+    source: str,
+    cwd: Path,
+    *,
+    flags: tuple[str, ...] = (),
+    allow_data_write: bool = False,
+    max_query_rows: int | None = None,
+) -> None:
+    _assert_equivalent(
+        _run_native(binary, source, cwd, flags=flags),
+        _run_python(
+            source,
+            cwd,
+            allow_data_write=allow_data_write,
+            max_query_rows=max_query_rows,
+        ),
+    )
+
+
+def _parity_dirs(
+    binary: Path,
+    source: str,
+    native_cwd: Path,
+    python_cwd: Path,
+    *,
+    flags: tuple[str, ...] = (),
+    allow_data_write: bool = False,
+) -> None:
+    _assert_equivalent(
+        _run_native(binary, source, native_cwd, flags=flags),
+        _run_python(source, python_cwd, allow_data_write=allow_data_write),
+    )
 
 
 def test_jsonl_stream_and_transforms_match_python(native_binary: Path, data_dir: Path) -> None:
@@ -252,6 +303,149 @@ def test_native_data_errors(
     script = _write_case(source, data_dir)
     result = subprocess.run(
         [str(native_binary), "run", str(script)],
+        capture_output=True,
+        text=True,
+        cwd=data_dir,
+        check=False,
+    )
+    assert result.returncode == 1, result.stdout
+    assert fragment in result.stderr, result.stderr
+
+
+def test_sqlite_lifecycle_matches_python(native_binary: Path, data_dir: Path) -> None:
+    source = """
+        let db = data_sqlite_open(":memory:")
+        println(get json.encode(db))
+        println(get json.encode(data_sqlite_execute(db, "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT, score REAL)", [])))
+        println(get json.encode(data_sqlite_execute(db, "INSERT INTO t (name, score) VALUES (?, ?)", ["a", 2.5])))
+        println(get json.encode(data_sqlite_execute(db, "INSERT INTO t (name, score) VALUES (?, ?)", ["b", 3])))
+        println(get json.encode(data_sqlite_query(db, "SELECT id, name, score FROM t ORDER BY id")))
+        println(get json.encode(data_sqlite_query(db, "SELECT count(*) AS n, sum(score) AS total FROM t")))
+        println(get json.encode(data_sqlite_query(db, "PRAGMA table_info(t)")))
+        println(get json.encode(data_sqlite_close(db)))
+        println(get json.encode(data_sqlite_close(db)))
+    """
+    _parity(native_binary, source, data_dir, flags=("--data-write",), allow_data_write=True)
+
+
+def test_sqlite_parameters_and_row_transforms_match_python(
+    native_binary: Path, data_dir: Path
+) -> None:
+    source = """
+        let db = data_sqlite_open()
+        data_sqlite_execute(db, "CREATE TABLE sales (id INTEGER, kind TEXT, amount REAL)", [])
+        data_sqlite_execute(db, "INSERT INTO sales (id, kind, amount) VALUES (:id, :kind, :amount)", {"id": 1, "kind": "sale", "amount": 10})
+        data_sqlite_execute(db, "INSERT INTO sales (id, kind, amount) VALUES (:id, :kind, :amount)", {"id": 2, "kind": "refund", "amount": 2.5})
+        let rows = data_sqlite_query(db, "SELECT id, kind, amount FROM sales", [])
+        println(get json.encode(rows))
+        println(get json.encode(data_where(rows, "kind", "==", "sale")))
+        println(get json.encode(data_sum(rows, "amount")))
+        println(get json.encode(data_project(rows, ["id", "missing"])))
+        println(get json.encode(data_sqlite_query(db, "WITH big AS (SELECT * FROM sales WHERE amount > ?) SELECT id FROM big", [5])))
+    """
+    _parity(native_binary, source, data_dir, flags=("--data-write",), allow_data_write=True)
+
+
+def test_sqlite_file_and_readonly_match_python(native_binary: Path, tmp_path: Path) -> None:
+    native_dir = tmp_path / "native"
+    python_dir = tmp_path / "python"
+    for folder in (native_dir, python_dir):
+        (folder / "db").mkdir(parents=True)
+    source = """
+        println(get json.encode(data_sqlite_execute("db/people.db", "CREATE TABLE people (id INTEGER PRIMARY KEY, name TEXT)", [])))
+        println(get json.encode(data_sqlite_execute("db/people.db", "INSERT INTO people (name) VALUES (?)", ["ann"])))
+        println(get json.encode(data_sqlite_execute("db/people.db", "INSERT INTO people (name) VALUES (?)", ["bob"])))
+        println(get json.encode(data_sqlite_query("db/people.db", "SELECT id, name FROM people ORDER BY id")))
+        let ro = data_sqlite_open("db/people.db", true)
+        println(get json.encode(data_sqlite_query(ro, "SELECT name FROM people WHERE id > ?", [1])))
+        println(get json.encode(data_sqlite_close(ro)))
+    """
+    _parity_dirs(
+        native_binary,
+        source,
+        native_dir,
+        python_dir,
+        flags=("--data-write",),
+        allow_data_write=True,
+    )
+
+
+def test_sqlite_limits_match_python(native_binary: Path, data_dir: Path) -> None:
+    source = """
+        let db = data_sqlite_open()
+        data_sqlite_execute(db, "CREATE TABLE t (a INTEGER)", [])
+        data_sqlite_execute(db, "INSERT INTO t VALUES (1)", [])
+        data_sqlite_execute(db, "INSERT INTO t VALUES (2)", [])
+        println(len(data_sqlite_query(db, "SELECT a FROM t", [], 0)))
+        println(len(data_sqlite_query(db, "SELECT a FROM t", [], 2)))
+        println(len(data_sqlite_query(db, "SELECT a FROM t", [], 2.9)))
+        println(len(data_sqlite_query(db, "SELECT a FROM t", [], "2")))
+    """
+    _parity(
+        native_binary,
+        source,
+        data_dir,
+        flags=("--data-write", "--data-max-rows", "5"),
+        allow_data_write=True,
+        max_query_rows=5,
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "fragment", "flags"),
+    [
+        (
+            'let db = data_sqlite_open()\n'
+            'println(get json.encode(data_sqlite_execute(db, "CREATE TABLE t (a)", [])))\n',
+            "data writes are disabled",
+            (),
+        ),
+        (
+            'let db = data_sqlite_open()\n'
+            'println(get json.encode(data_sqlite_query(db, "DELETE FROM t")))\n',
+            "data.sqlite_query only allows read-only statements",
+            (),
+        ),
+        (
+            'let db = data_sqlite_open()\n'
+            'println(get json.encode(data_sqlite_execute(db, "DROP TABLE t")))\n',
+            "unsupported SQLite write statement",
+            ("--data-write",),
+        ),
+        (
+            'let db = data_sqlite_open()\n'
+            'data_sqlite_execute(db, "CREATE TABLE t (a)", [])\n'
+            'data_sqlite_execute(db, "INSERT INTO t VALUES (1)", [])\n'
+            'data_sqlite_execute(db, "INSERT INTO t VALUES (2)", [])\n'
+            'println(get json.encode(data_sqlite_query(db, "SELECT a FROM t", [], 1)))\n',
+            "SQLite result exceeds row limit 1",
+            ("--data-write",),
+        ),
+        (
+            'let db = data_sqlite_open()\n'
+            'println(get json.encode(data_sqlite_query(db, "SELECT 1; SELECT 2")))\n',
+            "You can only execute one statement at a time.",
+            (),
+        ),
+        (
+            'let db = data_sqlite_open()\n'
+            'println(get json.encode(data_sqlite_query(db, "SELECT ? AS a", [1, 2])))\n',
+            "Incorrect number of bindings supplied",
+            (),
+        ),
+        (
+            'println(get json.encode(data_sqlite_query(":memory:", "SELECT 1")))\n',
+            "use data.sqlite_open for a persistent in-memory database",
+            (),
+        ),
+    ],
+)
+def test_native_sqlite_errors(
+    native_binary: Path, data_dir: Path, source: str, fragment: str, flags: tuple[str, ...]
+) -> None:
+    script = _write_case(source, data_dir)
+    result = subprocess.run(
+        [str(native_binary), "run", str(script), *flags],
         capture_output=True,
         text=True,
         cwd=data_dir,

@@ -51,10 +51,14 @@ add_library(mellowrt_core STATIC
   src/mellowc_modules.c
   src/mellowc_parser.c
   ../sm/src/sm_native.c
+  vendor/sqlite/sqlite3.c
 )
 target_include_directories(mellowrt_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../sm/include
+)
+target_include_directories(mellowrt_core PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/sqlite
 )
 # MSVC exposes math through its C runtime and has no separate libm.
 if(NOT MSVC)

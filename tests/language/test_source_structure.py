@@ -251,7 +251,9 @@ LINE_CEILINGS: dict[str, int] = {
 
 LENGTH_SUFFIXES = {".py", ".c", ".h", ".inc"}
 LENGTH_SCAN_ROOTS = ("src", "native", "tests", "stdlib", "benchmarks", "scripts", "sdk")
-SKIP_PARTS = {"build", "node_modules", "dist", "__pycache__", ".venv"}
+# Vendored third-party sources are not part of the project's own layout: the
+# SQLite amalgamation alone is a generated 250k-line file.
+SKIP_PARTS = {"build", "node_modules", "dist", "__pycache__", ".venv", "vendor"}
 
 
 def _line_count(path: Path) -> int:

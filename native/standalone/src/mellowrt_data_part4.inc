@@ -1,4 +1,4 @@
-/* std.data fragment 4: row transforms and syscall dispatch. */
+/* std.data fragment 4: row transforms. */
 
 static int std_data_order(const MValue *left, const MValue *right, int *cmp) {
     if ((left->tag == MVAL_I64 || left->tag == MVAL_F64 || left->tag == MVAL_BOOL) &&
@@ -193,20 +193,4 @@ static int std_data_sum_syscall(MellowRuntimeContext *ctx, const MValue *args,
     free(key);
     *out = is_float ? mval_f64(total_float) : mval_i64(total_int);
     return 1;
-}
-
-static int std_data_syscall(MellowRuntimeContext *ctx, int id, const MValue *args,
-                            size_t argc, MValue *out) {
-    switch (id) {
-    case 360: return std_data_open_syscall(ctx, args, argc, DATA_KIND_JSONL, out);
-    case 361: return std_data_open_syscall(ctx, args, argc, DATA_KIND_CSV, out);
-    case 362: return std_data_next_syscall(ctx, args, argc, out);
-    case 363:
-    case 364: return std_data_close_syscall(ctx, args, argc, out);
-    case 365: return std_data_info_syscall(ctx, args, argc, out);
-    case 366: return std_data_project_syscall(ctx, args, argc, out);
-    case 367: return std_data_where_syscall(ctx, args, argc, out);
-    case 368: return std_data_sum_syscall(ctx, args, argc, out);
-    default: return 0;
-    }
 }
