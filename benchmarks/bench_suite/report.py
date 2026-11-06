@@ -110,8 +110,8 @@ def render_markdown(payload: dict[str, Any], baseline: dict[str, Any] | None = N
                 "",
                 "## Cross-Language Median Timings",
                 "",
-                "| Workload | Mellow ms | Zig ms | C ms | Python ms | Lua ms |",
-                "| --- | ---: | ---: | ---: | ---: | ---: |",
+                "| Workload | Mellow ms | Zig ms | C ms | Rust ms | Python ms | Lua ms |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for workload, item in summary.items():
@@ -121,6 +121,7 @@ def render_markdown(payload: dict[str, Any], baseline: dict[str, Any] | None = N
                 f"{_number(item.get('mellow_median_ms'))} | "
                 f"{_number(item.get('zig_median_ms'))} | "
                 f"{_number(item.get('c_median_ms'))} | "
+                f"{_number(item.get('rust_median_ms'))} | "
                 f"{_number(item.get('python_median_ms'))} | "
                 f"{_number(item.get('lua_median_ms'))} |"
             )

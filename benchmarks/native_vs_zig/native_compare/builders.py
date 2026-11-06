@@ -45,6 +45,21 @@ def _build_zig(zig: str, source: Path, output: Path) -> None:
         shutil.move(str(produced), str(output))
 
 
+def _build_rust(rustc: str, source: Path, output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if output.exists():
+        output.unlink()
+    subprocess.run(
+        [rustc, "--edition", "2021", "-O", str(source), "-o", str(output)],
+        cwd=output.parent,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if not output.exists():
+        raise RuntimeError(f"rustc did not produce expected binary: {output}")
+
+
 def _find_c_compiler(zig: str | None) -> tuple[str, str] | None:
     for name in ("cc", "gcc", "clang", "cl"):
         path = shutil.which(name)

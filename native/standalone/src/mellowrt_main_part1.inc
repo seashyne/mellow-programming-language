@@ -161,6 +161,8 @@ static void usage(const char *argv0){
         "  %s check <file>           Compile/syntax check a .mellow script\n"
         "  %s doctor                 Show native runtime status\n"
         "  %s status                 Show native runtime status\n"
+        "  %s pkg <cmd>              Native package manager (init/publish/install/list/...)\n"
+        "  %s install <name>         Install a package from the local registry\n"
         "  %s sm pack <in> -o <out>  Pack text-like assets into native SM3\n"
         "  %s server serve <file>    Run a native C HTTP server from Mellow source\n"
         "  %s sm inspect <file.sm>   Inspect a native SM3 file\n"
@@ -171,7 +173,8 @@ static void usage(const char *argv0){
         "  %s <program.mellow|program.mvi>\n"
         "  %s --runtime-info\n"
         "  %s --version\n",
-        argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0);
+        argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,argv0,
+        argv0,argv0);
 }
 
 static void native_doctor(const char *argv0){

@@ -41,7 +41,7 @@ def _ratio_summary(workload_result: dict[str, Any]) -> dict[str, Any]:
         return summary
     mellow_median = float(mellow_bench["median_ms"])
     summary["mellow_median_ms"] = mellow_median
-    for runtime in ("zig", "c", "python", "lua"):
+    for runtime in ("zig", "c", "rust", "python", "lua"):
         bench = workload_result.get(runtime, {}).get("benchmark")
         if not bench:
             continue

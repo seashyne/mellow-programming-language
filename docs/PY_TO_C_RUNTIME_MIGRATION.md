@@ -141,6 +141,14 @@ Targets:
 
 Native runtime import resolution should land before full registry publishing.
 
+Landed: `native/standalone/src/mellowrt_pkg.c` implements the local registry
+workflow end to end — `pkg init`, `publish`, `install`, `list`, `search`,
+`info`, `add`, `remove`, and `uninstall`, including recursive dependency
+installs and the shared `mellow.toml`/`mellow.pkg.json`/`mellow.lock`/
+`.mellow_aliases.json` formats. `tests/native/test_native_pkg_cli.py` is the
+conformance gate. Remaining: HTTPS registry fetch, `.mpkg` ZIP archives,
+signature verification, and the update planner.
+
 ### P4: Developer Tooling
 
 These are not required for running end-user programs and should move after the

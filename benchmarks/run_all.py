@@ -41,6 +41,7 @@ def main() -> int:
     parser.add_argument("--zig", default=str(LOCAL_ZIG) if LOCAL_ZIG.exists() else None)
     parser.add_argument("--python", help="Python executable for cross-language comparison.")
     parser.add_argument("--lua", help="Lua executable for cross-language comparison.")
+    parser.add_argument("--rust", help="rustc executable for cross-language comparison.")
     parser.add_argument("--skip-cross-language", action="store_true")
     args = parser.parse_args()
 
@@ -62,6 +63,7 @@ def main() -> int:
         args.python,
         args.lua,
         include_cross_language=not args.skip_cross_language,
+        rust_path=args.rust,
     )
     baseline = _load_json(args.baseline)
 

@@ -45,3 +45,12 @@ def test_native_compare_is_a_thin_facade_over_native_compare_package() -> None:
     for path in sorted(NATIVE_COMPARE.glob("*.py")):
         assert _line_count(path) <= 300, f"{path.name} grew past one concern"
     assert _declared_functions(NATIVE_COMPARE / "compare.py") == ["run_compare"]
+
+
+def test_cross_language_workloads_have_a_source_per_runtime() -> None:
+    workload_dir = BENCHMARKS / "native_vs_zig"
+    for workload in ("sum_loop", "function_calls", "list_index", "branch_mod", "string_concat"):
+        for suffix in (".mellow", ".c", ".zig", ".rs", ".py", ".lua"):
+            assert (workload_dir / f"{workload}{suffix}").exists(), (
+                f"missing {workload}{suffix} in the cross-language comparison"
+            )

@@ -42,6 +42,7 @@ def run_suite(
     python_path: str | None,
     lua_path: str | None,
     include_cross_language: bool,
+    rust_path: str | None = None,
 ) -> dict[str, Any]:
     profile = PROFILES[profile_name]
     sections: dict[str, Any] = {}
@@ -91,6 +92,7 @@ def run_suite(
                 python_path,
                 lua_path,
                 keep_zig_binary=False,
+                rust_path=rust_path,
             ),
         )["result"]
     else:

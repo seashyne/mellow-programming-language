@@ -59,6 +59,7 @@ def native_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
         str(NATIVE / "src" / "mellowrt_money.c"),
         str(NATIVE / "src" / "mellowrt_platform.c"),
         str(NATIVE / "src" / "mellowrt_packages.c"),
+        str(NATIVE / "src" / "mellowrt_pkg.c"),
         str(NATIVE / "src" / "mellowrt_scheduler.c"),
         str(NATIVE / "src" / "mellowrt_server.c"),
         str(NATIVE / "src" / "mellowrt_sm_cli.c"),
