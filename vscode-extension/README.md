@@ -2,14 +2,14 @@
 
 VS Code support for `.mellow` and `.mel` files:
 
-- Syntax highlighting for Mellow 2.9.9 native syntax and built-ins
+- Syntax highlighting for Mellow 2.9.10 native syntax and built-ins
 - Diagnostics
 - Completion and hover
 - Document symbols
 - Go to definition
 - Mellow logo file icon theme
 
-The grammar recognizes the 2.9.9 native C surface, including `var`, `keep`,
+The grammar recognizes the 2.9.10 native C surface, including `var`, `keep`,
 `null`, `none`, `elif`, `wait`, `stop`, `break`, `continue`, builtin modules
 (`io`, `sys`, `math`, `time`, `gc`, `thread`, `chan`), and native built-ins such
 as `gc_collect`, `gc_stats`, `spawn`, `yield`, `channel`, `send`, and `recv`.

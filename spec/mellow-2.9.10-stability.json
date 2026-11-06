@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "language": "Mellow Programming Language",
+  "version": "2.9.10",
+  "profile": "core",
+  "status": "in-development",
+  "goal": "Move the remaining standard library families onto the standalone C runtime, including SQLite through a vendored amalgamation, so native runs no longer need a Python host for data work",
+  "baseline": {
+    "version": "2.9",
+    "manifest": "spec/mellow-2.9-core.json",
+    "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
+  },
+  "entrypoint": "SPEC.md",
+  "stable_core": "docs/STABLE_CORE.md",
+  "experimental_index": "docs/experimental/README.md",
+  "previous_patch": "spec/mellow-2.9.9-stability.json",
+  "v3_track": "spec/mellow-3.0-stability.json",
+  "required_gates": [
+    "tests/core",
+    "tests/language",
+    "tests/native",
+    "native-safety",
+    "native-fuzzer",
+    "package-registry-smoke",
+    "native-arm64-ci",
+    "release-gate"
+  ],
+  "release_commands": [
+    "powershell -File scripts/test-v294-stability.ps1",
+    "cmake -S native/standalone -B build/standalone-safety -DCMAKE_BUILD_TYPE=Debug -DMELLOW_ENABLE_SANITIZERS=ON -DMELLOW_BUILD_FUZZER=ON",
+    "ctest --test-dir build/standalone-safety --output-on-failure"
+  ],
+  "new_in_2_9_10": [
+    "the standalone runtime implements std.string, std.list, std.map, std.type, std.json, std.math, std.time, std.assert, and std.event in native C with no Python process; native lists and maps are value types, so the mutating helpers return new collections",
+    "std.game and the ai.* behaviour and decision helpers run natively: easing curves, tween, bounded grid neighbours, A* with Python heap tie-breaking, scene/entity/physics/anim, steering and perception, utility_choose, bt_tick, and fsm_tick",
+    "std.data reads JSONL and CSV streams in native C, and data_sqlite_open, data_sqlite_close, data_sqlite_query, and data_sqlite_execute run through the vendored SQLite 3.54.1 amalgamation in native/standalone/vendor/sqlite, which tests/language/test_source_structure.py excludes as generated third-party code",
+    "the CLI probe now sends --data-write runs to the standalone binary and forwards --data-write plus --data-max-rows, so native keeps the same write permission and row limit instead of falling back to the Python VM",
+    "std.ai.api_complete can POST to any OpenAI-compatible endpoint with base_url, model, and an api_key or api_key_env; configuration reporters redact keys, and the client reuses the net_http_* sandbox rules",
+    "the standalone heap indexes tracked pointers so free-path lookup stops scanning the global block list; money and ledger loops no longer pay O(heap) per release",
+    "the CLI runtime command split into cli/commands/runtime_groups/, and the benchmark entry points, Cloudflare public-registry Worker, web, desktop, MMG, registry server, lint, AST, debugger, cbridge, agent control plane, agent registry, IR lowering, and compiler modules split behind imports-only facades",
+    "every native C source over 300 lines now includes contiguous *_partN.inc fragments, and a structure test pins numbering, include order, and the 300-line bound"
+  ],
+  "runtime_notes": [
+    "no opcode or bytecode layout changed in this patch",
+    "Python remains required for function-callback list helpers (list.map, list.filter, list.reduce, list.map_fn, list.filter_fn), the interop module, the encrypted save envelope, MELV standalone CLI hooks, debugger/events/record/replay, LSP, and package tooling",
+    "native collections are value types while the Python VM mutates them in place; parity tests pin the difference instead of hiding it",
+    "the standalone heap answers membership through a bucket index but still sweeps a linked list and has no automatic GC trigger",
+    "api_complete network transport is native for OpenAI-compatible providers; offline and local-rag providers remain byte-identical to the Python VM"
+  ],
+  "runtime_policy": [
+    "Native C is the release-authoritative runtime for v2.9.10 core work",
+    "default C execution must fail fast when native support is missing",
+    "release and CI validation should include native-only execution plus sanitizer/fuzzer gates",
+    "a new native family ships with a parity test that diffs its stdout against the Python VM",
+    "a file split must be verbatim and proven by before/after equivalence, not by review"
+  ]
+}

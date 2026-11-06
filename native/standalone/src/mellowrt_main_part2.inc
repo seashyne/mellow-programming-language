@@ -44,7 +44,7 @@ int main(int argc, char **argv){
         return 0;
     }
     if(!strcmp(argv[1],"--version")||!strcmp(argv[1],"-V")||!strcmp(argv[1],"version")){
-        puts("Mellow Programming Language 2.9.9 (Full Native C)");
+        puts("Mellow Programming Language 2.9.10 (Full Native C)");
         return 0;
     }
     if(!strcmp(argv[1],"doctor")||!strcmp(argv[1],"status")){

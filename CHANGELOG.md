@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.9.10 - 2026-11-06
+
 ### Added
 - The standalone `mellow` executable now implements the data standard library
   in native C: `std.string` (UTF-8 `len`/`chr`/`ord`, padding, `format`),
@@ -48,6 +50,9 @@
   SQLite 3.54.1 amalgamation (`native/standalone/vendor/sqlite/`). Statement
   classification, parameter binding, row limits, read-only opens, and
   `--data-write` gating match `DataCoreError` behavior in the Python VM.
+- `mellow run --engine c --data-write` now stays on the standalone runtime: the
+  probe no longer sends write-enabled runs to the Python VM, and `--data-write`
+  plus `--data-max-rows` are forwarded to the binary.
 - `std.ai.api_complete` can talk to any OpenAI-compatible endpoint instead of
   only returning the offline stub. Configure a provider with `base_url`,
   `model`, and `api_key` or `api_key_env`; the call POSTs to
@@ -71,8 +76,8 @@
   and stripped before dispatch, so scripts never see the flag. `ai.decide`,
   `prompt_template` and errors render containers with Python's `str()`/`repr()`
   spelling, and `.mmodel`/`.mllm` checkpoints load across engines. The only gap
-  is `api_complete`'s OpenAI network transport, which needs the Python host;
-  offline and `local-rag` providers behave identically.
+  on the native surface is `api_complete`'s OpenAI network transport, which runs
+  on the Python host; offline and `local-rag` providers behave identically.
   `tests/native/test_native_ai_standalone.py` diffs native stdout against the
   Python VM for every call family.
 

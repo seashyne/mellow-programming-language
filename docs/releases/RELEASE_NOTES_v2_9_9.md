@@ -65,6 +65,10 @@ findings matter for the next release:
 
 ## Deferred
 
+> Updated in v2.9.10: the standalone heap registry fix landed (pointer-keyed
+> bucket index, measured in `RELEASE_NOTES_v2_9_10.md`), and `std.data` plus
+> SQLite moved into the native runtime.
+
 - The `package_manager.py` split stayed undone because that file carries
   uncommitted work; it is 1,220 lines against a 1,100 ceiling.
 - The encrypted save envelope and MELV standalone CLI hooks remain Python-side.

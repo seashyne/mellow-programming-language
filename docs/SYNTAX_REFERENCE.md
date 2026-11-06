@@ -1,4 +1,4 @@
-# คู่มือ Syntax Mellow Programming Language v2.9.9
+# คู่มือ Syntax Mellow Programming Language v2.9.10
 
 เอกสารนี้เป็นคู่มือรวม syntax ทั้ง Core, Extended และ Compatibility ที่ compiler
 รองรับ สำหรับข้อกำหนดแบบบังคับและ syntax ที่ล็อกแล้วของ v2.9 ให้ยึด
@@ -358,7 +358,7 @@ out.println(m.sqrt(25))
 out.println(system.cwd())
 ```
 
-ใน Full Native C runtime รอบ v2.9.9, `import` / `use` / `need` รองรับเฉพาะ
+ใน Full Native C runtime รอบ v2.9.10, `import` / `use` / `need` รองรับเฉพาะ
 builtin modules แบบ allowlist (`io`, `sys`, `math`, `time`, `gc`, `thread`, `chan`) และทำหน้าที่เป็น
 alias ตอน compile เท่านั้น. Local file/package import ยังเป็นงานของ module
 loader รอบถัดไป
@@ -399,7 +399,7 @@ c.send(mailbox, "ping")
 print(c.recv(mailbox))
 ```
 
-ใน v2.9.9 ส่วน GC เป็น native mark/sweep สำหรับ runtime-owned native handles
+ใน v2.9.10 ส่วน GC เป็น native mark/sweep สำหรับ runtime-owned native handles
 และ VM heap ของ string/list/map: runtime จะ mark จาก VM stack/locals/task state
 แล้ว sweep channel handles และ heap blocks ที่ไม่ reachable.
 `gc_stats()["mode"]` จะเป็น `mark-sweep-native-handles`. `spawn(fn)` สร้าง
@@ -974,7 +974,7 @@ mellow doctor
 ## 24. ขอบเขตของ v2.9.0
 
 - ไม่มี class, object declaration, decorator หรือ static type annotation
-- ไม่มี `raise`, `async/await`, generator และ match expression; `yield()` ใน v2.9.9 เป็น native builtin call ไม่ใช่ generator keyword
+- ไม่มี `raise`, `async/await`, generator และ match expression; `yield()` ใน v2.9.10 เป็น native builtin call ไม่ใช่ generator keyword
 - assignment target ต้องเป็นชื่อ variable ไม่รองรับ `items[0] = value`
 - slice step ถูก parse แต่ยังไม่ถูกใช้โดย compiler
 - events, debugger และ record/replay ยังไม่อยู่ใน Full Native C Core Profile

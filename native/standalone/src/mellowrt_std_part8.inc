@@ -4,6 +4,13 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/* 0.0/0.0 through a volatile keeps MSVC's C2124 constant-division check from
+ * rejecting the NaN path; gcc folds it either way. */
+static double std_math_nan(void) {
+    volatile double zero = 0.0;
+    return zero / zero;
+}
+
 static int std_vec_list(const MValue *value, size_t *n) {
     if (!value || value->tag != MVAL_LIST) return 0;
     if (value->as.list.len < 2 || value->as.list.len > 16) return 0;
@@ -263,7 +270,7 @@ static int std_math_syscall(MellowRuntimeContext *ctx, int id, const MValue *arg
     if (id == 275 || id == 278) {
         if (argc != 2 || !ai_number(&args[0], &a) || !ai_number(&args[1], &b)) return 0;
         if (id == 275) *out = mval_f64(atan2(a, b));
-        else if (b == 0.0) *out = mval_f64(0.0 / 0.0);
+        else if (b == 0.0) *out = mval_f64(std_math_nan());
         else *out = mval_f64(a - floor(a / b) * b);
         return 1;
     }

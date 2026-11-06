@@ -154,7 +154,7 @@ static void free_run_result(MRunResult *result)
 /* ── entry point ─────────────────────────────────────────────────────────── */
 static void usage(const char *argv0){
     printf(
-        "Mellow Programming Language 2.9.9 (Full Native C)\n"
+        "Mellow Programming Language 2.9.10 (Full Native C)\n"
         "\n"
         "Common:\n"
         "  %s run <file>             Run a .mellow script\n"
@@ -176,7 +176,7 @@ static void usage(const char *argv0){
 
 static void native_doctor(const char *argv0){
     MRuntimePlatform platform=mellow_runtime_platform();
-    printf("MellowLang 2.9.9 (Full Native C)\n\n");
+    printf("MellowLang 2.9.10 (Full Native C)\n\n");
     printf("Environment\n");
     printf("  Executable    : %s\n",argv0);
     printf("  Runtime       : mellow-c standalone\n");

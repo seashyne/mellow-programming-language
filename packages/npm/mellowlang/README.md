@@ -1,6 +1,6 @@
 # mellowlang npm package
 
-This package installs the `mellow` command for MellowLang 2.9.9.
+This package installs the `mellow` command for MellowLang 2.9.10.
 
 It is native-first: Node.js is only used as an installer/wrapper. The language
 runtime is the standalone C executable.
