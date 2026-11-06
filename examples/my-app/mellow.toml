@@ -1,0 +1,12 @@
+name = "my-app"
+version = "0.1.0"
+description = "Mellow starter project scaffold"
+entry = "src/main.mel"
+license = "MIT"
+visibility = "private"
+
+[dependencies]
+core-print = "^0.2.0"
+core-strings = "^0.2.0"
+core-math = "^0.2.0"
+core-workflow = "^0.2.0"

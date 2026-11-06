@@ -1,12 +1,13 @@
 from pathlib import Path
 
 from mellowlang.compiler import Compiler
-from mellowlang.package_manager import init_package, read_manifest, seed_core_packages
+from mellowlang.package_manager import audit_packages, init_package, read_manifest, seed_core_packages
 
 REQUIRED_STARTER_PACKAGES = {
     "core-ai",
     "core-collections",
     "core-data",
+    "core-finance",
     "core-gamekit",
     "core-http",
     "core-json",
@@ -15,6 +16,7 @@ REQUIRED_STARTER_PACKAGES = {
     "core-math",
     "core-mmg",
     "core-money",
+    "core-server",
     "mellow-sdk",
     "core-print",
     "core-save",
@@ -68,3 +70,25 @@ def test_starter_package_manifests_and_entries_compile():
         assert entry.exists(), f"{manifest['name']} missing entry {manifest['entry']}"
         Compiler().compile(entry.read_text(encoding="utf-8"), filename=str(entry))
     assert REQUIRED_STARTER_PACKAGES <= names
+
+
+def test_official_runtime_packages_do_not_ship_python_sources():
+    root = Path(__file__).resolve().parents[1]
+    package_roots = [root / "starter_packages", root / "mellow_packages" / "registry"]
+    forbidden = []
+    for package_root in package_roots:
+        for path in package_root.rglob("*.py"):
+            parts = set(path.relative_to(package_root).parts)
+            if "__pycache__" in parts:
+                continue
+            forbidden.append(path)
+    assert not forbidden, "runtime packages must use Mellow sources or native host modules: " + ", ".join(
+        str(path.relative_to(root)) for path in forbidden
+    )
+
+
+def test_package_audit_latest_runtime_packages_are_native_ready():
+    result = audit_packages()
+    assert result["ok"], result
+    assert result["native_ready"] == result["count"]
+    assert result["count"] >= len(REQUIRED_STARTER_PACKAGES)

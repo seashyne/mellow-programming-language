@@ -22,12 +22,14 @@ These are the default starter set for `mellow new`.
 
 - `core-storage` — save/load statement helpers
 - `core-http` — request and route descriptors for host integrations
+- `core-server` — Mellow-authored HTTP route handlers for the `mellow server` host
 - `core-workflow` — job/event payload helpers
 - `core-save` — compatibility persistence helpers; prefer `core-storage`
 
 ## Domain
 
 - `core-money` — decimal-backed money helpers
+- `core-finance` — finance totals, fees, tax, discounts, and settlement helpers
 - `core-data` — bounded data transforms and file/SQLite host wrappers
 - `core-ledger` — double-entry ledger helpers
 
@@ -41,8 +43,11 @@ These are the default starter set for `mellow new`.
 - `core-mmg` — Mellow Magic Graphics declarations
 - `core-melv` — dependency-free MELV2 video container declarations
 
-`core-sm` currently has source stubs and local-registry packages, but is not
-included by `seed-core` until its starter manifest is complete.
+`core-sm` has a local-registry package for the `.sm` Smallless codec. The native
+codec lives in `native/sm/`; the CLI wrapper lives in
+`src/mellowlang/sm_codec.py` and is exposed through `mellow sm pack`,
+`mellow sm inspect`, and `mellow sm unpack`. It is not included by `seed-core`
+until its starter manifest is complete.
 
 ## Local source
 ```bash

@@ -1,3 +1,0 @@
-use @mellow/std-ai as ai
-
-print("agent demo")

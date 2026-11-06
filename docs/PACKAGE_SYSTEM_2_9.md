@@ -121,13 +121,29 @@ Starter packages include:
 `core-window`, and `core-workflow`.
 
 The local registry also contains `core-melv` and `core-sm`. `core-melv` now has
-a complete starter manifest for the dependency-free MELV2 path; `core-sm` still
-needs a complete starter manifest before joining the starter package set.
+a complete starter manifest for the dependency-free MELV2 path. `core-sm`
+documents the `.sm` Smallless codec exposed by `mellow sm pack/inspect/unpack`;
+it still needs a complete starter manifest before joining the starter package
+set.
 
 The default `mellow new` set is intentionally smaller: `core-print`,
 `core-strings`, `core-collections`, `core-math`, `core-json`, and `core-time`.
 Use presets such as `app`, `automation`, `finance`, `data`, `ai-agent`,
 `gamekit`, and `api-webhook` to opt into domain packages.
+
+## Native readiness audit
+
+Official runtime packages expose Mellow package APIs and call native host
+modules for runtime work. Use the audit gate before release:
+
+```bash
+mellow pkg audit
+mellow package-audit --json
+```
+
+By default this checks `starter_packages/` plus the latest local-registry
+version of each package. Use `--all-versions` when intentionally auditing old
+legacy registry versions too.
 
 The scoped standard-library package set contains:
 
@@ -160,4 +176,5 @@ or major version instead.
   operational monitoring, backups, rate limiting, and key rotation.
 - Package signing is optional rather than mandatory.
 - `core-sm` needs a complete starter manifest and package-level tests before
-  joining the starter package set.
+  joining the starter package set. The underlying `.sm` codec is implemented in
+  native C under `native/sm/` with a CLI wrapper in `src/mellowlang/sm_codec.py`.

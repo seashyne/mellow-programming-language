@@ -1,0 +1,11 @@
+def request():
+    return server_request()
+
+def json(body):
+    return server_json(body)
+
+def text(body):
+    return server_text(body)
+
+def status(code, body):
+    return server_status(code, body)

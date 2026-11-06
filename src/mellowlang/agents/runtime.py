@@ -136,6 +136,8 @@ class AgentRuntime:
         self.obs.emit('agent.finish', task=task, answer=answer, structured=structured, elapsed_ms=elapsed_ms)
         debug_payload = {
             'run_id': self.obs.run_id,
+            'native_core_contract': 'agent-runtime-v1',
+            'diagnostics_contract': 'native-core-diagnostics-v1',
             'elapsed_ms': elapsed_ms,
             'sandbox': context.get('sandbox'),
             'tool_count': len(self._tool_calls),

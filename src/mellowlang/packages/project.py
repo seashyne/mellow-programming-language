@@ -140,10 +140,8 @@ def _preset_dependencies(preset: str = "starter") -> Dict[str, str]:
         "starter": {
             "core-print": "^0.2.0",
             "core-strings": "^0.2.0",
-            "core-collections": "^0.2.0",
             "core-math": "^0.2.0",
-            "core-json": "^0.2.0",
-            "core-time": "^0.2.0",
+            "core-workflow": "^0.2.0",
         },
         "app": {
             "core-print": "^0.2.0",
@@ -172,11 +170,13 @@ def _preset_dependencies(preset: str = "starter") -> Dict[str, str]:
             "core-print": "^0.2.0",
             "core-json": "^0.2.0",
             "core-http": "^0.2.0",
+            "core-server": "^0.1.0",
             "core-workflow": "^0.2.0",
         },
         "finance": {
             "core-print": "^0.2.0",
             "core-json": "^0.2.0",
+            "core-finance": "^0.1.0",
             "core-money": "^0.1.0",
             "core-ledger": "^0.1.0",
         },
@@ -184,6 +184,9 @@ def _preset_dependencies(preset: str = "starter") -> Dict[str, str]:
             "core-print": "^0.2.0",
             "core-json": "^0.2.0",
             "core-data": "^0.1.0",
+        },
+        "web": {
+            "mellow-web": "^0.1.0",
         },
     }
     return dict(presets.get(preset, presets["starter"]))
@@ -250,20 +253,31 @@ out.success("gamekit preset ready")
 """,
         "api-webhook": """import "pkg:core-print" as out
 import "pkg:core-http" as http
+import "pkg:core-server" as server
 import "pkg:core-json" as jsonx
 
 keep route = http.route("POST", "/webhooks/orders")
-keep sample = {"route": route, "body": {"ok": true}}
+keep live = server.post("/webhooks/orders", "webhook")
+keep routes = [live]
+
+def webhook(req):
+    return server.json({"ok": true, "body": req["body"]})
+
+keep sample = {"route": route, "live": live, "body": {"ok": true}}
 out.kv("webhook", jsonx.pretty(sample))
 """,
         "finance": """import "pkg:core-print" as out
+import "pkg:core-finance" as finance
 import "pkg:core-money" as money
 import "pkg:core-ledger" as ledger
 
 keep book = ledger.create("USD")
 keep amount = money.of("125.50", "USD")
+keep fee = finance.fee(amount, "0.04")
+keep net = finance.net(amount, fee)
 ledger.post(book, "cash", "revenue", amount, "sale-001")
 out.kv("balance", money.format(ledger.balance(book, "cash")))
+out.kv("net", finance.format(net))
 """,
         "data": """import "pkg:core-print" as out
 import "pkg:core-data" as data
@@ -272,8 +286,21 @@ keep rows = [{"kind": "sale", "amount": 10}, {"kind": "sale", "amount": 15}]
 keep sales = data.where(rows, "kind", "eq", "sale")
 out.kv("total", data.sum(sales, "amount"))
 """,
+        "web": """page App
+  state count = 0
+
+  view:
+    Stack(gap: 12)
+      Title("Mellow Web")
+      Text("Count: {count}")
+      Button("Add", onClick: count += 1)
+""",
     }
     return samples.get(preset, samples["starter"])
+
+
+def _minimal_entry_source(project_name: str) -> str:
+    return f'print("Hello from {project_name}")\n'
 
 
 def ensure_project_starter_packages(project_dir: str | Path, packages: List[str] | None = None, *, resolve_runtime_map: bool = True) -> Dict[str, Any]:
@@ -308,8 +335,12 @@ def scaffold_project(target_dir: str | Path, *, force: bool = False, with_core: 
 
     src_dir = dest / "src"
     src_dir.mkdir(parents=True, exist_ok=True)
-    entry_name = "src/main.mel"
-    (src_dir / "main.mel").write_text(_preset_entry_source(preset_name), encoding="utf-8")
+    entry_name = "src/App.mellow" if preset_name == "web" else "src/main.mel"
+    if preset_name == "web":
+        entry_source = _preset_entry_source(preset_name)
+    else:
+        entry_source = _preset_entry_source(preset_name) if with_core else _minimal_entry_source(dest.name)
+    (dest / entry_name).write_text(entry_source, encoding="utf-8")
 
     if preset_name == "app":
         desktop_dir = dest / "desktop"
@@ -338,6 +369,13 @@ def scaffold_project(target_dir: str | Path, *, force: bool = False, with_core: 
         data["name"] = normalize_name(dest.name)
         data["preset"] = preset_name
         data["starter_packages"] = list(deps.keys()) if with_core else []
+        if preset_name == "web":
+            data["web"] = {
+                "entry": entry_name,
+                "out_dir": ".mellow/web-dev",
+                "host": "127.0.0.1",
+                "port": 5179,
+            }
         mj.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     manifest = {
@@ -353,13 +391,17 @@ def scaffold_project(target_dir: str | Path, *, force: bool = False, with_core: 
     }
     _write_toml(dest / "mellow.toml", manifest)
 
+    scaffold_cmd = f"mellow new --preset {preset_name}"
+    if with_core:
+        scaffold_cmd += " --with-core"
     readme_text = (
         f"# {dest.name}\n\n"
-        f"Scaffolded with `mellow new --preset {preset_name}`.\n\n"
-        "## Run\n\n"
+        f"Scaffolded with `{scaffold_cmd}`.\n\n"
+        "## Quick Start\n\n"
         "```bash\n"
-        "mellow run src/main.mel\n"
+        + ("mellow web dev\n" if preset_name == "web" else "mellow run src/main.mel\n") +
         "```\n\n"
+        f"Edit `{entry_name}` to change the project entry point. Project settings live in `mellow.toml` and `mellow.json`.\n\n"
     )
     if preset_name == "app":
         readme_text += (
@@ -368,11 +410,48 @@ def scaffold_project(target_dir: str | Path, *, force: bool = False, with_core: 
             "mellow desktop run src/main.mel\n"
             "```\n\n"
         )
-    readme_text += "## Starter packages\n\n"
+    if preset_name == "web":
+        readme_text += (
+            "## Web Preview\n\n"
+            "Prepare the generated React/Vite app without starting a server:\n\n"
+            "```bash\n"
+            "mellow web dev --prepare-only\n"
+            "```\n\n"
+            "Start the dev server:\n\n"
+            "```bash\n"
+            "mellow web dev\n"
+            "```\n\n"
+            "`mellow web dev` reads `web.entry` from `mellow.json` and installs the local `mellow-web` package when needed.\n\n"
+        )
+    readme_text += "## Starter Packages\n\n"
     if with_core and deps:
         readme_text += ''.join(f"- {name}\n" for name in deps.keys())
+        readme_text += "\nPackage metadata is generated for project imports and dependencies.\n"
     else:
-        readme_text += "No starter packages preloaded.\n"
+        readme_text += (
+            "No starter packages are preloaded. This keeps the project native-minimal and avoids generated package metadata.\n\n"
+            "Create a package starter when you need package examples:\n\n"
+            "```bash\n"
+            f"mellow new {dest.name} --preset {preset_name} --with-core\n"
+            "```\n"
+        )
+    readme_text += (
+        "\n## Add Packages\n\n"
+        "Add a dependency to this project and install it:\n\n"
+        "```bash\n"
+        "mellow add core-print\n"
+        "```\n\n"
+        f"Then import it from `{entry_name}` when package imports are supported by your runtime target:\n\n"
+        "```mellow\n"
+        "import \"pkg:core-print\" as out\n"
+        "```\n\n"
+        "Useful package commands:\n\n"
+        "```bash\n"
+        "mellow search core\n"
+        "mellow pkg list\n"
+        "mellow sync-imports .\n"
+        "```\n"
+    )
     (dest / "README.md").write_text(readme_text, encoding="utf-8")
 
     result = {

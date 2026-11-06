@@ -1,0 +1,67 @@
+{
+  "lockfile_version": 1,
+  "registry": "https://mellow-public-registry.jirayut-wh.workers.dev",
+  "packages": {
+    "core-print": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {},
+      "sha256": null
+    },
+    "core-strings": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {
+        "string": "host"
+      },
+      "sha256": null
+    },
+    "core-math": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {
+        "math": "host"
+      },
+      "sha256": null
+    },
+    "core-workflow": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {
+        "time": "host",
+        "json": "host"
+      },
+      "sha256": null
+    }
+  },
+  "root": {
+    "dependencies": {
+      "core-print": "0.2.1",
+      "core-strings": "0.2.1",
+      "core-math": "0.2.1",
+      "core-workflow": "0.2.1"
+    },
+    "imports": [
+      "core-print",
+      "core-strings",
+      "core-math",
+      "core-workflow"
+    ]
+  }
+}

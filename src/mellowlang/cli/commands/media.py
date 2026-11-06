@@ -108,9 +108,12 @@ def _cmd_sm_inspect(input_path: str, json_out: bool) -> int:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         print(f".sm codec: {payload['codec']}")
+        print(f"version: {payload['version']}")
         print(f"dictionary entries: {payload['dictionary_entries']}")
         print(f"original size: {payload['original_size']}")
         print(f"compressed size: {payload['compressed_size']}")
+        if payload.get("checksum_ok") is not None:
+            print(f"checksum ok: {payload['checksum_ok']}")
     return 0
 
 

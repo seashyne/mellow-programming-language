@@ -16,6 +16,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ..compiler import Compiler
+from ..diagnostics import diagnostics_for_source
 from ..vm import MellowVM, RunConfig
 from ..vm.cbridge import c_vm_capabilities
 from ..vm.python_vm import MellowLangVM
@@ -477,8 +478,28 @@ def run_playground_session(
     replay_recording_id: str | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    diagnostics = diagnostics_for_source(source, filename='<playground>', include_lints=True)
     compiler = Compiler()
-    program = compiler.compile(source, filename='<playground>', optimize=optimize)
+    try:
+        program = compiler.compile(source, filename='<playground>', optimize=optimize)
+    except Exception:
+        return {
+            'ok': False,
+            'stage': 'compile',
+            'stdout': '',
+            'raw_stdout': '',
+            'diagnostics': diagnostics,
+            'ai_prompt': diagnostics.get('ai_prompt', ''),
+            'editor': {
+                'line_count': max(len(source.splitlines()), 1),
+                'highlighted_html': _highlight_source_html(source),
+            },
+            'debug_capabilities': {
+                'engine_contract': 'native-core-diagnostics',
+                'diagnostics': True,
+                'ai_hints': True,
+            },
+        }
     compiled_ms = (time.perf_counter() - started) * 1000.0
 
     run_started = time.perf_counter()
@@ -487,7 +508,7 @@ def run_playground_session(
     replay_log = _recording_replay_path(recording_id)
     if break_lines:
         engine = 'py'
-    if replay_recording_id:
+    if replay_recording_id or record_execution:
         engine = 'py'
     with tempfile.TemporaryDirectory(prefix='mellow-playground-') as td:
         base_config = dict(
@@ -552,6 +573,8 @@ def run_playground_session(
     debug_stop = _to_plain(getattr(vm, 'last_debug_stop', None))
     payload: dict[str, Any] = {
         'ok': True,
+        'diagnostics': diagnostics,
+        'ai_prompt': diagnostics.get('ai_prompt', ''),
         'pipeline': getattr(program, 'pipeline', 'bytecode'),
         'stdout': clean_stdout,
         'raw_stdout': raw_stdout,
@@ -582,7 +605,9 @@ def run_playground_session(
             'conditional_breakpoints': True,
             'watch_expressions': True,
             'typed_frames': True,
-            'engine_contract': 'python-debugger-runtime',
+            'engine_contract': 'native-core-diagnostics+python-debugger-runtime',
+            'diagnostics': True,
+            'ai_hints': True,
             'native_c_capabilities': c_vm_capabilities(),
         },
         'debugger': {

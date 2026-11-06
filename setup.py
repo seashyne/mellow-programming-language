@@ -98,6 +98,17 @@ ext_modules = [
         extra_compile_args=[],
         extra_link_args=["/MANIFEST:NO"] if os.name == "nt" else [],
     ),
+    Extension(
+        "mellowlang._smnative",
+        sources=[
+            "native/sm/src/sm_native.c",
+            "native/sm/src/sm_module.c",
+        ],
+        include_dirs=["native/sm/include", *_python_include_dirs()],
+        define_macros=_native_arch_macros(),
+        extra_compile_args=[],
+        extra_link_args=["/MANIFEST:NO"] if os.name == "nt" else [],
+    ),
 ]
 
 setup(

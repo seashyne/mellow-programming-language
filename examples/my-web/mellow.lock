@@ -1,0 +1,22 @@
+{
+  "lockfile_version": 1,
+  "registry": "local",
+  "packages": {
+    "mellow-web": {
+      "version": "0.1.0",
+      "entry": "src/main.mellow",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {},
+      "sha256": null
+    }
+  },
+  "root": {
+    "dependencies": {
+      "mellow-web": "0.1.0"
+    },
+    "imports": []
+  }
+}

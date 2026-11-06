@@ -32,6 +32,7 @@ pkg_add_dependency = _lazy_attr(_PM, "add_dependency")
 pkg_remove_dependency = _lazy_attr(_PM, "remove_dependency")
 pkg_interactive_pick_package = _lazy_attr(_PM, "interactive_pick_package")
 pkg_diagnose_imports = _lazy_attr(_PM, "diagnose_imports")
+pkg_audit_packages = _lazy_attr(_PM, "audit_packages")
 pkg_package_creator = _lazy_attr(_PM, "package_creator")
 pkg_author_profile_remote = _lazy_attr(_PM, "author_profile_remote")
 pkg_package_signature_remote = _lazy_attr(_PM, "package_signature_remote")
@@ -292,6 +293,27 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
         for row in rows:
             print(f"- {row['name']}@{row['version']} by {pkg_package_creator(row)} -> {row['install_path']}")
         return 0
+    if pkg_cmd == 'audit':
+        res = pkg_audit_packages(
+            include_registry=not getattr(ns, 'no_registry', False),
+            all_versions=getattr(ns, 'all_versions', False),
+        )
+        if getattr(ns, 'json', False):
+            _json_print(res)
+            return 0 if res.get('ok') else 1
+        status = 'ok' if res.get('ok') else 'error'
+        _cli_line(
+            f"package audit: {res.get('native_ready', 0)}/{res.get('count', 0)} native-ready, "
+            f"{res.get('errors', 0)} error(s), {res.get('warnings', 0)} warning(s)",
+            kind=status,
+            file=sys.stderr if not res.get('ok') else sys.stdout,
+        )
+        for item in res.get('items', []):
+            mark = 'OK' if item.get('ok') else 'FAIL'
+            print(f"- [{mark}] {item.get('name')}@{item.get('version') or '-'}  native={'yes' if item.get('native_ready') else 'no'}  {item.get('path')}")
+            for issue in item.get('issues', []):
+                print(f"  {issue.get('severity', 'issue')}: {issue.get('code')}: {issue.get('message')}")
+        return 0 if res.get('ok') else 1
     if pkg_cmd == 'build':
         res = pkg_build_package_archive(ns.dir, out_path=ns.out)
         print(f"[OK] package archive built: {res['archive']}")
@@ -420,5 +442,5 @@ def _cmd_pkg(ns: argparse.Namespace) -> int:
         from ...registry.server import run_registry_server
         run_registry_server(ns.host, ns.port, ns.data_dir)
         return 0
-    print('usage: mellow pkg <init|publish|install|add|remove|search|info|login|whoami|registry|list|build|seed-core|sync-imports|resolve-runtime|diagnose-imports|update|uninstall|serve> ...')
+    print('usage: mellow pkg <init|publish|install|add|remove|search|info|login|whoami|registry|list|audit|build|seed-core|sync-imports|resolve-runtime|diagnose-imports|update|uninstall|serve> ...')
     return 2

@@ -1,0 +1,31 @@
+{
+  "mellow_version": "1.2.2",
+  "name": "my-web",
+  "version": "0.1.0",
+  "entry": "src/App.mellow",
+  "global_seed": 12345,
+  "permissions": {
+    "allow_ask": false,
+    "allow_wait": true,
+    "allow_storage": true,
+    "storage_dir": "mellow_saves"
+  },
+  "modules": [
+    "math",
+    "time",
+    "list",
+    "map",
+    "string",
+    "json",
+    "ai"
+  ],
+  "libs_dir": "libs",
+  "preset": "web",
+  "starter_packages": [],
+  "web": {
+    "entry": "src/App.mellow",
+    "out_dir": ".mellow/web-dev",
+    "host": "127.0.0.1",
+    "port": 5179
+  }
+}

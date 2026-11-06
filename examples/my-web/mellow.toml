@@ -1,0 +1,9 @@
+name = "my-web"
+version = "0.1.0"
+description = "Mellow web project scaffold"
+entry = "src/App.mellow"
+license = "MIT"
+visibility = "private"
+
+[dependencies]
+# add package = "^1.0.0"

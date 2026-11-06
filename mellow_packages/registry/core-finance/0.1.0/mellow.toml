@@ -1,0 +1,13 @@
+name = "core-finance"
+version = "0.1.0"
+description = "Finance workflow helpers backed by native money primitives."
+entry = "src/main.mel"
+license = "MIT"
+visibility = "public"
+
+authors = ["Mellow Code Team"]
+keywords = ["core", "finance", "money", "workflow", "decimal"]
+badges = ["official"]
+official = true
+[dependencies]
+money = "host"

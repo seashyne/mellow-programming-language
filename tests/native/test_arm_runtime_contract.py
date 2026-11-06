@@ -38,3 +38,27 @@ def test_arm_backend_claim_matches_implemented_kernels() -> None:
     platform = (ROOT / "native" / "standalone" / "src" / "mellowrt_platform.c").read_text(encoding="utf-8")
     assert 'platform.backend = "generic-c"' in platform
     assert "platform.optimized_kernels = 0" in platform
+
+
+def test_release_workflow_packages_windows_linux_and_arm64_native_artifacts() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert "target: windows-x64" in workflow
+    assert "target: linux-x64" in workflow
+    assert "target: linux-arm64" in workflow
+    assert "target: macos-arm64" in workflow
+    assert "aarch64-linux-gnu-gcc" in workflow
+    assert "qemu-aarch64" in workflow
+    assert "package-native-release.ps1" in workflow
+    assert "package-native-release.sh" in workflow
+    assert "dist/*.SHA256SUMS" in workflow
+
+
+def test_native_release_packagers_ship_registry_starters_and_checksums() -> None:
+    powershell_packager = (ROOT / "scripts" / "package-native-release.ps1").read_text(encoding="utf-8")
+    shell_packager = (ROOT / "scripts" / "package-native-release.sh").read_text(encoding="utf-8")
+    for packager in (powershell_packager, shell_packager):
+        assert "starter_packages" in packager
+        assert "mellow_packages" in packager
+        assert "registry" in packager
+        assert "SHA256SUMS" in packager
+        assert "manifest.json" in packager

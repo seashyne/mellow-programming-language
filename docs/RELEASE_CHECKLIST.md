@@ -72,10 +72,12 @@ The `release` workflow builds and uploads:
 
 - `mellow-<version>-windows-x64.zip`
 - `mellow-<version>-linux-x64.tar.gz`
+- `mellow-<version>-linux-arm64.tar.gz`
 - `mellow-<version>-macos-x64.tar.gz`
 - `mellow-<version>-macos-arm64.tar.gz`
 - `mellowlang-<version>.vsix`
 - `mellowlang-<version>.tgz`
+- `mellow-<version>-<target>.SHA256SUMS` for every native archive
 
 Only tag pushes create a GitHub Release. To check packaging without publishing
 a release, run the `release` workflow manually with `workflow_dispatch`.
@@ -88,7 +90,20 @@ Native archives include:
 - `NOTICE.md`
 - `README.md`
 - `INSTALL.md`
-- the matching native install helper.
+- the matching native install helper
+- `share/mellow/starter_packages`
+- `share/mellow/mellow_packages/registry`
+
+Local packaging commands:
+
+```powershell
+.\scripts\package-native-release.ps1 -Version X.Y.Z -Target windows-x64
+```
+
+```sh
+sh scripts/package-native-release.sh --version X.Y.Z --target linux-x64
+sh scripts/package-native-release.sh --version X.Y.Z --target linux-arm64 --cc aarch64-linux-gnu-gcc --cmake-system-processor aarch64
+```
 
 ## Git
 

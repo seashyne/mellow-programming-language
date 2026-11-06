@@ -3,14 +3,19 @@
 ## `.sm`
 
 `.sm` is a reversible container optimized for Mellow source and text-like assets.
-The current codec is `sm1-token-zlib`:
+The current native codec is `sm3-token-native-crc32`:
 
 1. scan repeated tokens and indentation patterns
 2. build a small token dictionary
 3. encode the token stream
-4. compress with zlib
+4. write a dependency-free native C payload
+5. store deterministic size and CRC32 checks so corrupted payloads fail fast
 
 Round-tripping is lossless.
+The Python wrapper remains backward-compatible with older `SM1` /
+`sm1-token-zlib` and `SM2` / `sm2-token-zlib-crc32` payloads.
+The native C implementation lives in `native/sm/` and is exposed to the CLI via
+`src/mellowlang/sm_codec.py`.
 
 ### CLI
 

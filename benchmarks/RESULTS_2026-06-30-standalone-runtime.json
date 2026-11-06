@@ -1,0 +1,25 @@
+{
+  "architecture": "x86_64",
+  "mode": "native",
+  "host": "Windows-11-10.0.26200-SP0",
+  "command": [
+    "build\\standalone-release\\Release\\mellow.exe",
+    "examples\\hello.mellow"
+  ],
+  "repeats": 7,
+  "output": "Hello from MellowLang!\nscore = 1",
+  "median_seconds": 0.007619500000146218,
+  "p95_seconds": 0.008981800000128715,
+  "min_seconds": 0.006862400000045454,
+  "max_seconds": 0.008981800000128715,
+  "runs_per_second": 131.2422074914115,
+  "samples_seconds": [
+    0.006862400000045454,
+    0.007320400000025984,
+    0.008209000000078959,
+    0.007943500000237691,
+    0.007619500000146218,
+    0.008981800000128715,
+    0.0072996999997485545
+  ]
+}

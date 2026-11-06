@@ -26,6 +26,11 @@ jobs:
             os: windows-latest
           - target: linux-x64
             os: ubuntu-latest
+          - target: linux-arm64
+            os: ubuntu-latest
+            cc: aarch64-linux-gnu-gcc
+            processor: aarch64
+            qemu_prefix: qemu-aarch64 -L /usr/aarch64-linux-gnu
           - target: macos-x64
             os: macos-13
           - target: macos-arm64
@@ -44,8 +49,36 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
-      - name: Configure native runtime
+      - name: Install Linux ARM64 cross tools
+        if: matrix.target == 'linux-arm64'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu qemu-user
+
+      - name: Configure native runtime on Windows
+        if: runner.os == 'Windows'
         run: cmake -S native/standalone -B build/standalone-release -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure native runtime on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          CC: ${{ matrix.cc }}
+          MELLOW_PROCESSOR: ${{ matrix.processor }}
+        run: |
+          args=(
+            -S native/standalone
+            -B build/standalone-release
+            -DCMAKE_BUILD_TYPE=Release
+          )
+          if [ -n "${CC:-}" ]; then
+            args+=("-DCMAKE_C_COMPILER=${CC}")
+          fi
+          if [ -n "${MELLOW_PROCESSOR:-}" ]; then
+            args+=("-DCMAKE_SYSTEM_PROCESSOR=${MELLOW_PROCESSOR}")
+          fi
+          cmake "${args[@]}"
 
       - name: Build native runtime
         run: cmake --build build/standalone-release --config Release --parallel 2
@@ -59,43 +92,32 @@ jobs:
           .\build\standalone-release\Release\mellow.exe run examples\hello.mellow
 
       - name: Smoke test native runtime on Unix
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && matrix.target != 'linux-arm64'
         shell: bash
         run: |
           build/standalone-release/mellow doctor
           build/standalone-release/mellow check examples/hello.mellow
           build/standalone-release/mellow run examples/hello.mellow
 
+      - name: Smoke test native runtime on Linux ARM64
+        if: matrix.target == 'linux-arm64'
+        shell: bash
+        run: |
+          ${{ matrix.qemu_prefix }} build/standalone-release/mellow --runtime-info
+          ${{ matrix.qemu_prefix }} build/standalone-release/mellow check examples/hello.mellow
+          ${{ matrix.qemu_prefix }} build/standalone-release/mellow run examples/hello.mellow
+
       - name: Stage native package on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $pkg = "mellow-$env:VERSION-${{ matrix.target }}"
-          New-Item -ItemType Directory -Force -Path "dist/$pkg/bin" | Out-Null
-          Copy-Item build/standalone-release/Release/mellow.exe "dist/$pkg/bin/mellow.exe"
-          Copy-Item build/standalone-release/Release/mellowrt.exe "dist/$pkg/bin/mellowrt.exe"
-          Copy-Item LICENSE "dist/$pkg/LICENSE"
-          Copy-Item NOTICE.md "dist/$pkg/NOTICE.md"
-          Copy-Item README.md "dist/$pkg/README.md"
-          Copy-Item docs/INSTALL.md "dist/$pkg/INSTALL.md"
-          Copy-Item scripts/install-native.ps1 "dist/$pkg/install-native.ps1"
-          Compress-Archive -Path "dist/$pkg/*" -DestinationPath "dist/$pkg.zip" -Force
+          .\scripts\package-native-release.ps1 -Version $env:VERSION -Target "${{ matrix.target }}" -BuildDir "build\standalone-release" -NoBuild
 
       - name: Stage native package on Unix
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          pkg="mellow-$VERSION-${{ matrix.target }}"
-          mkdir -p "dist/$pkg/bin"
-          cp build/standalone-release/mellow "dist/$pkg/bin/mellow"
-          cp build/standalone-release/mellowrt "dist/$pkg/bin/mellowrt"
-          chmod +x "dist/$pkg/bin/mellow" "dist/$pkg/bin/mellowrt"
-          cp LICENSE "dist/$pkg/LICENSE"
-          cp NOTICE.md "dist/$pkg/NOTICE.md"
-          cp README.md "dist/$pkg/README.md"
-          cp docs/INSTALL.md "dist/$pkg/INSTALL.md"
-          cp scripts/install-native.sh "dist/$pkg/install-native.sh"
-          tar -C dist -czf "dist/$pkg.tar.gz" "$pkg"
+          sh scripts/package-native-release.sh --version "$VERSION" --target "${{ matrix.target }}" --build-dir build/standalone-release --no-build
 
       - name: Upload native archive
         uses: actions/upload-artifact@v6
@@ -104,6 +126,7 @@ jobs:
           path: |
             dist/*.zip
             dist/*.tar.gz
+            dist/*.SHA256SUMS
           if-no-files-found: error
 
   vscode:
