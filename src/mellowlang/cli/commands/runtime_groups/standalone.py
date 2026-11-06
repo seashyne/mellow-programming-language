@@ -29,7 +29,6 @@ def _can_use_standalone_native(
     watch: str | None,
     ai_timeline: str | None,
     sandbox_profile: str,
-    allow_data_write: bool,
     project_mode: bool,
 ) -> bool:
     return (
@@ -44,6 +43,5 @@ def _can_use_standalone_native(
         and not watch
         and not ai_timeline
         and str(sandbox_profile or "default").lower() == "default"
-        and not allow_data_write
         and not project_mode
     )

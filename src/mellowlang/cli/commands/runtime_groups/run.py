@@ -155,12 +155,16 @@ def _cmd_run(file: str, *, json_out: bool, engine: str, record_path: str | None,
         watch=watch,
         ai_timeline=ai_timeline,
         sandbox_profile=sandbox_profile,
-        allow_data_write=allow_data_write,
         project_mode=project_mode,
     ):
         native_binary = _standalone_mellow_binary()
         if native_binary is not None:
-            completed = subprocess.run([str(native_binary), str(p)], check=False)
+            native_args = [str(native_binary), str(p)]
+            if allow_data_write:
+                native_args.append("--data-write")
+            if data_max_query_rows is not None:
+                native_args.extend(["--data-max-rows", str(int(data_max_query_rows))])
+            completed = subprocess.run(native_args, check=False)
             return int(completed.returncode)
         message = "standalone native mellow binary not found; build with `cmake -S native/standalone -B build/standalone-release -DCMAKE_BUILD_TYPE=Release && cmake --build build/standalone-release --config Release`"
         if json_out:
