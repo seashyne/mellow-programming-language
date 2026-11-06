@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .builders import _build_c, _build_zig, _find_c_compiler
+from .builders import _build_c, _build_rust, _build_zig, _find_c_compiler
 from .process import _tool_version, _zig_version
 from .runners import _benchmark_runtime, _ratio_summary
 from .workloads import BENCH_DIR, WORKLOADS
@@ -20,11 +20,13 @@ def run_compare(
     python_path: str | None,
     lua_path: str | None,
     keep_zig_binary: bool,
+    rust_path: str | None = None,
 ) -> dict[str, Any]:
     zig = zig_path or shutil.which("zig")
     c_compiler = _find_c_compiler(zig)
     python_exe = python_path or shutil.which("python")
     lua_exe = lua_path or shutil.which("lua") or shutil.which("luajit")
+    rustc = rust_path or shutil.which("rustc")
 
     result: dict[str, Any] = {
         "suite": "native_mellow_comparison",
@@ -44,6 +46,7 @@ def run_compare(
             },
             "python": {"available": bool(python_exe), "path": python_exe, "version": _tool_version([python_exe, "--version"]) if python_exe else None},
             "lua": {"available": bool(lua_exe), "path": lua_exe, "version": _tool_version([lua_exe, "-v"]) if lua_exe else None},
+            "rust": {"available": bool(rustc), "path": rustc, "version": _tool_version([rustc, "--version"]) if rustc else None},
         },
         "summary": {},
     }
@@ -134,6 +137,40 @@ def run_compare(
             result["workloads"][workload]["zig"] = {
                 "available": False,
                 "reason": "zig executable was not found in PATH; pass --zig PATH or install Zig to run this side.",
+            }
+
+        if rustc:
+            unique_rust = f"{workload}_rust_{os.getpid()}_{int(time.time() * 1000)}"
+            rust_bin = BENCH_DIR / "build" / ((unique_rust + ".exe") if os.name == "nt" else unique_rust)
+            try:
+                _build_rust(rustc, BENCH_DIR / f"{workload}.rs", rust_bin)
+                _benchmark_runtime(
+                    result,
+                    workload,
+                    "rust",
+                    [str(rust_bin)],
+                    repeats,
+                    expected,
+                    {"binary": str(rust_bin), "version": result["tools"]["rust"]["version"]},
+                )
+                if not keep_zig_binary:
+                    try:
+                        rust_bin.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+            except subprocess.CalledProcessError as exc:
+                result["workloads"][workload]["rust"] = {
+                    "available": True,
+                    "failed": True,
+                    "version": result["tools"]["rust"]["version"],
+                    "returncode": exc.returncode,
+                    "stdout": exc.stdout,
+                    "stderr": exc.stderr,
+                }
+        else:
+            result["workloads"][workload]["rust"] = {
+                "available": False,
+                "reason": "rustc was not found in PATH; pass --rust PATH or install Rust to run this side.",
             }
 
         if python_exe:

@@ -11,11 +11,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Compare Mellow 2.9.7 native runtime with Zig ReleaseFast.")
+    parser = argparse.ArgumentParser(description="Compare the Mellow native runtime with Zig, C, Rust, Python, and Lua.")
     parser.add_argument("--mellow-binary", type=Path, default=ROOT / "build" / "standalone-release" / "Release" / "mellow.exe")
     parser.add_argument("--zig", help="Path to zig executable. Defaults to PATH lookup.")
     parser.add_argument("--python", help="Path to python executable. Defaults to PATH lookup.")
     parser.add_argument("--lua", help="Path to lua or luajit executable. Defaults to PATH lookup.")
+    parser.add_argument("--rust", help="Path to rustc executable. Defaults to PATH lookup.")
     parser.add_argument("--repeats", type=int, default=10)
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--keep-zig-binary", action="store_true")
@@ -26,7 +27,15 @@ def main() -> int:
     if not args.mellow_binary.exists():
         parser.error(f"Mellow binary not found: {args.mellow_binary}")
 
-    payload = run_compare(args.mellow_binary, args.repeats, args.zig, args.python, args.lua, args.keep_zig_binary)
+    payload = run_compare(
+        args.mellow_binary,
+        args.repeats,
+        args.zig,
+        args.python,
+        args.lua,
+        args.keep_zig_binary,
+        args.rust,
+    )
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)

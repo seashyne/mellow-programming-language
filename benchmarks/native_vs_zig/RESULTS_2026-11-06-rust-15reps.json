@@ -1,0 +1,1141 @@
+{
+  "suite": "native_mellow_comparison",
+  "workload_order": [
+    "sum_loop",
+    "function_calls",
+    "list_index",
+    "branch_mod",
+    "string_concat"
+  ],
+  "workloads": {
+    "sum_loop": {
+      "description": "integer while loop sum; includes Mellow loop super-opcode coverage",
+      "iterations": 2000000,
+      "expected_output": "1999999000000",
+      "mellow": {
+        "binary": "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\sum_loop.mellow"
+          ],
+          "output": "1999999000000",
+          "repeats": 15,
+          "median_ms": 10.831300001882482,
+          "average_ms": 10.894566666684113,
+          "min_ms": 10.441699996590614,
+          "max_ms": 11.491299999761395,
+          "samples_ms": [
+            11.379700001270976,
+            10.441699996590614,
+            10.603200003970414,
+            10.931700002402067,
+            10.614999999233987,
+            11.363499994331505,
+            10.598900000331923,
+            10.929000003670808,
+            10.756399999081623,
+            11.23859999643173,
+            11.039699995308183,
+            10.549600003287196,
+            11.491299999761395,
+            10.831300001882482,
+            10.648900002706796
+          ]
+        }
+      },
+      "c": {
+        "compiler": "gcc",
+        "compiler_path": "C:\\Strawberry\\c\\bin\\gcc.EXE",
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_c_12500_1793949503614.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_c_12500_1793949503614.exe"
+          ],
+          "output": "1999999000000",
+          "repeats": 15,
+          "median_ms": 10.365499998442829,
+          "average_ms": 10.374966666859109,
+          "min_ms": 9.88820000202395,
+          "max_ms": 10.886600000958424,
+          "samples_ms": [
+            10.130800001206808,
+            10.352199999033473,
+            10.012999999162275,
+            10.724599997047335,
+            10.483300000487361,
+            10.886600000958424,
+            10.320699999283534,
+            10.397800004284363,
+            10.365499998442829,
+            10.047000003396533,
+            10.27270000486169,
+            10.767100000521168,
+            10.438999997859355,
+            10.535999994317535,
+            9.88820000202395
+          ]
+        }
+      },
+      "zig": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_zig_12500_1793949503991.exe",
+        "version": "0.16.0",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_zig_12500_1793949503991.exe"
+          ],
+          "output": "1999999000000",
+          "repeats": 15,
+          "median_ms": 9.187900002871174,
+          "average_ms": 10.379993333481252,
+          "min_ms": 8.754000002227258,
+          "max_ms": 26.322400000935886,
+          "samples_ms": [
+            26.322400000935886,
+            9.59780000266619,
+            8.754000002227258,
+            9.532500000204891,
+            9.172100006253459,
+            9.236399993824307,
+            9.086199999728706,
+            9.632500004954636,
+            9.840699996857438,
+            9.11939999787137,
+            9.090300001844298,
+            8.789499996055383,
+            9.27189999492839,
+            9.187900002871174,
+            9.066300000995398
+          ]
+        }
+      },
+      "rust": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_rust_12500_1793949507512.exe",
+        "version": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_rust_12500_1793949507512.exe"
+          ],
+          "output": "1999999000000",
+          "repeats": 15,
+          "median_ms": 10.550799997872673,
+          "average_ms": 10.674533332348801,
+          "min_ms": 10.235200003080536,
+          "max_ms": 12.12390000000596,
+          "samples_ms": [
+            10.235200003080536,
+            10.742899998149369,
+            10.599899993394502,
+            10.687499998311978,
+            10.359200001403224,
+            10.335799997847062,
+            10.436000004119705,
+            11.060400000133086,
+            10.550799997872673,
+            10.28519999817945,
+            10.497199997189455,
+            12.12390000000596,
+            10.974400000122841,
+            10.287599994626362,
+            10.942000000795815
+          ]
+        }
+      },
+      "python": {
+        "binary": "C:\\Program Files\\Python314\\python.EXE",
+        "version": "Python 3.14.3",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "C:\\Program Files\\Python314\\python.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\sum_loop.py"
+          ],
+          "output": "1999999000000",
+          "repeats": 15,
+          "median_ms": 247.07620000117458,
+          "average_ms": 251.2171333330722,
+          "min_ms": 234.79460000089603,
+          "max_ms": 274.4094000008772,
+          "samples_ms": [
+            274.4094000008772,
+            238.02719999366673,
+            241.40539999643806,
+            240.42629999894416,
+            253.25680000241846,
+            239.2775000043912,
+            263.8797999970848,
+            234.79460000089603,
+            269.10469999711495,
+            261.2675999989733,
+            262.88799999747425,
+            247.07620000117458,
+            243.0361000006087,
+            258.50690000515897,
+            240.90050000086194
+          ]
+        }
+      },
+      "lua": {
+        "binary": "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+        "version": "Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\sum_loop.lua"
+          ],
+          "output": "1999999000000",
+          "repeats": 15,
+          "median_ms": 12.546199999633245,
+          "average_ms": 12.670259999867994,
+          "min_ms": 12.128000002121553,
+          "max_ms": 13.61489999544574,
+          "samples_ms": [
+            13.019200006965548,
+            12.52810000005411,
+            12.546199999633245,
+            12.197900003229734,
+            13.61489999544574,
+            12.406899993948173,
+            12.693699994997587,
+            12.473000002501067,
+            12.128000002121553,
+            13.08969999809051,
+            12.643800000660121,
+            13.282400002935901,
+            12.417999998433515,
+            12.626399999135174,
+            12.385699999867938
+          ]
+        }
+      }
+    },
+    "function_calls": {
+      "description": "small function call inside a while loop",
+      "iterations": 200000,
+      "expected_output": "19999900000",
+      "mellow": {
+        "binary": "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\function_calls.mellow"
+          ],
+          "output": "19999900000",
+          "repeats": 15,
+          "median_ms": 10.307799995644018,
+          "average_ms": 10.431006666234072,
+          "min_ms": 10.004299998399802,
+          "max_ms": 11.293600000499282,
+          "samples_ms": [
+            10.21490000130143,
+            10.75690000288887,
+            10.32689999556169,
+            10.365200003434438,
+            10.227999999187887,
+            11.051000001316424,
+            10.38669999979902,
+            10.296000000380445,
+            10.004299998399802,
+            10.664699999324512,
+            10.241199997835793,
+            10.307799995644018,
+            10.108800001034979,
+            10.219099996902514,
+            11.293600000499282
+          ]
+        }
+      },
+      "c": {
+        "compiler": "gcc",
+        "compiler_path": "C:\\Strawberry\\c\\bin\\gcc.EXE",
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\function_calls_c_12500_1793949512268.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\function_calls_c_12500_1793949512268.exe"
+          ],
+          "output": "19999900000",
+          "repeats": 15,
+          "median_ms": 10.266500001307577,
+          "average_ms": 10.253293334972113,
+          "min_ms": 9.816800004045945,
+          "max_ms": 10.721400001784787,
+          "samples_ms": [
+            9.978100002626888,
+            10.397899997769855,
+            9.816800004045945,
+            10.354300000471994,
+            9.925700003805105,
+            10.654400000930764,
+            10.721400001784787,
+            10.561399998550769,
+            9.855299998889677,
+            10.266500001307577,
+            10.009600002376828,
+            10.064200003398582,
+            10.523900004045572,
+            10.203999998338986,
+            10.465900006238371
+          ]
+        }
+      },
+      "zig": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\function_calls_zig_12500_1793949512643.exe",
+        "version": "0.16.0",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\function_calls_zig_12500_1793949512643.exe"
+          ],
+          "output": "19999900000",
+          "repeats": 15,
+          "median_ms": 9.959800001524854,
+          "average_ms": 12.434366665547714,
+          "min_ms": 9.045500002685003,
+          "max_ms": 42.69870000280207,
+          "samples_ms": [
+            42.69870000280207,
+            12.60809999803314,
+            13.452999999572057,
+            10.803400000440888,
+            10.40889999421779,
+            10.021800000686198,
+            9.426999997231178,
+            9.916899995005224,
+            9.75069999549305,
+            9.959800001524854,
+            9.403299998666625,
+            10.457399999722838,
+            9.415300002729055,
+            9.045500002685003,
+            9.145699994405732
+          ]
+        }
+      },
+      "rust": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\function_calls_rust_12500_1793949516154.exe",
+        "version": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\function_calls_rust_12500_1793949516154.exe"
+          ],
+          "output": "19999900000",
+          "repeats": 15,
+          "median_ms": 10.92390000121668,
+          "average_ms": 11.020726665932065,
+          "min_ms": 10.379599996667821,
+          "max_ms": 11.837999998533633,
+          "samples_ms": [
+            11.418599999160506,
+            10.91209999867715,
+            11.16139999794541,
+            10.92390000121668,
+            10.379599996667821,
+            10.835100001713727,
+            10.481900004378986,
+            10.725399995862972,
+            11.30169999669306,
+            10.86840000061784,
+            10.512000000744592,
+            11.24569999956293,
+            11.353100002452265,
+            11.837999998533633,
+            11.353999994753394
+          ]
+        }
+      },
+      "python": {
+        "binary": "C:\\Program Files\\Python314\\python.EXE",
+        "version": "Python 3.14.3",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "C:\\Program Files\\Python314\\python.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\function_calls.py"
+          ],
+          "output": "19999900000",
+          "repeats": 15,
+          "median_ms": 84.85469999868656,
+          "average_ms": 85.33371333469404,
+          "min_ms": 82.53980000154115,
+          "max_ms": 92.2363000063342,
+          "samples_ms": [
+            86.24730000155978,
+            84.85469999868656,
+            85.34040000085952,
+            83.96029999858001,
+            86.43019999726675,
+            85.40100000391249,
+            82.53980000154115,
+            83.55220000521513,
+            82.7348999955575,
+            92.2363000063342,
+            84.53020000160905,
+            82.93499999854248,
+            84.28910000657197,
+            87.21410000725882,
+            87.74019999691518
+          ]
+        }
+      },
+      "lua": {
+        "binary": "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+        "version": "Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\function_calls.lua"
+          ],
+          "output": "19999900000",
+          "repeats": 15,
+          "median_ms": 11.548800001037307,
+          "average_ms": 11.643200000495806,
+          "min_ms": 11.361899996700231,
+          "max_ms": 12.142600004153792,
+          "samples_ms": [
+            11.374699999578297,
+            11.866400003782474,
+            11.361899996700231,
+            11.481499997898936,
+            11.479300002974924,
+            11.968599996180274,
+            11.777800005802419,
+            11.380600000848062,
+            11.503800000355113,
+            11.548800001037307,
+            11.393699998734519,
+            11.912399997527245,
+            11.896700001670979,
+            12.142600004153792,
+            11.559200000192504
+          ]
+        }
+      }
+    },
+    "list_index": {
+      "description": "list/array indexing plus modulo in a loop",
+      "iterations": 500000,
+      "expected_output": "1500000",
+      "mellow": {
+        "binary": "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\list_index.mellow"
+          ],
+          "output": "1500000",
+          "repeats": 15,
+          "median_ms": 11.586200002057012,
+          "average_ms": 11.867906667369729,
+          "min_ms": 11.315600000671111,
+          "max_ms": 14.109999996435363,
+          "samples_ms": [
+            11.405199998989701,
+            12.150900001870468,
+            11.55760000256123,
+            11.62280000426108,
+            12.071500001184177,
+            11.530400006449781,
+            12.466299995139707,
+            14.109999996435363,
+            12.292499995965045,
+            11.31800000439398,
+            11.31599999644095,
+            11.44180000119377,
+            11.833800002932549,
+            11.586200002057012,
+            11.315600000671111
+          ]
+        }
+      },
+      "c": {
+        "compiler": "gcc",
+        "compiler_path": "C:\\Strawberry\\c\\bin\\gcc.EXE",
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\list_index_c_12500_1793949518297.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\list_index_c_12500_1793949518297.exe"
+          ],
+          "output": "1500000",
+          "repeats": 15,
+          "median_ms": 10.56129999778932,
+          "average_ms": 10.58349999996911,
+          "min_ms": 9.936000002198853,
+          "max_ms": 11.806299997260794,
+          "samples_ms": [
+            10.307800002919976,
+            10.423300002003089,
+            10.886299998674076,
+            11.806299997260794,
+            10.725500003900379,
+            10.34559999970952,
+            10.579800000414252,
+            10.592600003292318,
+            10.358699997595977,
+            10.56129999778932,
+            10.397599995485507,
+            9.936000002198853,
+            10.603399998217355,
+            10.400999999546912,
+            10.82730000052834
+          ]
+        }
+      },
+      "zig": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\list_index_zig_12500_1793949518689.exe",
+        "version": "0.16.0",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\list_index_zig_12500_1793949518689.exe"
+          ],
+          "output": "1500000",
+          "repeats": 15,
+          "median_ms": 9.613499998522457,
+          "average_ms": 10.636346666433383,
+          "min_ms": 9.031599998706952,
+          "max_ms": 25.172800000291318,
+          "samples_ms": [
+            25.172800000291318,
+            9.952899999916553,
+            9.502700006123632,
+            9.517099999357015,
+            9.214899997459725,
+            9.768399999302346,
+            9.975299995858222,
+            9.613499998522457,
+            10.08699999511009,
+            9.785100002773106,
+            9.031599998706952,
+            9.282799997890834,
+            9.877700002107304,
+            9.18620000447845,
+            9.577199998602737
+          ]
+        }
+      },
+      "rust": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\list_index_rust_12500_1793949522175.exe",
+        "version": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\list_index_rust_12500_1793949522175.exe"
+          ],
+          "output": "1500000",
+          "repeats": 15,
+          "median_ms": 10.978799997246824,
+          "average_ms": 11.059646666399203,
+          "min_ms": 10.28020000376273,
+          "max_ms": 12.134099997638259,
+          "samples_ms": [
+            11.11289999971632,
+            11.975599998550024,
+            10.978799997246824,
+            11.043300000892486,
+            10.609599994495511,
+            11.270900002273265,
+            10.695500001020264,
+            10.52460000209976,
+            10.677900005248375,
+            10.957499995129183,
+            12.134099997638259,
+            11.687700003676582,
+            10.81749999866588,
+            11.128599995572586,
+            10.28020000376273
+          ]
+        }
+      },
+      "python": {
+        "binary": "C:\\Program Files\\Python314\\python.EXE",
+        "version": "Python 3.14.3",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "C:\\Program Files\\Python314\\python.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\list_index.py"
+          ],
+          "output": "1500000",
+          "repeats": 15,
+          "median_ms": 114.55779999960214,
+          "average_ms": 117.2996466664093,
+          "min_ms": 110.29559999587946,
+          "max_ms": 154.1639999995823,
+          "samples_ms": [
+            118.08549999841489,
+            114.77710000326624,
+            115.16940000001341,
+            113.01790000288747,
+            114.55779999960214,
+            112.66220000106841,
+            117.92289999721106,
+            112.25449999619741,
+            119.7217000008095,
+            112.30210000212537,
+            110.29559999587946,
+            113.92049999994924,
+            154.1639999995823,
+            118.28619999869261,
+            112.35730000043986
+          ]
+        }
+      },
+      "lua": {
+        "binary": "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+        "version": "Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\list_index.lua"
+          ],
+          "output": "1500000",
+          "repeats": 15,
+          "median_ms": 15.00079999823356,
+          "average_ms": 15.204873333277646,
+          "min_ms": 14.683600005810149,
+          "max_ms": 16.42859999992652,
+          "samples_ms": [
+            15.366999999969266,
+            15.122699995117728,
+            15.00079999823356,
+            14.856599998893216,
+            15.556500002276152,
+            15.619799996784423,
+            14.719400001922622,
+            15.141600000788458,
+            14.683600005810149,
+            15.984899997420143,
+            16.42859999992652,
+            14.925499999662861,
+            14.8438999967766,
+            14.86060000024736,
+            14.96160000533564
+          ]
+        }
+      }
+    },
+    "branch_mod": {
+      "description": "branching plus modulo in a loop",
+      "iterations": 500000,
+      "expected_output": "1000000",
+      "mellow": {
+        "binary": "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\branch_mod.mellow"
+          ],
+          "output": "1000000",
+          "repeats": 15,
+          "median_ms": 10.727200002293102,
+          "average_ms": 12.663720001000911,
+          "min_ms": 10.123600004590116,
+          "max_ms": 19.725699996342883,
+          "samples_ms": [
+            10.238199996820185,
+            10.256400004436728,
+            10.666400004993193,
+            12.038200002280064,
+            10.965400004351977,
+            10.636500002874527,
+            10.123600004590116,
+            10.530600004130974,
+            10.591799997200724,
+            15.971599998010788,
+            19.725699996342883,
+            18.848799998522736,
+            12.543999997433275,
+            16.091400000732392,
+            10.727200002293102
+          ]
+        }
+      },
+      "c": {
+        "compiler": "gcc",
+        "compiler_path": "C:\\Strawberry\\c\\bin\\gcc.EXE",
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\branch_mod_c_12500_1793949524896.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\branch_mod_c_12500_1793949524896.exe"
+          ],
+          "output": "1000000",
+          "repeats": 15,
+          "median_ms": 10.745200001110788,
+          "average_ms": 10.615273333193423,
+          "min_ms": 10.00979999662377,
+          "max_ms": 11.348699998052325,
+          "samples_ms": [
+            10.175499999604654,
+            11.348699998052325,
+            10.588700002699625,
+            10.199000003922265,
+            10.549700004048645,
+            11.259300001256634,
+            10.745200001110788,
+            10.900799999944866,
+            10.786799997731578,
+            10.00979999662377,
+            10.758600001281593,
+            10.235399997327477,
+            10.753099995781668,
+            10.156199998164084,
+            10.762300000351388
+          ]
+        }
+      },
+      "zig": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\branch_mod_zig_12500_1793949525274.exe",
+        "version": "0.16.0",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\branch_mod_zig_12500_1793949525274.exe"
+          ],
+          "output": "1000000",
+          "repeats": 15,
+          "median_ms": 9.388200000103097,
+          "average_ms": 10.46548666684733,
+          "min_ms": 8.831899998767767,
+          "max_ms": 27.180099998076912,
+          "samples_ms": [
+            27.180099998076912,
+            9.648599996580742,
+            9.11890000134008,
+            9.447199998248834,
+            9.372400003485382,
+            9.393600004841574,
+            9.61259999894537,
+            9.046500003023539,
+            8.90590000199154,
+            9.451999998418614,
+            9.030599998368416,
+            8.831899998767767,
+            9.388200000103097,
+            9.559099999023601,
+            8.994700001494493
+          ]
+        }
+      },
+      "rust": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\branch_mod_rust_12500_1793949528777.exe",
+        "version": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\branch_mod_rust_12500_1793949528777.exe"
+          ],
+          "output": "1000000",
+          "repeats": 15,
+          "median_ms": 10.816800000611693,
+          "average_ms": 10.863919999974314,
+          "min_ms": 10.396999998192769,
+          "max_ms": 12.230399996042252,
+          "samples_ms": [
+            10.487500003364403,
+            10.579000001598615,
+            11.010599999281112,
+            10.842299998330418,
+            12.230399996042252,
+            11.507600000186358,
+            11.097299997345544,
+            11.004399995726999,
+            10.616100000333972,
+            10.816800000611693,
+            10.398499995062593,
+            10.56800000515068,
+            10.396999998192769,
+            10.89450000290526,
+            10.508800005482044
+          ]
+        }
+      },
+      "python": {
+        "binary": "C:\\Program Files\\Python314\\python.EXE",
+        "version": "Python 3.14.3",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "C:\\Program Files\\Python314\\python.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\branch_mod.py"
+          ],
+          "output": "1000000",
+          "repeats": 15,
+          "median_ms": 113.18109999410808,
+          "average_ms": 113.92670666488507,
+          "min_ms": 110.51170000428101,
+          "max_ms": 121.56990000221413,
+          "samples_ms": [
+            112.82309999660356,
+            112.9506999932346,
+            121.56990000221413,
+            111.79809999885038,
+            112.34349999722326,
+            116.45640000642743,
+            114.10939999768743,
+            111.98670000158018,
+            111.52179999771761,
+            114.2489999983809,
+            115.69439999584574,
+            115.22619999595918,
+            113.18109999410808,
+            110.51170000428101,
+            114.47859999316279
+          ]
+        }
+      },
+      "lua": {
+        "binary": "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+        "version": "Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\branch_mod.lua"
+          ],
+          "output": "1000000",
+          "repeats": 15,
+          "median_ms": 12.350699995295145,
+          "average_ms": 12.482086666568648,
+          "min_ms": 12.00799999787705,
+          "max_ms": 13.375100003031548,
+          "samples_ms": [
+            12.214499998663086,
+            12.00799999787705,
+            12.05130000016652,
+            12.096099999325816,
+            13.375100003031548,
+            12.261299998499453,
+            13.229399999545421,
+            13.058500000624917,
+            12.350699995295145,
+            12.011200000415556,
+            12.570400002005044,
+            12.503299993113615,
+            12.942500005010515,
+            12.478800003009383,
+            12.08020000194665
+          ]
+        }
+      }
+    },
+    "string_concat": {
+      "description": "repeated string append followed by length",
+      "iterations": 2000,
+      "expected_output": "2000",
+      "mellow": {
+        "binary": "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\string_concat.mellow"
+          ],
+          "output": "2000",
+          "repeats": 15,
+          "median_ms": 10.512399996514432,
+          "average_ms": 10.502919999028865,
+          "min_ms": 10.122599996975623,
+          "max_ms": 11.12029999785591,
+          "samples_ms": [
+            10.189199994783849,
+            10.245699995721225,
+            10.460800003784243,
+            10.608299999148585,
+            10.254599998006597,
+            11.12029999785591,
+            10.685200002626516,
+            10.758299998997245,
+            10.122599996975623,
+            10.617499996442348,
+            10.191200002736878,
+            10.938100000203121,
+            10.512399996514432,
+            10.619200002111029,
+            10.220399999525398
+          ]
+        }
+      },
+      "c": {
+        "compiler": "gcc",
+        "compiler_path": "C:\\Strawberry\\c\\bin\\gcc.EXE",
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\string_concat_c_12500_1793949531368.exe",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\string_concat_c_12500_1793949531368.exe"
+          ],
+          "output": "2000",
+          "repeats": 15,
+          "median_ms": 10.363999994297046,
+          "average_ms": 10.331013333052397,
+          "min_ms": 9.672599997429643,
+          "max_ms": 11.052199995901901,
+          "samples_ms": [
+            10.184400001890026,
+            10.23690000147326,
+            10.363999994297046,
+            10.775999995530583,
+            9.952100001100916,
+            10.637700004735962,
+            11.052199995901901,
+            10.611000005155802,
+            10.263700001814868,
+            10.076400001707952,
+            9.672599997429643,
+            10.371500000474043,
+            10.40419999480946,
+            9.891599998809397,
+            10.470900000655092
+          ]
+        }
+      },
+      "zig": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\string_concat_zig_12500_1793949531755.exe",
+        "version": "0.16.0",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\string_concat_zig_12500_1793949531755.exe"
+          ],
+          "output": "2000",
+          "repeats": 15,
+          "median_ms": 9.319500000856351,
+          "average_ms": 10.439126666460652,
+          "min_ms": 9.009699999296572,
+          "max_ms": 25.851300000795163,
+          "samples_ms": [
+            25.851300000795163,
+            9.083899996767286,
+            9.250199997040909,
+            9.437699998670723,
+            9.319500000856351,
+            9.262899999157526,
+            9.093200002098456,
+            9.640600001148414,
+            9.238700004061684,
+            9.459299995796755,
+            9.321099998487625,
+            9.03180000022985,
+            9.513600001810119,
+            10.073400000692345,
+            9.009699999296572
+          ]
+        }
+      },
+      "rust": {
+        "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\string_concat_rust_12500_1793949535278.exe",
+        "version": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\string_concat_rust_12500_1793949535278.exe"
+          ],
+          "output": "2000",
+          "repeats": 15,
+          "median_ms": 10.716600001615006,
+          "average_ms": 10.80510666652117,
+          "min_ms": 10.47159999870928,
+          "max_ms": 11.512799996125977,
+          "samples_ms": [
+            11.512799996125977,
+            10.47159999870928,
+            10.716600001615006,
+            10.7064999974682,
+            10.49040000361856,
+            11.358700001437683,
+            10.768499996629544,
+            11.116999994555954,
+            10.72060000296915,
+            10.747400003310759,
+            10.553299995081034,
+            10.644300004059914,
+            11.053700000047684,
+            10.584199997538235,
+            10.63100000465056
+          ]
+        }
+      },
+      "python": {
+        "binary": "C:\\Program Files\\Python314\\python.EXE",
+        "version": "Python 3.14.3",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "C:\\Program Files\\Python314\\python.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\string_concat.py"
+          ],
+          "output": "2000",
+          "repeats": 15,
+          "median_ms": 61.15870000212453,
+          "average_ms": 61.78864000054697,
+          "min_ms": 60.26679999922635,
+          "max_ms": 65.49250000534812,
+          "samples_ms": [
+            60.650400002487004,
+            60.954900000069756,
+            62.38570000277832,
+            65.49250000534812,
+            60.26679999922635,
+            61.894499995105434,
+            61.41609999758657,
+            60.89320000319276,
+            61.15870000212453,
+            60.79479999607429,
+            60.35249999695225,
+            62.88480000512209,
+            60.95820000336971,
+            62.59159999899566,
+            64.13489999977173
+          ]
+        }
+      },
+      "lua": {
+        "binary": "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+        "version": "Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio",
+        "available": true,
+        "benchmark": {
+          "command": [
+            "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+            "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\string_concat.lua"
+          ],
+          "output": "2000",
+          "repeats": 15,
+          "median_ms": 12.424300002749078,
+          "average_ms": 12.527860001137014,
+          "min_ms": 12.088100003893487,
+          "max_ms": 13.489400000253227,
+          "samples_ms": [
+            12.717600002360996,
+            12.547500002256129,
+            12.29629999579629,
+            12.457199998607393,
+            12.418300000717863,
+            12.21540000551613,
+            12.424300002749078,
+            12.241700002050493,
+            12.254200002644211,
+            13.243000001239125,
+            13.489400000253227,
+            12.318699999013916,
+            12.555699999211356,
+            12.650500000745524,
+            12.088100003893487
+          ]
+        }
+      }
+    }
+  },
+  "mellow": {
+    "binary": "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+    "version": "Mellow Programming Language 2.9.10 (Full Native C)",
+    "runtime_info": "{\"runtime\":\"mellow-c\",\"architecture\":\"x86_64\",\"backend\":\"generic-c\",\"pointer_bits\":64,\"little_endian\":true,\"arm_neon_available\":false,\"optimized_kernels\":false}"
+  },
+  "tools": {
+    "zig": {
+      "available": true,
+      "path": "tools/zig/zig-x86_64-windows-0.16.0/zig.exe",
+      "version": "0.16.0"
+    },
+    "c": {
+      "available": true,
+      "compiler": "gcc",
+      "path": "C:\\Strawberry\\c\\bin\\gcc.EXE"
+    },
+    "python": {
+      "available": true,
+      "path": "C:\\Program Files\\Python314\\python.EXE",
+      "version": "Python 3.14.3"
+    },
+    "lua": {
+      "available": true,
+      "path": "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+      "version": "Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio"
+    },
+    "rust": {
+      "available": true,
+      "path": "C:\\Users\\seash\\.cargo\\bin\\rustc.EXE",
+      "version": "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
+    }
+  },
+  "summary": {
+    "sum_loop": {
+      "mellow_median_ms": 10.831300001882482,
+      "zig_median_ms": 9.187900002871174,
+      "zig_faster_by": 1.1788656818748302,
+      "c_median_ms": 10.365499998442829,
+      "c_faster_by": 1.0449375335014837,
+      "rust_median_ms": 10.550799997872673,
+      "rust_faster_by": 1.026585662136176,
+      "python_median_ms": 247.07620000117458,
+      "mellow_faster_than_python_by": 22.811315350718075,
+      "lua_median_ms": 12.546199999633245,
+      "mellow_faster_than_lua_by": 1.1583281782844823
+    },
+    "function_calls": {
+      "mellow_median_ms": 10.307799995644018,
+      "zig_median_ms": 9.959800001524854,
+      "zig_faster_by": 1.0349404600560137,
+      "c_median_ms": 10.266500001307577,
+      "c_faster_by": 1.0040227920256348,
+      "rust_median_ms": 10.92390000121668,
+      "rust_faster_by": 0.9436007281736338,
+      "python_median_ms": 84.85469999868656,
+      "mellow_faster_than_python_by": 8.232086384538444,
+      "lua_median_ms": 11.548800001037307,
+      "mellow_faster_than_lua_by": 1.1203942651116363
+    },
+    "list_index": {
+      "mellow_median_ms": 11.586200002057012,
+      "zig_median_ms": 9.613499998522457,
+      "zig_faster_by": 1.2052010197990064,
+      "c_median_ms": 10.56129999778932,
+      "c_faster_by": 1.0970429780881352,
+      "rust_median_ms": 10.978799997246824,
+      "rust_faster_by": 1.0553248082634266,
+      "python_median_ms": 114.55779999960214,
+      "mellow_faster_than_python_by": 9.88743505025492,
+      "lua_median_ms": 15.00079999823356,
+      "mellow_faster_than_lua_by": 1.2947126750418878
+    },
+    "branch_mod": {
+      "mellow_median_ms": 10.727200002293102,
+      "zig_median_ms": 9.388200000103097,
+      "zig_faster_by": 1.1426258497023178,
+      "c_median_ms": 10.745200001110788,
+      "c_faster_by": 0.9983248335241945,
+      "rust_median_ms": 10.816800000611693,
+      "rust_faster_by": 0.9917165891656013,
+      "python_median_ms": 113.18109999410808,
+      "mellow_faster_than_python_by": 10.55085203687019,
+      "lua_median_ms": 12.350699995295145,
+      "mellow_faster_than_lua_by": 1.151344245716962
+    },
+    "string_concat": {
+      "mellow_median_ms": 10.512399996514432,
+      "zig_median_ms": 9.319500000856351,
+      "zig_faster_by": 1.1280004287299177,
+      "c_median_ms": 10.363999994297046,
+      "c_faster_by": 1.0143187960535551,
+      "rust_median_ms": 10.716600001615006,
+      "rust_faster_by": 0.980945448643245,
+      "python_median_ms": 61.15870000212453,
+      "mellow_faster_than_python_by": 5.81776759088341,
+      "lua_median_ms": 12.424300002749078,
+      "mellow_faster_than_lua_by": 1.1818709340272981
+    }
+  }
+}

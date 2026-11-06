@@ -50,4 +50,4 @@ python benchmarks\run_all.py --profile quick --skip-cross-language
 - Python package runtime, compile cache, and CLI startup.
 - Data stream core throughput.
 - Native data transform throughput.
-- Cross-language microbenchmarks against Zig, C, Python, and Lua when available.
+- Cross-language microbenchmarks against Zig, C, Rust, Python, and Lua when available.
