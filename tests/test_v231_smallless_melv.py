@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from mellowlang.sm_codec import encode_file, decode_file, inspect_file
+import json
+import struct
+import zlib
+
+import pytest
+
+from mellowlang.sm_codec import CODEC_V2, CODEC_V3, decode_file, decode_sm_bytes, encode_file, inspect_file
 from mellowlang.melv_codec import inspect_melv
 from mellowlang.melv_native_codec import (
     encode_ppm_sequence_to_melv,
@@ -16,8 +22,53 @@ def test_sm_roundtrip(tmp_path: Path):
     packed = encode_file(src)
     info = inspect_file(packed["output"])
     out = decode_file(packed["output"], tmp_path / "restored.mel")
-    assert info["codec"] == "sm1-token-zlib"
+    assert info["codec"] in {CODEC_V2, CODEC_V3}
+    assert info["version"] in {2, 3}
+    assert info["checksum_ok"] is True
     assert Path(out["output"]).read_text(encoding="utf-8") == src.read_text(encoding="utf-8")
+
+
+def test_sm_reads_legacy_sm1_payload():
+    text = "keep name = \"mellow\"\nkeep name = \"mellow\"\n"
+    dictionary = ["keep", "name", "mellow", "\n"]
+    token_stream = bytearray()
+    for ch in text:
+        data = ch.encode("utf-8")
+        token_stream.append(len(data))
+        token_stream.extend(data)
+    header = {
+        "dictionary": dictionary,
+        "original_size": len(text.encode("utf-8")),
+        "token_stream_size": len(token_stream),
+        "codec": "sm1-token-zlib",
+    }
+    header_blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    payload = b"SM1\x00" + struct.pack("<I", len(header_blob)) + header_blob + zlib.compress(bytes(token_stream), level=9)
+    assert decode_sm_bytes(payload) == text
+
+
+def test_sm_rejects_corrupt_payload(tmp_path: Path):
+    src = tmp_path / "demo.mel"
+    src.write_text("keep n = 1\nkeep n = 1\n", encoding="utf-8")
+    packed = encode_file(src)
+    data = bytearray(Path(packed["output"]).read_bytes())
+    data[-1] ^= 0x33
+    with pytest.raises(Exception):
+        decode_sm_bytes(bytes(data))
+
+
+def test_native_sm3_roundtrip_when_extension_is_available():
+    try:
+        from mellowlang import _smnative  # type: ignore
+    except Exception:
+        pytest.skip("native SM extension is not built")
+    text = b"keep score = score + 1\nkeep score = score + 1\n"
+    packed = _smnative.pack_bytes(text)
+    info = _smnative.inspect_bytes(packed)
+    assert info["codec"] == CODEC_V3
+    assert info["version"] == 3
+    assert info["checksum_ok"] is True
+    assert _smnative.unpack_bytes(packed) == text
 
 
 def test_melv_inspect_fixture(tmp_path: Path):

@@ -1,5 +1,0 @@
-import "pkg:core-print" as out
-
-out.banner("starter")
-out.kv("mode", "demo")
-out.success("ready")

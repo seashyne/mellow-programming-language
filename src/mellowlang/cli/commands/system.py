@@ -16,7 +16,6 @@ from ... import __version__
 from ...compiler import Compiler
 from ...error_explain import explain as explain_error
 from ...host.modules import MODULE_ALLOWLIST
-from ...lint import lint_source
 from ..common import (
     _cli_line,
     _find_project_root,
@@ -663,6 +662,7 @@ def _cmd_assistant(file: str, mode: str, json_out: bool) -> int:
       - diagnose: try compile; if ok, print summary + lints count
     """
     from ...assistant import analyze_source, render_human
+    from ...diagnostics import diagnostics_for_source
 
     p = Path(file)
     if not p.exists():
@@ -675,14 +675,21 @@ def _cmd_assistant(file: str, mode: str, json_out: bool) -> int:
     src = _read_text(p)
 
     if mode == "diagnose":
-        # 1) compile (best signal)
-        try:
-            Compiler().compile(src, filename=str(p))
-        except Exception as e:
+        diag_payload = diagnostics_for_source(src, filename=str(p), include_lints=True)
+        if not diag_payload.get("compile_ok", False):
             if json_out:
-                _json_print({"ok": False, "stage": "compile", "error": str(e)})
+                _json_print({"ok": False, "stage": "compile", **diag_payload})
             else:
-                _print_pretty_error(e, filename=str(p), source_lines=src.splitlines(True))
+                first = (diag_payload.get("diagnostics") or [{}])[0]
+                print(f"{first.get('kind', 'ERROR')}: {first.get('message', 'compile failed')}")
+                if first.get("line"):
+                    print(f"at {p}:{first.get('line')}:{first.get('col') or 1}")
+                if first.get("excerpt"):
+                    print(first.get("excerpt"))
+                for hint in first.get("hints") or []:
+                    print(f"hint: {hint.get('action')}")
+                print("\nAI context:")
+                print(diag_payload.get("ai_prompt", ""))
             return 1
 
     # 2) AST-based assistant report
@@ -696,9 +703,10 @@ def _cmd_assistant(file: str, mode: str, json_out: bool) -> int:
         return 2
 
     if mode == "diagnose":
-        issues = lint_source(src)
+        diag_payload = diagnostics_for_source(src, filename=str(p), include_lints=True)
         payload = rep.to_dict()
-        payload["lint_issues"] = len(issues)
+        payload["lint_issues"] = len(diag_payload.get("diagnostics") or [])
+        payload["diagnostics"] = diag_payload
         if json_out:
             _json_print({"ok": True, **payload})
         else:

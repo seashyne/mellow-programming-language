@@ -1,0 +1,67 @@
+{
+  "workload": "sum_loop",
+  "iterations": 2000000,
+  "expected_output": "1999999000000",
+  "mellow": {
+    "binary": "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+    "version": "Mellow Programming Language 2.9.7 (Full Native C)",
+    "runtime_info": "{\"runtime\":\"mellow-c\",\"architecture\":\"x86_64\",\"backend\":\"generic-c\",\"pointer_bits\":64,\"little_endian\":true,\"arm_neon_available\":false,\"optimized_kernels\":false}",
+    "benchmark": {
+      "command": [
+        "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\sum_loop.mellow"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 5.855699999301578,
+      "average_ms": 6.0316699997201795,
+      "min_ms": 5.795700002636295,
+      "max_ms": 6.639399998675799,
+      "samples_ms": [
+        6.4122000003408175,
+        6.2099999995552935,
+        6.052400000044145,
+        5.854200000612764,
+        5.842399998073233,
+        5.842899998242501,
+        5.795700002636295,
+        5.857199997990392,
+        5.810300001030555,
+        6.639399998675799
+      ]
+    }
+  },
+  "zig": {
+    "available": true,
+    "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_zig_9416_1782652353922.exe",
+    "version": "0.16.0",
+    "benchmark": {
+      "command": [
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_zig_9416_1782652353922.exe"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 5.006100000173319,
+      "average_ms": 6.453880000481149,
+      "min_ms": 4.629600000043865,
+      "max_ms": 18.438300001434982,
+      "samples_ms": [
+        18.438300001434982,
+        4.865200000494951,
+        4.894800000329269,
+        4.721900000731694,
+        4.629600000043865,
+        5.222100000537466,
+        5.933800002821954,
+        5.958599998848513,
+        4.7570999995514285,
+        5.117400000017369
+      ]
+    }
+  },
+  "comparison": {
+    "mellow_median_ms": 5.855699999301578,
+    "zig_median_ms": 5.006100000173319,
+    "zig_faster_by": 1.1697129500207435
+  }
+}

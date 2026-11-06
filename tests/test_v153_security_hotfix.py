@@ -11,8 +11,8 @@ import mellowlang.package_manager as pm
 def test_login_with_token_does_not_save_invalid_token(tmp_path: Path, monkeypatch):
     cfg_dir = tmp_path / 'cfg'
     monkeypatch.setenv('MELLOW_CONFIG_DIR', str(cfg_dir))
-    pm.CONFIG_HOME = cfg_dir
-    pm.CONFIG_FILE = cfg_dir / 'config.json'
+    monkeypatch.setattr(pm, 'CONFIG_HOME', cfg_dir)
+    monkeypatch.setattr(pm, 'CONFIG_FILE', cfg_dir / 'config.json')
 
     def fake_request(method, url, payload=None, token=None):
         return {'ok': False, 'error': 'invalid publish token'}

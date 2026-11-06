@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -12,20 +14,50 @@ from mellowlang.vm import MellowVM, RunConfig
 from mellowlang.vm.cbridge import c_vm_available, c_vm_capabilities
 
 
-def _run(source: str, *, engine: str, **config: object) -> tuple[str, MellowVM]:
+ROOT = Path(__file__).resolve().parents[2]
+STORAGE_PROGRAM = (ROOT / "tests" / "fixtures" / "storage_core.mellow").read_text(encoding="utf-8")
+
+STORAGE_SANDBOX_CASES = {
+    "storage_traversal": (
+        'let slot = storage.save("../evil", {"a": 1})\nprint(slot)\n',
+        "invalid storage path",
+    ),
+    "storage_dir_traversal": (
+        'let root = storage_dir("../outside")\nprint(root)\n',
+        'storage_dir: ".." traversal is blocked',
+    ),
+    "fs_traversal": (
+        'let body = fs_read("../secret.txt")\nprint(body)\n',
+        'fs: ".." traversal is blocked',
+    ),
+    "missing_folder": (
+        'let slot = storage.save("nodir/hero", {"a": 1})\nprint(slot)\n',
+        "Folder not found:",
+    ),
+}
+
+
+def _run(source: str, *, engine: str, cwd: Path | None = None, **config: object) -> tuple[str, MellowVM]:
     program = Compiler().compile(textwrap.dedent(source).lstrip("\n"), filename="<native-stdlib>")
     vm = MellowVM()
     output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        vm.run(
-            program,
-            config=RunConfig(
-                engine=engine,
-                native_allow_fallback=False,
-                native_require=(engine == "c"),
-                **config,
-            ),
-        )
+    previous = os.getcwd()
+    if cwd is not None:
+        os.chdir(cwd)
+    try:
+        with contextlib.redirect_stdout(output):
+            vm.run(
+                program,
+                config=RunConfig(
+                    engine=engine,
+                    native_allow_fallback=False,
+                    native_require=(engine == "c"),
+                    **config,
+                ),
+            )
+    finally:
+        if cwd is not None:
+            os.chdir(previous)
     return output.getvalue(), vm
 
 
@@ -33,6 +65,10 @@ def _assert_strict_native(vm: MellowVM) -> None:
     assert c_vm_available(), "native C extension is required for v2.9.0 stdlib parity"
     assert vm.last_engine == "c"
     assert vm.last_native_result.get("used_fallback") is False
+
+
+def _tree(root: Path) -> list[str]:
+    return sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
 
 
 def test_native_extension_reports_data_transform_acceleration() -> None:
@@ -141,3 +177,39 @@ def test_native_sqlite_lifecycle_matches_python() -> None:
     native_output, native_vm = _run(source, engine="c", **options)
     _assert_strict_native(native_vm)
     assert native_output == py_output
+
+
+def test_native_storage_matches_python_write_for_write(tmp_path: Path) -> None:
+    python_dir = tmp_path / "py"
+    native_dir = tmp_path / "c"
+    python_dir.mkdir()
+    native_dir.mkdir()
+
+    py_output, _ = _run(STORAGE_PROGRAM, engine="py", cwd=python_dir)
+    native_output, native_vm = _run(STORAGE_PROGRAM, engine="c", cwd=native_dir)
+    _assert_strict_native(native_vm)
+    assert native_output == py_output == "storage ok\n"
+
+    saved = Path("mellow_fixture_saves") / "profiles" / "hero.json"
+    assert (native_dir / saved).read_bytes() == (python_dir / saved).read_bytes()
+    assert _tree(native_dir) == _tree(python_dir)
+
+
+@pytest.mark.parametrize("engine", ["py", "c"])
+@pytest.mark.parametrize(
+    ("case", "source", "fragment"),
+    [(name, source, fragment) for name, (source, fragment) in sorted(STORAGE_SANDBOX_CASES.items())],
+)
+def test_native_storage_rejects_the_same_paths_as_python(
+    engine: str,
+    case: str,
+    source: str,
+    fragment: str,
+    tmp_path: Path,
+) -> None:
+    workdir = tmp_path / f"{case}-{engine}"
+    workdir.mkdir()
+    with pytest.raises(MellowLangRuntimeError) as reference:
+        _run(source, engine=engine, cwd=workdir)
+    assert fragment in str(reference.value)
+    assert list(workdir.rglob("*.json")) == []

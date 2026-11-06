@@ -38,10 +38,12 @@ python benchmarks/native_data_transform_benchmark.py --rows 1000 --rounds 250 --
 The benchmark reports elapsed time and rows per second. Performance depends on
 storage, Python version, record width, and transformation complexity.
 
-On the v2.7.1 development machine, repeated native transform runs reached about
-8.3-10.8 million rows/second and were about 3.2-4.1x faster than the Python VM
-for the same where+project+sum workload. This benchmark measures in-memory
-transforms, not JSONL/CSV disk parsing.
+Measured 2026-11-05 on commit `13b67178` (Windows 11, Intel64, Python 3.14.3)
+with `native_data_transform_benchmark.py --rows 1000 --rounds 250 --repeats 7`:
+the C engine sustained 8.2-8.9 million rows/second and was 3.2-3.4x faster than
+the Python VM on the same where+project+sum workload. These are measurements of
+one machine, not a language guarantee; re-run the command to refresh them. The
+benchmark measures in-memory transforms, not JSONL/CSV disk parsing.
 
 ## Boundaries
 

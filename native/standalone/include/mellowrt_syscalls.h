@@ -3,10 +3,24 @@
 
 #include "mellowrt.h"
 
+/* MT19937 state, seeded the same way CPython's random.Random(seed) is, so a
+ * Mellow program gets the same sequence on the standalone runtime without
+ * linking a Python host. */
+typedef struct {
+    uint32_t state[624];
+    int index;
+    int gauss_valid;
+    double gauss_next;
+} MRngState;
+
 typedef struct {
     int argc;
     char **argv;
     int script_arg_start;
+    int64_t rng_seed;
+    int rng_seed_set;
+    int rng_ready;
+    MRngState rng;
     MVM *vm;
     uint64_t gc_collections;
     uint64_t gc_freed;
@@ -20,6 +34,16 @@ typedef struct {
     uint64_t scheduler_worker_changes;
     int recv_would_block;
     void *native_registry;
+    char storage_dir[512];
+    MValue server_request;
+    MValue server_response_body;
+    int server_response_set;
+    int server_response_status;
+    char server_response_content_type[64];
+    char syscall_error[256];
+    int allow_data_write;
+    long long data_max_query_rows;
+    void *data_state;
 } MellowRuntimeContext;
 
 int mellowrt_default_syscall(
@@ -30,6 +54,12 @@ int mellowrt_default_syscall(
     MValue *out_result
 );
 
+/* Resolve a syscall name (behaviour-tree leaves) to its runtime id. */
+int mellowrt_builtin_lookup(const char *name, size_t len);
+
 void mellowrt_collect_garbage(MellowRuntimeContext *ctx);
+
+/* Free open std.data streams when a runtime context is torn down. */
+void mellowrt_data_release(MellowRuntimeContext *ctx);
 
 #endif

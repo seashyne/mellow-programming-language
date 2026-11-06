@@ -1,0 +1,23 @@
+{
+  "name": "core-server",
+  "version": "0.1.0",
+  "description": "HTTP server route and response helpers for Mellow server apps.",
+  "entry": "src/main.mellow",
+  "license": "MIT",
+  "visibility": "public",
+  "authors": [
+    "Mellow Code Team"
+  ],
+  "keywords": [
+    "core",
+    "server",
+    "http",
+    "api",
+    "route"
+  ],
+  "badges": [
+    "official"
+  ],
+  "official": true,
+  "dependencies": {}
+}

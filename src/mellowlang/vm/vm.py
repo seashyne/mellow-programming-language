@@ -235,9 +235,9 @@ class MellowVM:
         }
         self.last_debug_capabilities = dict(native_caps)
         if debug_requested and engine in ('auto', 'c') and not c_vm_debug_supported():
-            if native_require or not native_allow_fallback:
-                raise MellowLangRuntimeError('NATIVE_REQUIRED', 'native C debugger parity is not complete yet in v2.4.0')
             self.last_engine_detail = 'python-debug-bridge-for-c-parity' if native_caps.get('available') else 'python-debug-path'
+            self.last_debug_capabilities['debug_bridge'] = 'python-inspector'
+            self.last_debug_capabilities['engine_contract'] = 'native-core-diagnostics+python-debugger-runtime'
             engine = 'py'
 
         # ---- C-accelerated VM (hybrid/native-first) ----

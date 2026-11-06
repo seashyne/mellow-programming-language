@@ -1,0 +1,9 @@
+let i = 0
+let text = ""
+let n = 2000
+
+while i < n:
+    text = text + "a"
+    i = i + 1
+
+print(len(text))

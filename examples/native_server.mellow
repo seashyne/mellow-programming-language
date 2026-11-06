@@ -1,0 +1,8 @@
+use server as server
+
+let req = server.request()
+let method = req["method"]
+let path = req["path"]
+
+if path == "/hello":
+    server.json({"ok": true, "method": method, "path": path})

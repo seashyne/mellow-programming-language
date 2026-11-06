@@ -2,7 +2,9 @@
   "name": "core-sm",
   "version": "0.1.0",
   "entry": "src/main.mel",
-  "kind": "starter-package",
+  "description": "Mellow Smallless reversible compression starter package.",
+  "visibility": "public",
+  "dependencies": {},
   "authors": [
     "Mellow Code Team"
   ],

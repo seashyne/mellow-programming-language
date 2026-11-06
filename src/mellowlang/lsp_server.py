@@ -184,6 +184,7 @@ def lsp_runtime_status() -> dict[str, object]:
         "error": PYGLS_IMPORT_ERROR,
     }
 from mellowlang import __version__
+from mellowlang.diagnostics import diagnostics_for_source
 from mellowlang.lint import lint_source
 
 KEYWORDS: dict[str, str] = {
@@ -285,8 +286,36 @@ def _diagnostic_severity(kind: str) -> int:
     }.get(kind, DiagnosticSeverity.Warning)
 
 
+def _diagnostic_severity_name(name: str) -> int:
+    return {
+        'error': DiagnosticSeverity.Error,
+        'warning': DiagnosticSeverity.Warning,
+        'info': DiagnosticSeverity.Information,
+        'hint': DiagnosticSeverity.Hint,
+    }.get((name or '').lower(), DiagnosticSeverity.Warning)
+
+
 def _mk_diag(msg: str, line0: int, kind: str) -> Diagnostic:
     return Diagnostic(range=_full_line_range(line0), message=msg, severity=_diagnostic_severity(kind), source='mellow')
+
+
+def _mk_core_diag(item: dict) -> Diagnostic:
+    line0 = max(0, int(item.get('line') or 1) - 1)
+    col0 = max(0, int(item.get('col') or 1) - 1)
+    end_line0 = max(line0, int(item.get('end_line') or (line0 + 1)) - 1)
+    end_col0 = max(col0 + 1, int(item.get('end_col') or (col0 + 2)) - 1)
+    hints = item.get('hints') or []
+    hint_text = ''
+    if hints:
+        hint_text = f"\n\nAI hint: {hints[0].get('action') or hints[0].get('detail') or hints[0].get('title')}"
+    code = item.get('code')
+    code_text = f"{code}: " if code else ''
+    return Diagnostic(
+        range=Range(start=Position(line=line0, character=col0), end=Position(line=end_line0, character=end_col0)),
+        message=f"{code_text}{item.get('message', '')}{hint_text}",
+        severity=_diagnostic_severity_name(str(item.get('severity') or 'warning')),
+        source='mellow-native-core',
+    )
 
 
 class MellowLangLanguageServer(LanguageServer):
@@ -298,11 +327,10 @@ server = MellowLangLanguageServer('mellowlang-lsp', __version__)
 
 def _publish(ls: MellowLangLanguageServer, uri: str, text: str):
     DOC_STORE[uri] = text
-    issues = lint_source(text)
     diags: List[Diagnostic] = []
-    for iss in issues:
-        line0 = max(0, (iss.line or 1) - 1)
-        diags.append(_mk_diag(iss.message, line0, iss.kind))
+    payload = diagnostics_for_source(text, filename=uri, include_lints=True)
+    for item in payload.get('diagnostics', []):
+        diags.append(_mk_core_diag(item))
     ls.publish_diagnostics(uri, diags)
 
 

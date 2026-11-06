@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import json
 import shutil
+import socket
 import subprocess
+import time
+import urllib.request
 from pathlib import Path
 
 import pytest
+
+from mellowlang.compiler import Compiler
+from mellowlang.ledger_core import LedgerError, balance, create, entries, post, verify
+from mellowlang.vm import MellowVM, RunConfig
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,21 +39,34 @@ def native_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
         "-std=c99",
         "-I",
         str(NATIVE / "include"),
+        "-I",
+        str(ROOT / "native" / "sm" / "include"),
+        "-I",
+        str(NATIVE / "vendor" / "sqlite"),
         str(NATIVE / "src" / "mellowrt_core.c"),
         str(NATIVE / "src" / "mellowrt_debug.c"),
+        str(NATIVE / "src" / "mellowrt_ledger.c"),
+        str(NATIVE / "src" / "mellowrt_money.c"),
         str(NATIVE / "src" / "mellowrt_platform.c"),
         str(NATIVE / "src" / "mellowrt_packages.c"),
         str(NATIVE / "src" / "mellowrt_scheduler.c"),
+        str(NATIVE / "src" / "mellowrt_server.c"),
+        str(NATIVE / "src" / "mellowrt_sm_cli.c"),
+        str(NATIVE / "src" / "mellowrt_storage.c"),
         str(NATIVE / "src" / "mellowrt_syscalls.c"),
         str(NATIVE / "src" / "mellowc.c"),
         str(NATIVE / "src" / "mellowc_lexer.c"),
         str(NATIVE / "src" / "mellowc_modules.c"),
         str(NATIVE / "src" / "mellowc_parser.c"),
+        str(ROOT / "native" / "sm" / "src" / "sm_native.c"),
+        str(NATIVE / "vendor" / "sqlite" / "sqlite3.c"),
         str(NATIVE / "src" / "mellowrt_main.c"),
         "-o",
         str(binary),
         "-lm",
     ]
+    if os.name == "nt":
+        command.append("-lws2_32")
     built = subprocess.run(command, capture_output=True, text=True, check=False)
     assert built.returncode == 0, built.stderr
     return binary
@@ -58,7 +80,7 @@ def test_full_native_version_has_no_python_runtime(native_binary: Path) -> None:
         check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == "Mellow Programming Language 2.9.7 (Full Native C)"
+    assert result.stdout.strip() == "Mellow Programming Language 2.9.10 (Full Native C)"
 
 
 def test_full_native_reports_runtime_platform(native_binary: Path) -> None:
@@ -100,6 +122,42 @@ def test_full_native_compiles_checks_and_runs_source(native_binary: Path) -> Non
     assert ran.stdout.splitlines() == SPEC["conformance_output"]
 
 
+def test_full_native_serves_http_from_mellow_source(native_binary: Path) -> None:
+    source = ROOT / "examples" / "native_server.mellow"
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    proc = subprocess.Popen(
+        [str(native_binary), "server", "serve", str(source), "--host", "127.0.0.1", "--port", str(port)],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/hello", timeout=0.5) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+                    assert resp.status == 200
+                    assert payload == {"ok": True, "method": "GET", "path": "/hello"}
+                    return
+            except Exception:
+                if proc.poll() is not None:
+                    out = proc.stdout.read() if proc.stdout else ""
+                    err = proc.stderr.read() if proc.stderr else ""
+                    raise AssertionError(out + err)
+                time.sleep(0.1)
+        raise AssertionError("native server did not respond before timeout")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
 def test_full_native_runs_every_frozen_core_surface(native_binary: Path) -> None:
     source = ROOT / "tests" / "fixtures" / "native_core_surface.mellow"
     expected = (ROOT / "tests" / "fixtures" / "native_core_surface.expected").read_text(encoding="utf-8").splitlines()
@@ -138,6 +196,68 @@ def test_full_native_runs_specialized_integer_loop_fast_path(native_binary: Path
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "499500"
+
+
+def test_full_native_repeated_function_calls_do_not_corrupt_locals(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "function-call-loop.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "def add(a, b):",
+                "    return a + b",
+                "",
+                "let i = 0",
+                "let total = 0",
+                "let n = 1000",
+                "",
+                "while i < n:",
+                "    total = add(total, i)",
+                "    i = i + 1",
+                "",
+                "print(total)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "499500"
+
+
+def test_full_native_specialized_list_index_loop(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "list-index-loop.mellow"
+    source.write_text(
+        "\n".join(
+            [
+                "let values = [1, 2, 3, 4, 5]",
+                "let i = 0",
+                "let total = 0",
+                "let n = 1000",
+                "",
+                "while i < n:",
+                "    total = total + values[i % 5]",
+                "    i = i + 1",
+                "",
+                "print(total)",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "3000"
 
 
 def test_full_native_string_addition_does_not_use_integer_fast_path(native_binary: Path, tmp_path: Path) -> None:
@@ -346,6 +466,429 @@ def test_full_native_accepts_installed_package_import(native_binary: Path, tmp_p
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == ["package-ok"]
+
+
+def test_full_native_imports_mellow_package_api_without_python(native_binary: Path, tmp_path: Path) -> None:
+    project = tmp_path / "pkg-api-project"
+    source = project / "src" / "main.mellow"
+    package = project / "mellow_packages" / "installed" / "math-kit" / "current" / "package"
+    source.parent.mkdir(parents=True)
+    package.joinpath("src").mkdir(parents=True)
+    (project / "mellow.toml").write_text(
+        'name = "pkg-api-project"\nversion = "0.1.0"\nentry = "src/main.mellow"\n',
+        encoding="utf-8",
+    )
+    (package / "manifest.json").write_text(
+        '{"name":"math-kit","version":"0.1.0","entry":"src/main.mellow"}\n',
+        encoding="utf-8",
+    )
+    (package / "src" / "main.mellow").write_text(
+        "\n".join(
+            [
+                "def double(x):",
+                "    return x * 2",
+                "",
+                "def add3(x):",
+                "    return x + 3",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    source.write_text(
+        "\n".join(
+            [
+                "use math-kit as kit",
+                "print(kit.double(7))",
+                "print(kit.add3(4))",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["14", "7"]
+
+
+def test_full_native_core_money_package_uses_native_money_module(native_binary: Path, tmp_path: Path) -> None:
+    project = tmp_path / "finance-project"
+    source = project / "src" / "main.mellow"
+    package_src = ROOT / "starter_packages" / "core-money"
+    package = project / "mellow_packages" / "installed" / "core-money" / "current" / "package"
+    source.parent.mkdir(parents=True)
+    package.parent.mkdir(parents=True)
+    shutil.copytree(package_src, package)
+    (project / "mellow.toml").write_text(
+        'name = "finance-project"\nversion = "0.1.0"\nentry = "src/main.mellow"\n',
+        encoding="utf-8",
+    )
+    (project / "mellow_packages" / "installed" / "core-money" / "current" / "manifest.json").write_text(
+        '{"name":"core-money","version":"0.1.1","entry":"src/main.mellow"}\n',
+        encoding="utf-8",
+    )
+    source.write_text(
+        "\n".join(
+            [
+                "use core-money as money",
+                "let subtotal = money.of(\"0.10\", \"THB\")",
+                "let fee = money.of(\"0.20\", \"THB\")",
+                "let total = money.add(subtotal, fee)",
+                "print(money.format(total))",
+                "print(money.amount(total))",
+                "print(money.currency(total))",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["THB 0.30", "0.30", "THB"]
+
+
+def test_full_native_core_finance_package_uses_native_money_module(native_binary: Path, tmp_path: Path) -> None:
+    project = tmp_path / "finance-package-project"
+    source = project / "src" / "main.mellow"
+    package_src = ROOT / "starter_packages" / "core-finance"
+    package = project / "mellow_packages" / "installed" / "core-finance" / "current" / "package"
+    source.parent.mkdir(parents=True)
+    package.parent.mkdir(parents=True)
+    shutil.copytree(package_src, package)
+    (project / "mellow.toml").write_text(
+        'name = "finance-package-project"\nversion = "0.1.0"\nentry = "src/main.mellow"\n',
+        encoding="utf-8",
+    )
+    (project / "mellow_packages" / "installed" / "core-finance" / "current" / "manifest.json").write_text(
+        '{"name":"core-finance","version":"0.1.0","entry":"src/main.mellow"}\n',
+        encoding="utf-8",
+    )
+    source.write_text(
+        "\n".join(
+            [
+                "use core-finance as finance",
+                "let gross = finance.of(\"100.00\", \"USD\")",
+                "let fee = finance.fee(gross, \"0.025\")",
+                "let net = finance.net(gross, fee)",
+                "print(finance.format(fee))",
+                "print(finance.format(net))",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["USD 2.50", "USD 97.50"]
+
+
+def test_full_native_core_math_package_uses_native_math_module(native_binary: Path, tmp_path: Path) -> None:
+    project = tmp_path / "math-package-project"
+    source = project / "src" / "main.mellow"
+    package_src = ROOT / "starter_packages" / "core-math"
+    package = project / "mellow_packages" / "installed" / "core-math" / "current" / "package"
+    source.parent.mkdir(parents=True)
+    package.parent.mkdir(parents=True)
+    shutil.copytree(package_src, package)
+    (project / "mellow.toml").write_text(
+        'name = "math-package-project"\nversion = "0.1.0"\nentry = "src/main.mellow"\n',
+        encoding="utf-8",
+    )
+    (project / "mellow_packages" / "installed" / "core-math" / "current" / "manifest.json").write_text(
+        '{"name":"core-math","version":"0.2.0","entry":"src/main.mellow"}\n',
+        encoding="utf-8",
+    )
+    source.write_text(
+        "\n".join(
+            [
+                "use core-math as mathx",
+                "print(mathx.clamp(7, 0, 5))",
+                "print(mathx.clamp01(2))",
+                "print(mathx.lerp(10, 20, 0.5))",
+                "print(mathx.distance2(0, 0, 3, 4))",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["5", "1", "15", "5"]
+
+
+LEDGER_SOURCE = """
+use ledger as ledger
+let book = ledger.create("  thb  ")
+let debit = {"account": " cash ", "amount": "125.50"}
+let credit = {"account": "revenue", "amount": "-125.5"}
+let sold = ledger.post(book, "sale-001", [debit, credit], "cash sale", {"channel": "web", "items": 2})
+let back = [{"account": "revenue", "amount": "-25.50"}, {"account": "cash", "amount": "25.50"}]
+let refund = ledger_post(sold, "refund-001", back, "partial refund")
+let rows = ledger.entries(refund)
+let first = rows[0]
+let second = rows[1]
+let status = ledger_verify(refund)
+print(len(ledger_entries(book)))
+print(len(rows))
+print(first["hash"])
+print(second["previous_hash"])
+print(status["head"])
+print(status["ok"])
+print(status["count"])
+print(money_format(ledger_balance(refund, "cash")))
+print(money_format(ledger_balance(refund, "petty-cash")))
+let meta = first["metadata"]
+print(meta["channel"])
+print(meta["items"])
+"""
+
+
+def _reference_ledger_output() -> list[str]:
+    book = create("  thb  ")
+    sold = post(
+        book,
+        "sale-001",
+        [{"account": " cash ", "amount": "125.50"}, {"account": "revenue", "amount": "-125.5"}],
+        "cash sale",
+        {"channel": "web", "items": 2},
+    )
+    refund = post(
+        sold,
+        "refund-001",
+        [{"account": "revenue", "amount": "-25.50"}, {"account": "cash", "amount": "25.50"}],
+        "partial refund",
+    )
+    rows = entries(refund)
+    status = verify(refund)
+    cash = balance(refund, "cash")
+    petty = balance(refund, "petty-cash")
+    return [
+        str(len(entries(book))),
+        str(len(rows)),
+        rows[0]["hash"],
+        rows[1]["previous_hash"],
+        status["head"],
+        "true" if status["ok"] else "false",
+        str(status["count"]),
+        f"{cash['currency']} {cash['amount']}",
+        f"{petty['currency']} {petty['amount']}",
+        "web",
+        "2",
+    ]
+
+
+def test_full_native_ledger_matches_python_ledger_core(native_binary: Path, tmp_path: Path) -> None:
+    source = tmp_path / "ledger.mellow"
+    source.write_text(LEDGER_SOURCE.lstrip("\n"), encoding="utf-8")
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == _reference_ledger_output()
+
+
+@pytest.mark.parametrize(
+    ("transaction_id", "postings", "expected"),
+    [
+        ("", [{"account": "cash", "amount": "1.00"}, {"account": "revenue", "amount": "-1.00"}],
+         "ledger: transaction id is required"),
+        ("t-1", [{"account": "cash", "amount": "10.00"}],
+         "ledger: postings must contain at least two rows"),
+        ("t-1", [{"amount": "10.00"}, {"account": "revenue", "amount": "-10.00"}],
+         "ledger: posting account is required"),
+        ("t-1", [{"account": "cash", "amount": "10.00"}, {"account": "revenue", "amount": "-9.00"}],
+         "ledger: transaction is not balanced: 1.00"),
+        ("t-1", [{"account": "cash", "amount": "not-money"}, {"account": "revenue", "amount": "-1.00"}],
+         "ledger: invalid amount: not-money"),
+    ],
+)
+def test_full_native_ledger_rejects_invalid_transactions(
+    native_binary: Path,
+    tmp_path: Path,
+    transaction_id: str,
+    postings: list[dict[str, str]],
+    expected: str,
+) -> None:
+    with pytest.raises(LedgerError) as reference:
+        post(create("THB"), transaction_id, postings, "memo")
+    assert str(reference.value) == expected
+
+    source = tmp_path / "ledger-invalid.mellow"
+    source.write_text(
+        "let book = ledger_create(\"THB\")\n"
+        f"let bad = ledger_post(book, {json.dumps(transaction_id)}, "
+        f"{json.dumps(postings)}, \"memo\")\n"
+        "print(bad)\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [str(native_binary), str(source)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert f":2:1: runtime error: {expected}" in result.stderr
+
+
+STORAGE_FIXTURE = ROOT / "tests" / "fixtures" / "storage_core.mellow"
+
+ABSOLUTE_PROBE = "C:/Windows/win.ini" if os.name == "nt" else "/etc/hosts"
+
+# (source, message fragment both engines must report).
+STORAGE_ESCAPE_CASES = {
+    "storage_traversal": ('let slot = storage.save("../evil", {"a": 1})\nprint(slot)\n',
+                          "invalid storage path (path traversal blocked)"),
+    "storage_dir_traversal": ('let root = storage_dir("../outside")\nprint(root)\n',
+                              'storage_dir: ".." traversal is blocked'),
+    "fs_traversal": ('let body = fs_read("../secret.txt")\nprint(body)\n',
+                     'fs: ".." traversal is blocked'),
+    "fs_absolute": (f'let body = fs_read("{ABSOLUTE_PROBE}")\nprint(body)\n',
+                    "absolute paths are disabled by default"),
+    "missing_folder": ('let slot = storage.save("nodir/hero", {"a": 1})\nprint(slot)\n',
+                       "Folder not found:"),
+}
+
+
+def _run_python_engine(source: str, cwd: Path, engine: str = "py") -> str:
+    previous = os.getcwd()
+    os.chdir(cwd)
+    try:
+        program = Compiler().compile(source, filename="<storage-parity>")
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            MellowVM().run(
+                program,
+                config=RunConfig(engine=engine, native_allow_fallback=False,
+                                 native_require=(engine == "c")),
+            )
+        return buffer.getvalue()
+    finally:
+        os.chdir(previous)
+
+
+def _tree(root: Path) -> list[str]:
+    return sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+
+
+def test_full_native_storage_matches_python_engine(native_binary: Path, tmp_path: Path) -> None:
+    source = STORAGE_FIXTURE.read_text(encoding="utf-8")
+    native_dir = tmp_path / "native"
+    python_dir = tmp_path / "python"
+    native_dir.mkdir()
+    python_dir.mkdir()
+
+    result = subprocess.run(
+        [str(native_binary), str(STORAGE_FIXTURE)],
+        cwd=native_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "storage ok\n"
+    assert _run_python_engine(source, python_dir) == result.stdout
+
+    saved = Path("mellow_fixture_saves") / "profiles" / "hero.json"
+    assert (native_dir / saved).read_bytes() == (python_dir / saved).read_bytes()
+    assert _tree(native_dir) == _tree(python_dir)
+
+
+@pytest.mark.parametrize(
+    ("case", "source", "fragment"),
+    [(name, source, fragment) for name, (source, fragment) in sorted(STORAGE_ESCAPE_CASES.items())],
+)
+def test_full_native_storage_rejects_the_same_paths_as_the_python_engine(
+    native_binary: Path,
+    tmp_path: Path,
+    case: str,
+    source: str,
+    fragment: str,
+) -> None:
+    script = tmp_path / f"{case}.mellow"
+    script.write_text(source, encoding="utf-8")
+    native_dir = tmp_path / f"{case}-native"
+    python_dir = tmp_path / f"{case}-python"
+    native_dir.mkdir()
+    python_dir.mkdir()
+
+    result = subprocess.run(
+        [str(native_binary), str(script)],
+        cwd=native_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0, result.stdout
+    assert fragment in result.stderr
+
+    with pytest.raises(Exception) as reference:
+        _run_python_engine(source, python_dir)
+    assert fragment in str(reference.value)
+    assert _tree(native_dir) == _tree(python_dir)
+
+
+def test_full_native_sm_cli_pack_inspect_unpack(native_binary: Path, tmp_path: Path) -> None:
+    src = tmp_path / "asset.mellow"
+    packed = tmp_path / "asset.sm"
+    restored = tmp_path / "asset.restored.mellow"
+    src.write_text("keep name = \"mellow\"\nkeep name = \"mellow\"\n", encoding="utf-8")
+
+    pack = subprocess.run(
+        [str(native_binary), "sm", "pack", str(src), "-o", str(packed), "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert pack.returncode == 0, pack.stderr
+    pack_info = json.loads(pack.stdout)
+    assert pack_info["codec"] == "sm3-token-native-crc32"
+    assert packed.exists()
+
+    inspect = subprocess.run(
+        [str(native_binary), "sm", "inspect", str(packed), "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert inspect.returncode == 0, inspect.stderr
+    inspect_info = json.loads(inspect.stdout)
+    assert inspect_info["version"] == 3
+    assert inspect_info["checksum_ok"] is True
+
+    unpack = subprocess.run(
+        [str(native_binary), "sm", "unpack", str(packed), "-o", str(restored), "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert unpack.returncode == 0, unpack.stderr
+    unpack_info = json.loads(unpack.stdout)
+    assert unpack_info["codec"] == "sm3-token-native-crc32"
+    assert restored.read_bytes() == src.read_bytes()
 
 
 def test_full_native_reports_missing_package_import(native_binary: Path, tmp_path: Path) -> None:

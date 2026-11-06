@@ -1,0 +1,4 @@
+import "pkg:core-server" as server
+
+keep req = server.request()
+server.json({"ok": true, "path": req["path"]})

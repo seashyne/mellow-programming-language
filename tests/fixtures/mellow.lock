@@ -1,0 +1,39 @@
+{
+  "lockfile_version": 1,
+  "registry": "https://mellow-public-registry.jirayut-wh.workers.dev",
+  "packages": {
+    "core-json": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {
+        "json": "host"
+      },
+      "sha256": null
+    },
+    "core-print": {
+      "version": "0.2.1",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {},
+      "sha256": null
+    }
+  },
+  "root": {
+    "dependencies": {
+      "core-json": "0.2.1",
+      "core-print": "0.2.1"
+    },
+    "imports": [
+      "ledger",
+      "core-json",
+      "core-print"
+    ]
+  }
+}

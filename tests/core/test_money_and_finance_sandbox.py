@@ -6,7 +6,7 @@ import shutil
 import textwrap
 from pathlib import Path
 
-from mellowlang.cli import main as cli_main
+from mellowlang.cli.main import main as cli_main
 from mellowlang.compiler import Compiler
 from mellowlang.host.modules import MODULE_ALLOWLIST
 from mellowlang.vm import MellowVM, RunConfig

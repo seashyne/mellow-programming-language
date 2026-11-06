@@ -1,0 +1,17 @@
+use ledger as ledger
+let book = ledger.create("THB")
+let sale = [{"account": "cash", "amount": "125.50"}, {"account": "revenue", "amount": "-125.50"}]
+let sold = ledger.post(book, "sale-001", sale, "cash sale", {"channel": "web"})
+let refund = [{"account": "revenue", "amount": "-25.50"}, {"account": "cash", "amount": "25.50"}]
+let closed = ledger_post(sold, "refund-001", refund, "partial refund")
+let rows = ledger.entries(closed)
+let first = rows[0]
+let meta = first["metadata"]
+let status = ledger_verify(closed)
+print(len(rows))
+print(first["hash"])
+print(status["ok"])
+print(status["count"])
+print(meta["channel"])
+print(money_format(ledger_balance(closed, "cash")))
+print(money_format(ledger_balance(closed, "revenue")))

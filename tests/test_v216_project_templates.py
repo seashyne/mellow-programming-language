@@ -1,8 +1,12 @@
+import json
+import os
 from pathlib import Path
 
 from mellowlang.compiler import Compiler
+from mellowlang.cli.main import main
 from mellowlang.desktop_host import parse_window_spec
 from mellowlang.package_manager import scaffold_project
+from mellowlang.web import parse_web_source
 
 
 def test_app_preset_scaffold(tmp_path: Path):
@@ -27,6 +31,44 @@ def test_all_project_presets_compile(tmp_path: Path):
         assert res["ok"] is True
         entry = out / "src" / "main.mel"
         Compiler().compile(entry.read_text(encoding="utf-8"), filename=str(entry))
+
+
+def test_no_core_project_is_minimal_and_runnable(tmp_path: Path):
+    out = tmp_path / "plain"
+    res = scaffold_project(out, with_core=False)
+    assert res["ok"] is True
+    entry = out / "src" / "main.mel"
+    text = entry.read_text(encoding="utf-8")
+    assert "pkg:" not in text
+    assert not (out / "mellow_packages").exists()
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert "mellow run src/main.mel" in readme
+    assert "--with-core" in readme
+    assert "mellow add core-print" in readme
+    assert "mellow search core" in readme
+    assert "mellow sync-imports ." in readme
+    Compiler().compile(text, filename=str(entry))
+
+
+def test_web_preset_works_with_mellow_web_defaults(tmp_path: Path):
+    out = tmp_path / "webapp"
+    res = scaffold_project(out, with_core=False, preset="web")
+    assert res["ok"] is True
+    entry = out / "src" / "App.mellow"
+    assert entry.exists()
+    parse_web_source(entry.read_text(encoding="utf-8"), filename=str(entry))
+    mellow_json = json.loads((out / "mellow.json").read_text(encoding="utf-8"))
+    assert mellow_json["web"]["entry"] == "src/App.mellow"
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert "mellow web dev" in readme
+
+    old_cwd = Path.cwd()
+    try:
+        os.chdir(out)
+        assert main(["web", "dev", "--prepare-only"]) == 0
+    finally:
+        os.chdir(old_cwd)
+    assert (out / ".mellow" / "web-dev" / "MellowApp.tsx").exists()
 
 
 def test_desktop_parser_reads_window_spec():

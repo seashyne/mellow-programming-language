@@ -1,3 +1,0 @@
-use @mellow/std-game as game
-
-print("game demo")

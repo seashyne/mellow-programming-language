@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "language": "Mellow Programming Language",
+  "version": "2.9.8",
+  "profile": "core",
+  "status": "in-development",
+  "goal": "Move storage, save, ledger, money, and server services behind native runtime built-ins so one bytecode stream runs unchanged on the Python VM, the CPython extension, and the standalone executable",
+  "baseline": {
+    "version": "2.9",
+    "manifest": "spec/mellow-2.9-core.json",
+    "normative_document": "docs/LANGUAGE_SPEC_2_9.md"
+  },
+  "entrypoint": "SPEC.md",
+  "stable_core": "docs/STABLE_CORE.md",
+  "experimental_index": "docs/experimental/README.md",
+  "previous_patch": "spec/mellow-2.9.7-stability.json",
+  "v3_track": "spec/mellow-3.0-stability.json",
+  "required_gates": [
+    "tests/core",
+    "tests/language",
+    "tests/native",
+    "native-safety",
+    "native-fuzzer",
+    "package-registry-smoke",
+    "native-arm64-ci",
+    "release-gate"
+  ],
+  "release_commands": [
+    "powershell -File scripts/test-v294-stability.ps1",
+    "cmake -S native/standalone -B build/standalone-safety -DCMAKE_BUILD_TYPE=Debug -DMELLOW_ENABLE_SANITIZERS=ON -DMELLOW_BUILD_FUZZER=ON",
+    "ctest --test-dir build/standalone-safety --output-on-failure"
+  ],
+  "new_in_2_9_8": [
+    "storage, save, fs, and file APIs lower to std.* syscalls and run in native C on both native engines",
+    "the save-path sandbox is enforced inside the CPython extension and the standalone executable, not only in the Python VM",
+    "ledger, money, server, and the SM CLI share the native syscall id table",
+    "the Python VM re-enters its legacy builtins from the syscall instruction on a VM-private bytecode copy, so the compile cache stays intact",
+    "native parity fixtures cover storage_core.mellow and ledger_core.mellow entry hashes",
+    "examples/native_server.mellow is the maintained native HTTP example served by mellow server serve",
+    "the workspace boundary gate rejects root build artifacts and undocumented native/ surfaces"
+  ],
+  "runtime_notes": [
+    "the encrypted save envelope (ChaCha20Poly1305 with HKDF) stays a Python service until phase 2",
+    "MELV standalone CLI hooks remain Python-side and are scheduled after the storage migration",
+    "green threads stay cooperative and explicit-yield based"
+  ],
+  "runtime_policy": [
+    "Native C is the release-authoritative runtime for v2.9.8 core work",
+    "default C execution must fail fast when native support is missing",
+    "release and CI validation should include native-only execution plus sanitizer/fuzzer gates"
+  ]
+}

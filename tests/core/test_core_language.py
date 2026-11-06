@@ -7,7 +7,7 @@ import textwrap
 from pathlib import Path
 
 from mellowlang import __version__
-from mellowlang.cli import main as cli_main
+from mellowlang.cli.main import main as cli_main
 from mellowlang.compiler import Compiler
 from mellowlang.vm import MellowVM, RunConfig
 
@@ -22,7 +22,7 @@ def run_source(source: str) -> str:
 
 
 def test_version_matches_core_release():
-    assert __version__ == "2.9.7"
+    assert __version__ == "2.9.10"
 
 
 def test_print_arithmetic_and_variables():
@@ -98,7 +98,7 @@ def test_list_and_map_literals_print_values():
 
 
 def test_cli_run_and_check_core_script():
-    script = Path(__file__).resolve().parents[2] / "examples" / "hello.mellow"
+    script = Path(__file__).resolve().parents[1] / "fixtures" / "hello_core.mellow"
     run_out = io.StringIO()
     with contextlib.redirect_stdout(run_out):
         assert cli_main(["run", str(script), "--engine", "py"]) == 0

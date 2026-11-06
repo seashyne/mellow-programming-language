@@ -1,2 +1,0 @@
-Task: {{ task }}
-{% if rag_summary %}RAG: {{ rag_summary }}{% endif %}

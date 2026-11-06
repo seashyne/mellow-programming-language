@@ -1,0 +1,98 @@
+{
+  "workload": "sum_loop",
+  "iterations": 2000000,
+  "expected_output": "1999999000000",
+  "mellow": {
+    "binary": "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+    "version": "Mellow Programming Language 2.9.7 (Full Native C)",
+    "runtime_info": "{\"runtime\":\"mellow-c\",\"architecture\":\"x86_64\",\"backend\":\"generic-c\",\"pointer_bits\":64,\"little_endian\":true,\"arm_neon_available\":false,\"optimized_kernels\":false}",
+    "benchmark": {
+      "command": [
+        "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\sum_loop.mellow"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 6.375449998813565,
+      "average_ms": 6.3948299997719005,
+      "min_ms": 6.186100003105821,
+      "max_ms": 6.734599999617785,
+      "samples_ms": [
+        6.288900000072317,
+        6.734599999617785,
+        6.440499997552251,
+        6.310400000074878,
+        6.278400000155671,
+        6.442099998821504,
+        6.5484000006108545,
+        6.465099999331869,
+        6.253799998376053,
+        6.186100003105821
+      ]
+    }
+  },
+  "zig": {
+    "available": true,
+    "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_zig_17668_1782652402705.exe",
+    "version": "0.16.0",
+    "benchmark": {
+      "command": [
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_zig_17668_1782652402705.exe"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 5.23714999872027,
+      "average_ms": 7.897539999612491,
+      "min_ms": 4.705600000306731,
+      "max_ms": 31.05610000056913,
+      "samples_ms": [
+        31.05610000056913,
+        6.579500000952976,
+        5.709299999580253,
+        5.0951999983226415,
+        5.261399997834815,
+        4.711400000815047,
+        4.705600000306731,
+        5.5917999998200685,
+        5.212899999605725,
+        5.052199998317519
+      ]
+    }
+  },
+  "c": {
+    "available": true,
+    "compiler": "gcc",
+    "compiler_path": "C:\\Strawberry\\c\\bin\\gcc.EXE",
+    "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_c_17668_1782652402397.exe",
+    "benchmark": {
+      "command": [
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_c_17668_1782652402397.exe"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 5.985600000713021,
+      "average_ms": 8.214800000132527,
+      "min_ms": 5.680500002199551,
+      "max_ms": 27.92779999799677,
+      "samples_ms": [
+        5.7018000006792136,
+        5.680500002199551,
+        6.910500000230968,
+        27.92779999799677,
+        5.967400000372436,
+        5.849999997735722,
+        6.123800001660129,
+        5.991300000459887,
+        6.01499999902444,
+        5.979900000966154
+      ]
+    }
+  },
+  "comparison": {
+    "mellow_median_ms": 6.375449998813565,
+    "zig_median_ms": 5.23714999872027,
+    "zig_faster_by": 1.2173510402359005,
+    "c_median_ms": 5.985600000713021,
+    "c_faster_by": 1.065131314831279
+  }
+}

@@ -4,23 +4,18 @@ import io
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
+import mellowlang.cli.commands.packages as pkg_cmds
 import mellowlang.cli.main as cli
 import mellowlang.package_manager as pm
 from mellowlang.cli.main import main
 
 
-def test_direct_script_path_autoroutes_to_run(monkeypatch):
-    seen = {}
-
-    def fake_run(file: str, **kwargs):
-        seen["file"] = file
-        seen["kwargs"] = kwargs
-        return 0
-
-    monkeypatch.setattr(cli, "_cmd_run", fake_run)
+def test_direct_script_path_is_rejected_with_run_hint(capsys):
     code = main(["demo.mellow"])
-    assert code == 0
-    assert seen["file"] == "demo.mellow"
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "direct script mode has been removed" in err
+    assert "Use `mellow run demo.mellow`." in err
 
 
 def test_unknown_command_shows_suggestion(capsys):
@@ -53,6 +48,8 @@ def test_add_dependency_accepts_alias_and_persists_it(tmp_path: Path, monkeypatc
 
 
 def test_interactive_search_can_install_selection(monkeypatch):
+    # main pushes its pkg_* aliases into the packages command module on dispatch,
+    # so those are patched on main; the prompt helpers are owned by packages only.
     monkeypatch.setattr(cli, "pkg_search_remote", lambda query, registry=None: {
         "ok": True,
         "items": [
@@ -60,10 +57,10 @@ def test_interactive_search_can_install_selection(monkeypatch):
             {"name": "@ai/llama", "latest": "0.9.0", "versions": ["0.9.0"], "description": "Llama SDK"},
         ],
     })
-    monkeypatch.setattr(cli, "_prompt_choice", lambda items, title="": "@ai/openai")
-    answers = iter([False, True])
-    monkeypatch.setattr(cli, "_prompt_yes_no", lambda prompt, default=True: next(answers))
     monkeypatch.setattr(cli, "pkg_install_remote", lambda name, registry=None, project_dir=None: {"ok": True, "name": name, "version": "1.2.3"})
+    monkeypatch.setattr(pkg_cmds, "_prompt_choice", lambda items, title="": "@ai/openai")
+    answers = iter([False, True])
+    monkeypatch.setattr(pkg_cmds, "_prompt_yes_no", lambda prompt, default=True: next(answers))
 
     out = io.StringIO()
     with redirect_stdout(out):

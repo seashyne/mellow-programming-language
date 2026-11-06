@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mellowlang.cli import main as cli_main
+from mellowlang.cli.commands import system as cli_main
 from mellowlang import lsp_server
 
 

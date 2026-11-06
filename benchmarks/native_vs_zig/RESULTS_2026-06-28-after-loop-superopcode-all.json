@@ -1,0 +1,160 @@
+{
+  "workload": "sum_loop",
+  "iterations": 2000000,
+  "expected_output": "1999999000000",
+  "mellow": {
+    "binary": "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+    "version": "Mellow Programming Language 2.9.7 (Full Native C)",
+    "runtime_info": "{\"runtime\":\"mellow-c\",\"architecture\":\"x86_64\",\"backend\":\"generic-c\",\"pointer_bits\":64,\"little_endian\":true,\"arm_neon_available\":false,\"optimized_kernels\":false}",
+    "benchmark": {
+      "command": [
+        "E:\\software\\MellowLang\\build\\standalone-release\\Release\\mellow.exe",
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\sum_loop.mellow"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 6.231649998881039,
+      "average_ms": 6.456360000447603,
+      "min_ms": 5.708000000595348,
+      "max_ms": 8.518899998307461,
+      "samples_ms": [
+        6.0284999999566935,
+        6.5044000002671964,
+        5.986800002574455,
+        6.235999997443287,
+        5.708000000595348,
+        8.518899998307461,
+        6.519400001707254,
+        5.781200001365505,
+        7.053100001940038,
+        6.227300000318792
+      ]
+    }
+  },
+  "zig": {
+    "available": true,
+    "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_zig_3116_1782652453779.exe",
+    "version": "0.16.0",
+    "benchmark": {
+      "command": [
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_zig_3116_1782652453779.exe"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 4.558999997243518,
+      "average_ms": 6.351499999072985,
+      "min_ms": 4.305099999328377,
+      "max_ms": 22.150900000269758,
+      "samples_ms": [
+        22.150900000269758,
+        4.625399997166824,
+        4.8687000016798265,
+        4.845999999815831,
+        4.305099999328377,
+        4.458100000192644,
+        4.425699997227639,
+        4.46409999858588,
+        4.878399999142857,
+        4.492599997320212
+      ]
+    }
+  },
+  "c": {
+    "available": true,
+    "compiler": "gcc",
+    "compiler_path": "C:\\Strawberry\\c\\bin\\gcc.EXE",
+    "binary": "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_c_3116_1782652453535.exe",
+    "benchmark": {
+      "command": [
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\build\\sum_loop_c_3116_1782652453535.exe"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 5.329949999577366,
+      "average_ms": 5.384499999854597,
+      "min_ms": 5.087099998490885,
+      "max_ms": 5.602799999905983,
+      "samples_ms": [
+        5.590700002358062,
+        5.2924000010534655,
+        5.282500002067536,
+        5.087099998490885,
+        5.333099998097168,
+        5.512599997018697,
+        5.572399997618049,
+        5.326800001057563,
+        5.602799999905983,
+        5.244600000878563
+      ]
+    }
+  },
+  "python": {
+    "available": true,
+    "binary": "C:\\Program Files\\Python314\\python.EXE",
+    "version": "Python 3.14.3",
+    "benchmark": {
+      "command": [
+        "C:\\Program Files\\Python314\\python.EXE",
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\sum_loop.py"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 224.77654999966035,
+      "average_ms": 235.64747000054922,
+      "min_ms": 209.85389999987092,
+      "max_ms": 321.95600000341074,
+      "samples_ms": [
+        248.90220000088448,
+        216.47939999820665,
+        248.6425999995845,
+        225.4520999995293,
+        321.95600000341074,
+        220.3074999997625,
+        209.85389999987092,
+        224.10099999979138,
+        226.24940000241622,
+        214.5306000020355
+      ]
+    }
+  },
+  "lua": {
+    "available": true,
+    "binary": "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+    "version": "Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio",
+    "benchmark": {
+      "command": [
+        "D:\\Program\\ZeroBraneStudioEduPack-2.01-win32\\bin\\lua.EXE",
+        "E:\\software\\MellowLang\\benchmarks\\native_vs_zig\\sum_loop.lua"
+      ],
+      "output": "1999999000000",
+      "repeats": 10,
+      "median_ms": 7.947649999550777,
+      "average_ms": 8.035480000035022,
+      "min_ms": 7.5862999983655754,
+      "max_ms": 9.164700000837911,
+      "samples_ms": [
+        7.986500000697561,
+        7.897400002548238,
+        7.79079999847454,
+        7.970099999511149,
+        7.9931000000215136,
+        8.181299999705516,
+        7.859400000597816,
+        7.925199999590404,
+        7.5862999983655754,
+        9.164700000837911
+      ]
+    }
+  },
+  "comparison": {
+    "mellow_median_ms": 6.231649998881039,
+    "zig_median_ms": 4.558999997243518,
+    "zig_faster_by": 1.3668896693680295,
+    "c_median_ms": 5.329949999577366,
+    "c_faster_by": 1.1691760709528556,
+    "python_median_ms": 224.77654999966035,
+    "mellow_faster_than_python_by": 36.07014996670568,
+    "lua_median_ms": 7.947649999550777,
+    "mellow_faster_than_lua_by": 1.275368482019668
+  }
+}

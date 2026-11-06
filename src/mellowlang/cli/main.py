@@ -28,6 +28,7 @@ from .commands.system import (
     _cmd_release_gate,
     _cmd_security_audit,
     _cmd_status,
+    _doctor_report,
 )
 from .commands.agents import (
     _build_backoff,
@@ -121,6 +122,7 @@ pkg_install_remote = _lazy_attr(_PM, "install_remote")
 pkg_author_profile_remote = _lazy_attr(_PM, "author_profile_remote")
 pkg_package_signature_remote = _lazy_attr(_PM, "package_signature_remote")
 pkg_update_packages = _lazy_attr(_PM, "update_packages")
+pkg_whoami_remote = _lazy_attr(_PM, "whoami_remote")
 
 # ============================================================
 # CLI policy
@@ -321,6 +323,8 @@ def main(argv: List[str] | None = None) -> int:
             return _cmd_pkg(argparse.Namespace(pkg_cmd="search", query=ns.query, registry=ns.registry, interactive=getattr(ns, 'interactive', False)))
         if cmd == "info":
             return _cmd_pkg(argparse.Namespace(pkg_cmd="info", name=ns.name, registry=ns.registry))
+        if cmd == "package-audit":
+            return _cmd_pkg(argparse.Namespace(pkg_cmd="audit", no_registry=getattr(ns, "no_registry", False), all_versions=getattr(ns, "all_versions", False), json=getattr(ns, "json", False)))
         if cmd in {"profile", "author"}:
             return _cmd_pkg(argparse.Namespace(pkg_cmd="profile", author=ns.author, registry=ns.registry))
         if cmd in {"verify", "signature"}:
@@ -375,7 +379,7 @@ def main(argv: List[str] | None = None) -> int:
         if cmd == "init":
             return _cmd_init(ns.dir, ns.force)
         if cmd == "new":
-            return _cmd_new(ns.dir, ns.force, with_core=not getattr(ns, "no_core", False), preset=getattr(ns, "preset", "starter"))
+            return _cmd_new(ns.dir, ns.force, with_core=bool(getattr(ns, "with_core", False)) and not bool(getattr(ns, "no_core", False)), preset=getattr(ns, "preset", "starter"))
         if cmd == "desktop":
             subcmd = getattr(ns, "desktop_cmd", None)
             if subcmd == "run":

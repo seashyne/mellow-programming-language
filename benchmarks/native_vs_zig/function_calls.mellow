@@ -1,0 +1,12 @@
+def add(a, b):
+    return a + b
+
+let i = 0
+let total = 0
+let n = 200000
+
+while i < n:
+    total = add(total, i)
+    i = i + 1
+
+print(total)

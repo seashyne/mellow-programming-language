@@ -1,0 +1,8 @@
+page App
+  state count = 10
+
+  view:
+    Stack(gap: 12)
+      Title("Mellow Web")
+      Text("Count: {count}")
+      Button("Add", onClick: count += 100)

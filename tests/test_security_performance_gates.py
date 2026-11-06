@@ -5,7 +5,7 @@ import json
 from mellowlang.agents.policy import PolicyEngine
 from mellowlang.agents.tools import builtin_tool_registry
 from mellowlang.benchmarking import run_benchmarks
-from mellowlang.cli import main as cli_main
+from mellowlang.cli.main import main as cli_main
 from mellowlang.security_audit import run_security_audit
 
 

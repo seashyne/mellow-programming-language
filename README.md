@@ -2,7 +2,7 @@
   <img src="docs/assets/mellow-logo.png" alt="Mellow logo" width="96">
 </p>
 
-# Mellow Programming Language 2.9.7
+# Mellow Programming Language 2.9.10
 
 Mellow Programming Language, also known as MellowLang, is a sandbox scripting language focused on games, tools, and AI behavior experiments.
 
@@ -16,7 +16,7 @@ This release treats the language core as the stable surface:
 - string/math/list/map/json/money/data/ledger helpers
 - `mellow run`, `mellow check`, `mellow fmt`, `mellow modules`, and `mellow doctor`
 
-Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but are documented as **experimental** under [`docs/experimental/README.md`](docs/experimental/README.md). In v2.9.7 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, native terminal/system built-ins, builtin module aliases, real cooperative green-thread task switching, channel yield semantics, and stronger GC ownership stats. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
+Larger systems such as agents, MMG, desktop bundles, package registries, and MELV video tools are available, but are documented as **experimental** under [`docs/experimental/README.md`](docs/experimental/README.md). In v2.9.10 the standalone `mellow` executable includes a C lexer, compiler, bytecode runtime, native terminal/system built-ins, builtin module aliases, real cooperative green-thread task switching, channel yield semantics, and stronger GC ownership stats. Debugger, events, record/replay, package tooling, LSP, and extended services remain optional Python tooling.
 
 ## Quick Start
 
@@ -159,7 +159,9 @@ while len(batch) > 0:
 Use `--sandbox=data` for read-oriented data jobs. Add `--data-write` only when parameterized SQLite writes are required.
 
 Finance and data sandbox profiles, plus Ledger Core, run on the default C engine
-in v2.9.7. Native parity tests run in native-only mode.
+in v2.9.10. `ledger_create`, `ledger_post`, `ledger_verify`, `ledger_balance`, and
+`ledger_entries` are native C built-ins in the standalone runtime, and the
+standalone tests compare their entry hashes against `mellowlang.ledger_core`.
 
 Native runtime foundation APIs:
 
@@ -178,7 +180,7 @@ send(ch, "hello")
 print(recv(ch))
 ```
 
-These APIs are native C built-ins in v2.9.7. They provide real cooperative task
+These APIs are native C built-ins in v2.9.10. They provide real cooperative task
 creation, round-robin `yield()` switching, FIFO channels, implicit channel-yield
 on empty `recv(ch)`, and GC accounting for VM heap plus native handles. Full
 preemptive or OS-backed M:N scheduling remains future runtime-engine work.
@@ -187,17 +189,11 @@ Build an immutable, balanced ledger:
 
 ```mellow
 let book = ledger_create("THB")
-book = ledger_post(
-    book,
-    "sale-001",
-    [
-        {"account": "cash", "amount": "100.00"},
-        {"account": "revenue", "amount": "-100.00"}
-    ],
-    "cash sale"
-)
-print(money_format(ledger_balance(book, "cash")))
-print(ledger_verify(book)["ok"])
+let rows = [{"account": "cash", "amount": "100.00"}, {"account": "revenue", "amount": "-100.00"}]
+let sold = ledger_post(book, "sale-001", rows, "cash sale")
+let status = ledger_verify(sold)
+print(money_format(ledger_balance(sold, "cash")))
+print(status["ok"])
 ```
 
 Ledger Core is intended for deterministic business rules and audit-friendly prototypes. Durable storage, identity, authorization, signatures, and compliance controls belong in the host application.
@@ -240,6 +236,28 @@ is only for bridge commands that import/export common video files.
 
 `mellow doctor` reports which optional features are available in the current Python environment.
 
+## Performance
+
+Numbers here are dated measurements on one host, not guarantees. Each linked
+report names its machine and the command to reproduce it. Measured on Windows 11
+(Intel64, Python 3.14.3) with the 2.9.10 native runtime - the standalone binary for
+startup, money, and interpreter numbers, the C extension for data transforms:
+
+- Startup: 6.4 ms median for a script that does no work (`mellow --version` is
+  6.3 ms); the same host measured Node 24 at 43.75 ms and CPython at 55.65 ms.
+- In-memory data transforms: 8.2-8.9 million rows/second and 3.2-3.4x the
+  Python VM on the same where+project+sum workload.
+- Business arithmetic: 9,000 `money_add` calls take 58 ms; the heap fix removed
+  the quadratic free path (17,130 ms before).
+- General interpreter throughput remains modest: about 2x CPython, about 4.7x
+  slower than Lua 5.4 and about 11x slower than `gcc -O3` on a loop-carried
+  chain. The five loop shapes in the cross-language suite are compiler fast
+  paths, not general speed.
+
+Raw data, probes, and the startup-floor caveats:
+[`RESULTS_2026-11-02_CROSS-LANGUAGE-HONEST.md`](benchmarks/native_vs_zig/RESULTS_2026-11-02_CROSS-LANGUAGE-HONEST.md)
+and [`RESULTS_2026-11-05_HEAP-INDEX.md`](benchmarks/native_vs_zig/RESULTS_2026-11-05_HEAP-INDEX.md).
+
 ## Testing
 
 Core language gate:
@@ -274,13 +292,13 @@ or the native pytest gate in native-only mode.
 
 ## Release Process
 
-Mellow 2.9.7 uses a native-first release pipeline. Pushing a tag named `v*`
+Mellow 2.9.10 uses a native-first release pipeline. Pushing a tag named `v*`
 starts `.github/workflows/release.yml`, builds standalone C CLI artifacts for
 Windows, Linux, and macOS, and packages the editor/npm delivery artifacts.
 
 ```bash
-git tag v2.9.7
-git push origin v2.9.7
+git tag v2.9.10
+git push origin v2.9.10
 ```
 
 Expected release assets:
@@ -295,7 +313,7 @@ Expected release assets:
 - Stable core definition: `docs/STABLE_CORE.md`
 - Core docs index: `docs/CORE_DOCS.md`
 - Experimental docs: `docs/experimental/README.md`
-- 2.9.7 stability manifest: `spec/mellow-2.9.7-stability.json`
+- 2.9.10 stability manifest: `spec/mellow-2.9.10-stability.json`
 - 2.9.x stability gates: `scripts/test-v294-stability.ps1`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Changelog: `CHANGELOG.md`

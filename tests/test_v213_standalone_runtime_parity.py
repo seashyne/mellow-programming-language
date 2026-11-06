@@ -4,9 +4,11 @@ from pathlib import Path
 
 from mellowlang.standalone_runtime import build_standalone_runtime, compile_standalone_image, standalone_run_image
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_standalone_runtime_parity_pack(tmp_path: Path):
-    src = Path('examples/hello.mellow')
+    src = ROOT / 'tests' / 'fixtures' / 'hello_core.mellow'
     out = tmp_path / 'hello.mvi'
     build = build_standalone_runtime()
     assert build['ok']

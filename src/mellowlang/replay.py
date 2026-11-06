@@ -37,6 +37,11 @@ class ReplayLog:
                     if line:
                         self._events.append(json.loads(line))
 
+    def __del__(self):
+        # A raised trap leaves the record handle open; Windows then refuses to
+        # delete the temp directory the run wrote into.
+        self.close()
+
     def close(self):
         if self._fh:
             self._fh.close()

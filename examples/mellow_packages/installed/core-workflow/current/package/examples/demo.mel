@@ -1,4 +1,0 @@
-import "pkg:core-workflow" as wf
-
-keep task = wf.job("email.send", {"to": "demo@example.com"})
-print(wf.to_json(task))

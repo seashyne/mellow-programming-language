@@ -1,6 +1,6 @@
 {
   "lockfile_version": 1,
-  "registry": "local",
+  "registry": "https://mellow-public-registry.jirayut-wh.workers.dev",
   "packages": {
     "core-money": {
       "version": "0.1.0",
@@ -159,6 +159,28 @@
       "creator": "Mellow Code Team",
       "dependencies": {},
       "sha256": null
+    },
+    "mellow-sdk": {
+      "version": "0.3.0",
+      "entry": "src/main.mel",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {
+        "sdk": "host"
+      },
+      "sha256": null
+    },
+    "core-server": {
+      "version": "0.1.0",
+      "entry": "src/main.mellow",
+      "authors": [
+        "Mellow Code Team"
+      ],
+      "creator": "Mellow Code Team",
+      "dependencies": {},
+      "sha256": null
     }
   },
   "root": {
@@ -176,24 +198,28 @@
       "core-gamekit": "0.2.1",
       "core-collections": "0.2.1",
       "core-ai": "0.2.1",
-      "mellow-web": "0.1.0"
+      "mellow-web": "0.1.0",
+      "mellow-sdk": "0.3.0",
+      "core-server": "0.1.0"
     },
     "imports": [
-      "core-json",
-      "core-print",
+      "server",
+      "ledger",
+      "mellow-web",
+      "mellow-sdk",
+      "core-server",
+      "canvas",
       "math",
       "ai",
-      "@mellow/std-game",
-      "@mellow/std-http",
-      "@mellow/std-storage",
-      "@mellow/std-ai",
-      "core-mmg",
       "core-workflow",
       "core-window",
       "core-time",
       "core-strings",
       "core-save",
+      "core-print",
+      "core-mmg",
       "core-math",
+      "core-json",
       "core-gamekit",
       "core-collections",
       "core-ai"

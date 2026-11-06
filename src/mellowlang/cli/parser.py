@@ -233,6 +233,10 @@ def _build_modern_parser() -> argparse.ArgumentParser:
     pkg_registry = pkg_sub.add_parser("registry", help="Configure default registry URL")
     pkg_registry.add_argument("url")
     pkg_list = pkg_sub.add_parser("list", help="List installed packages")
+    pkg_audit = pkg_sub.add_parser("audit", help="Audit official packages for native runtime readiness")
+    pkg_audit.add_argument("--no-registry", action="store_true", help="Only audit starter_packages")
+    pkg_audit.add_argument("--all-versions", action="store_true", help="Audit every local registry version instead of only latest")
+    pkg_audit.add_argument("--json", action="store_true")
     pkg_build = pkg_sub.add_parser("build", help="Build .mpkg archive")
     pkg_build.add_argument("dir")
     pkg_build.add_argument("--out")
@@ -279,6 +283,11 @@ def _build_modern_parser() -> argparse.ArgumentParser:
     pinfo = sub.add_parser("info", help="Show package details from registry")
     pinfo.add_argument("name")
     pinfo.add_argument("--registry", help="Registry base URL")
+
+    paudit = sub.add_parser("package-audit", help="Audit official packages for native runtime readiness")
+    paudit.add_argument("--no-registry", action="store_true", help="Only audit starter_packages")
+    paudit.add_argument("--all-versions", action="store_true", help="Audit every local registry version instead of only latest")
+    paudit.add_argument("--json", action="store_true")
 
     pprofile = sub.add_parser("profile", help="Show packages by creator/author")
     pprofile.add_argument("author")
@@ -402,10 +411,11 @@ def _build_modern_parser() -> argparse.ArgumentParser:
     pi.add_argument("dir")
     pi.add_argument("--force", action="store_true")
 
-    pnw = sub.add_parser("new", help="Scaffold a new Mellow project with starter packages")
+    pnw = sub.add_parser("new", help="Scaffold a new Mellow project")
     pnw.add_argument("dir")
     pnw.add_argument("--force", action="store_true")
-    pnw.add_argument("--no-core", action="store_true", help="Do not preload starter core packages")
+    pnw.add_argument("--with-core", action="store_true", help="Preload starter core packages")
+    pnw.add_argument("--no-core", action="store_true", help="Compatibility flag; core packages are not preloaded by default")
     pnw.add_argument("--preset", default="starter")
 
     pdesk = sub.add_parser("desktop", help="Desktop/window host for Mellow app presets")

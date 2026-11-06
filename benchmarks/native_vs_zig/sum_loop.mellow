@@ -1,0 +1,9 @@
+let i = 0
+let total = 0
+let n = 2000000
+
+while i < n:
+    total = total + i
+    i = i + 1
+
+print(total)

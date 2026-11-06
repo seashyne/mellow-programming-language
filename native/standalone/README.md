@@ -59,6 +59,9 @@ Extended systems that remain outside the native runtime:
 - native workflow/event runtime parity
 - package manager, registry, LSP, playground, and deployment tooling
 
+The migration plan for moving old Python-backed systems into C and Mellow
+runtime packages is tracked in `../../docs/PY_TO_C_RUNTIME_MIGRATION.md`.
+
 Build:
 
 ```bash
@@ -172,7 +175,7 @@ c.send(mailbox, "hello")
 print(c.recv(mailbox))
 ```
 
-In v2.9.7 these APIs are native C built-ins. Channels are FIFO native handles,
+In v2.9.10 these APIs are native C built-ins. Channels are FIFO native handles,
 `spawn` creates cooperative tasks, and `yield` round-robin switches between
 runnable tasks. `workers(n)` configures the native M:N scheduler topology,
 `worker_count()` reports the configured worker count, and `scheduler_mode()`

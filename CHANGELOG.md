@@ -2,6 +2,485 @@
 
 ## Unreleased
 
+## 2.9.10 - 2026-11-06
+
+### Added
+- The standalone `mellow` executable now implements the data standard library
+  in native C: `std.string` (UTF-8 `len`/`chr`/`ord`, padding, `format`),
+  `std.list`, `std.map`, `std.type`, `std.json` encode/decode, `std.math`
+  (including vectors, `distance`, `angle_between`, and `sum`), `std.time`,
+  `std.assert`, and `std.event`. No Python process is involved. Async and
+  callback helpers remain Python-only: `list.map/filter/reduce/map_fn/filter_fn`
+  must call a Mellow function. Native lists and maps are value types, so `list.push`,
+  `list.insert`, `list.remove`, `list.pop`, `list.sort`, and `map.set` return
+  new collections instead of mutating the receiver; the Python VM still mutates.
+  `tests/native/test_native_std_standalone.py` diffs native stdout against the
+  Python VM for every family and pins the value-semantics difference;
+  `docs/STDLIB_REFERENCE.md` records the coverage table.
+- The same standalone runtime now implements `std.game` in native C: all eleven
+  easing curves, `tween.step`, bounds-aware `grid.neighbors4`/`neighbors8`,
+  `path.astar` (Manhattan or Chebyshev heuristic, `1.41421356237` diagonal cost,
+  Python heap tie-breaking), `scene.create`, `entity.create`, `entity.move`,
+  `physics.collide_aabb`, and `anim.frame`. The `ai.*` behaviour helpers also run
+  natively: `steering.seek/flee/arrive/wander/patrol` and
+  `perception.in_range/in_sight/nearest/filter_range`, including Python's
+  `float()`/`int()` coercions and non-negative modulo. A 120-grid A* fuzz run
+  and `tests/native/test_native_game_standalone.py` confirm byte-identical
+  output against the Python VM; only function-callback helpers remain
+  Python-only.
+- The same runtime implements `ai.utility_choose`, `ai.bt_tick`, and
+  `ai.fsm_tick` in native C. `bt_tick` and `fsm_tick` resolve the syscall named
+  by their node or state map through the compiler's builtin table and re-enter
+  the default dispatcher, so selector/sequence ordering, `success`/`fail`/
+  `running` passthrough, `None`-context zero-arg calls, and the Python VM's
+  `[value]` vs list-expansion argument rules all match. Unknown syscall names
+  fail with the same `SANDBOX: syscall not allowed` message, and the parity
+  cases live in `tests/native/test_native_game_standalone.py`.
+- The standalone runtime implements the `std.data` read side in native C:
+  `open_jsonl`, `open_csv`, `next`, `info`, `close`, `cancel`, `project`,
+  `where`, and `sum`. CSV parsing follows `csv.DictReader` for quoting,
+  embedded newlines, blank lines, duplicate headers, missing columns, and extra
+  values (under the `null` key). Limits match the Python defaults (batch 1-1000,
+  eight open streams, 1 MiB records), paths obey the `fs` sandbox, and the
+  Python reader's auto-close on `StopIteration` is preserved.
+  `tests/native/test_native_data_standalone.py` diffs the output against the
+  Python VM.
+- `data_sqlite_open`, `data_sqlite_close`, `data_sqlite_query`, and
+  `data_sqlite_execute` run in the standalone C runtime through the vendored
+  SQLite 3.54.1 amalgamation (`native/standalone/vendor/sqlite/`). Statement
+  classification, parameter binding, row limits, read-only opens, and
+  `--data-write` gating match `DataCoreError` behavior in the Python VM.
+- `mellow run --engine c --data-write` now stays on the standalone runtime: the
+  probe no longer sends write-enabled runs to the Python VM, and `--data-write`
+  plus `--data-max-rows` are forwarded to the binary.
+- `std.ai.api_complete` can talk to any OpenAI-compatible endpoint instead of
+  only returning the offline stub. Configure a provider with `base_url`,
+  `model`, and `api_key` or `api_key_env`; the call POSTs to
+  `{base_url}/chat/completions` and returns `response`, `model`, and `usage`.
+  Keys are never echoed: `api_providers()` and returned configs redact them.
+  The client reuses the `net_http_*` sandbox rules (`allow_net` plus
+  `net_http_allow`), the 0.1-120 s timeout clamp and `net_max_bytes`, and leaves
+  offline providers byte-identical. `tests/core/test_ai_provider.py` covers the
+  request shape, environment-variable keys, redaction, and both sandbox
+  refusals; `docs/STDLIB_REFERENCE.md` documents the configuration.
+- The standalone `mellow` executable now runs the whole `std.ai` surface in
+  native C: neural models (`model_create`, `train`, `predict`, `model_save`,
+  `model_load`, `loss_history`, `model_info`), tiny causal LLMs (`llm_create`,
+  `llm_train`, `llm_eval`, `llm_generate`, `llm_complete`, `llm_chat`,
+  `llm_dataset`, `llm_tokenize`, `llm_save`, `llm_load`), embeddings, vector
+  search, RAG answers, prompt templates, sessions, runtime/provider reports, and
+  the tensor kernels, reported under the `mellow-native-c` backend. No Python
+  process is involved. Randomness matches CPython MT19937: `random()`,
+  `random(n)`, `random(a, b)` and model training reproduce the Python VM for the
+  same seed. `--seed N` and `--seed=N` are accepted anywhere on the command line
+  and stripped before dispatch, so scripts never see the flag. `ai.decide`,
+  `prompt_template` and errors render containers with Python's `str()`/`repr()`
+  spelling, and `.mmodel`/`.mllm` checkpoints load across engines. The only gap
+  on the native surface is `api_complete`'s OpenAI network transport, which runs
+  on the Python host; offline and `local-rag` providers behave identically.
+  `tests/native/test_native_ai_standalone.py` diffs native stdout against the
+  Python VM for every call family.
+
+### Performance
+- The standalone runtime heap now finds a tracked pointer in constant time.
+  `heap_find` used to scan the global block list, and every value release and GC
+  mark calls it, so loops that churn containers paid O(heap) per free and became
+  quadratic. The list stays for sweep iteration; a pointer-keyed bucket index
+  (`mellowrt_heap.inc`) answers the lookup, grows at a 3/4 load factor and drops
+  entries during the sweep. Measured on the Release standalone binary: money
+  1,000 steps 188.4 ms -> 9.5 ms, 4,000 steps 3,438.4 ms -> 21.1 ms; ledger 80
+  posts 15,128.4 ms -> 29.9 ms, and 160 posts, which did not finish before,
+  now takes 129.9 ms. The remainder of the ledger curve is the per-post clone of
+  the whole book, not the heap.
+
+### Docs
+- The README now publishes measured performance instead of leaving speed
+  unstated: 6.4 ms startup floor, 8.2-8.9 million rows/second and 3.2-3.4x the
+  Python VM for in-memory data transforms, 58 ms for 9,000 `money_add` calls,
+  and the honest interpreter position (about 2x CPython, about 4.7x slower than
+  Lua 5.4). `benchmarks/native_vs_zig/RESULTS_2026-11-05_HEAP-INDEX.md` records
+  the post-heap-fix re-measurement, the 2026-11-02 cross-language report gains a
+  dated addendum, and `docs/DATA_PROCESSING_CORE.md` replaces its v2.7.1
+  figures with the current measured range.
+- `docs/STDLIB_REFERENCE.md` documents the standalone `std.ai` surface, the
+  `--seed` flag with three-engine random parity, and the offline limit on
+  OpenAI transport instead of calling `random(...)` a compile error.
+
+### Structure
+- Split the two benchmark entry points into concern packages behind unchanged
+  command lines. `benchmarks/run_all.py` (423 lines) now holds only argument
+  parsing, `main`, and the two JSON helpers and delegates to `bench_suite/`:
+  `config.py` (paths, `Profile`, `PROFILES`), `environment.py` (tool versions,
+  git commit, environment block), `suite.py` (section runners and `run_suite`)
+  and `report.py` (`SUMMARY_METRICS` and the Markdown renderer).
+  `benchmarks/native_vs_zig/run_compare.py` (399 lines) keeps only `main` and
+  delegates to `native_compare/`: `workloads.py`, `process.py`, `builders.py`,
+  `runners.py` and `compare.py`. Every moved definition is source-identical, both
+  scripts keep their `--help` and `ROOT`-relative defaults, and a quick-profile
+  run with `--skip-cross-language` still produces all four measured sections plus
+  the skipped cross-language marker. `tests/language/test_benchmark_layout.py`
+  pins the facades and the module sets.
+- Split the Cloudflare public-registry Worker (`apps/deploy/cloudflare-public-registry/
+  src/index.ts`, 409 lines) into one module per concern behind the same wrangler
+  entry: `types.ts` (the `Env` bindings and `MAX_ARCHIVE_BYTES`), `http.ts` (security
+  headers, JSON response, body reader), `auth.ts` (SHA-256, token lookup, publish
+  scope, requester), `manifest.ts` (visibility/authors/creator/badges/row
+  derivation), `pages.ts` (HTML escaping, page shell, registry and package-detail
+  pages) and `validation.ts` (package name, version, namespace owner). `index.ts`
+  keeps only the fetch route table and is 236 lines; `main` in `wrangler.toml` is
+  unchanged. Every moved declaration is byte-identical to HEAD and so is the fetch
+  body, and the package type-checks under `strict` with the global TypeScript
+  compiler against a minimal `D1Database`/`R2Bucket` shim because the app has no
+  installed `node_modules`.
+- The playground UI script (`src/mellowlang/playground/assets/app.js`, 483 lines) is
+  not split yet: the browser fetches exactly `/app.js`, and the only place that could
+  serve further modules is `playground/server.py`, which still carries uncommitted
+  work.
+- Split the 15 native C sources over 300 lines into fragment parents. C cannot split
+  one translation unit across import seams, so each parent keeps everything before
+  the first seam and `#include`s contiguous `*_partN.inc` slices in order; the
+  fragments are never compiled separately, so no CMake or `setup.py` source entry
+  changed. Seams are top-level function starts, `/* ── ` section banners, and - for
+  the giant dispatch loops - `case` labels inside the switch. Seam detection tracks
+  brace, preprocessor, comment and paren depth so a multi-line signature is never
+  cut, and every split proves byte-identical reconstruction from parent plus parts.
+  - `native/standalone/src/`: `mellowc.c` 11 + 3 parts (150/280/191),
+    `mellowc_fastloops.inc` 13 + 3 (274/259/51), `mellowrt_core.c` 31 + 4
+    (289/255/252/103), `mellowrt_ledger.c` 17 + 4 (285/253/168/223),
+    `mellowrt_storage.c` 41 + 4 (290/250/283/111), `mellowrt_syscalls.c` 56 + 4
+    (285/282/290/24) and `mellowrt_main.c` 38 + 2 (194/94).
+  - `native/mellowvm/src/`: `mellowvm_module.c` 139 + 2 (266/234), `mellowvm_exec.inc`
+    17 + 3 (287/261/127), `mellowvm_storage.inc` 16 + 3 (227/261/281) and
+    `mellowvm_syscalls.inc` 12 + 4 (39/255/275/189). The parent keeps the struct,
+    opcode table and forward declarations; the second part carries the includes of
+    the three subject fragments, which are each parents of their own parts.
+  - `native/sm/src/sm_native.c` 20 + 2 (276/106), `native/melv/src/melv_native.c`
+    9 + 3 (223/210/199), `native/mmg_gpu/src/renderer_gl.c` 21 + 2 (229/66) and
+    `native/mellowllm/src/mellowllm_module.c` 8 + 2 (191/113).
+- Every native `.c`/`.h`/`.inc` file is now at most 300 lines. The eight obsolete
+  native ceilings are gone from `LINE_CEILINGS`, and
+  `tests/language/test_source_structure.py` gained a fragment-manifest test: part
+  numbering is contiguous, each parent includes exactly its parts in order, and
+  parent and parts both stay at or below 300 lines. `test_native_vm_dispatch...`
+  and `test_standalone_compiler...` now read the translation unit through its
+  parts instead of the former monolith.
+- Verified: the standalone CMake Release build of `mellow` succeeded and CTest
+  passed 5/5; all four Python extensions rebuilt in place; `tests/native` passed
+  91/91. `native/mmg_gpu` could not be configured on this machine (no pkg-config /
+  SDL2), so its split rests on the byte-identical reconstruction rather than a
+  compile.
+- Split eight more over-long modules along their documented seams, each behind an
+  imports-only facade that keeps the old import path and surface:
+  - `src/mellowlang/web.py` (510) over `web_groups/`: records, lexing, value helpers,
+    parsing, TSX emission, dev-app scaffold and dev server. 115 oracle checks, a
+    64-step battery (47 results, 17 refusals) and complete group coverage.
+  - `src/mellowlang/desktop_host.py` (471) over `desktop_host_groups/`: parsing, window
+    files, Tk actions, runtime/launcher, portable bundle and status. 66 checks, 49 steps.
+    `bundle.py` re-anchors `__file__` to the facade - the split's one authored line.
+  - `src/mellowlang/mmg_runtime.py` (464) over `mmg_groups/`: parsing, render graph,
+    spec entry points, status and the window loop. 57 checks, 31 steps, no exemptions.
+  - `src/mellowlang/registry/server.py` (446) over `registry/server_groups/`: manifest
+    helpers, `RegistryStore`, `Handler` and the launcher. 68 checks; the 79-step battery
+    drives a real `ThreadingHTTPServer` on `127.0.0.1:0`, 16 refusals included.
+  - `src/mellowlang/lint.py` (350) over `lint_groups/`: issues/scope chain, visitor and
+    API. 69 checks, 138 steps, no refusals or exemptions.
+  - `src/mellowlang/ast.py` (332) over `ast_nodes/`: containers, statements and
+    expressions, the two node families never importing each other. 260 checks, full
+    executable-line coverage of all three modules, and the facade still re-exports the
+    `dataclass`/`field`/typing names the historical star-import surface handed out.
+  - `src/mellowlang/vm/debugger.py` (366) over `debugger_groups/`: one peer mixin per
+    subject, assembled by a `DebuggerMixin` whose body is only the four bases. 105 checks.
+  - `src/mellowlang/vm/cbridge.py` (363) over `cbridge_groups/`: the native vocabulary
+    and loader, the host adapter and the storage guards. 54 checks and a 105-step battery
+    (71 results, 34 refusals). The capability reporters and both runners deliberately
+    stay in the facade because callers and tests patch `_load_ext` there; the loader's
+    `from ... import _mellowvm` is the split's one authored token, pinned by
+    `test_cbridge_structure.py`.
+- Each split carries its own `tests/language/test_<name>_structure.py` - member homes,
+  module sizes, one-way layering, exported surface and no outside importers - because
+  `test_source_structure.py` sits at its declared 1,100-line ceiling. The language,
+  native-parity, workspace-boundary and quality gates pass; the only failure is the
+  pre-existing `package_manager.py` ceiling owned by uncommitted work.
+- Split `src/mellowlang/agents/control_plane.py` (536 lines) into
+  `src/mellowlang/agents/control_plane_groups/`, behind a 38-line imports-only facade
+  that keeps the `mellowlang.agents.control_plane` path `agents/__init__.py`, the CLI
+  and the tests use. `state.py` owns the state-file path and its JSON read/write pair
+  plus the timestamp/slug helpers, `transport.py` the remote test, URL builder and JSON
+  HTTP call, `traffic.py` traffic-split normalisation and revision labelling,
+  `metrics.py` metric coercion and autoscaling signals, and `alerts.py` alert-rule
+  evaluation. `deploy.py` registers deployments and revisions, `inspection.py` lists
+  deployments, status, revisions and health, `rollout.py` promotes, rebalances and rolls
+  back, and `observability.py` records metrics and manages alert rules. Imports point
+  only downwards - `state`/`transport` (0), `traffic`/`metrics` (1),
+  `deploy`/`inspection`/`rollout`/`alerts` (2), `observability` (3) - and the facade
+  re-exports exactly the 15 public names; the 18 helpers stay package-internal.
+- Also proven against `HEAD`: all 33 declarations are byte-identical with equal code
+  signatures. A 151-step battery - local registration, revision history, health,
+  rollouts with and without a canary, traffic splits including the 0/0 and negative
+  normalisations, rollbacks by default and explicitly, metrics history trimming,
+  autoscaling in and out, every alert operator, malformed and non-dict state files, and
+  a canned remote control plane that answers success, empty body, HTTP JSON error, HTTP
+  text error, bad JSON and a network failure - runs against both the monolith and the
+  split package in fresh temp trees and agrees step for step, 18 refusals included. The
+  battery executes every executable line of all 9 modules; the single exemption is the
+  `None` guard in `_upsert_local_deployment`, which `_ensure_revision` always fills
+  first. `test_control_plane_structure.py` carries the contract - member homes, module
+  sizes, one-way layering, the exported surface and its excluded helpers - in its own
+  file because `test_source_structure.py` sits at its declared 1,100-line ceiling.
+- Deleted the orphaned `src/mellowlang/core.py` (411 lines): nothing imported its
+  `MellowLangEngine`, an early `frinds/core.py` leftover referenced only inside its own
+  file, so it was removed rather than split.
+- Split `src/mellowlang/agents/registry.py` (544 lines) into
+  `src/mellowlang/agents/registry_groups/`, behind a 65-line imports-only facade that
+  keeps the `mellowlang.agents.registry` path `agents/__init__.py` and the registry
+  tests use. `layout.py` owns the on-disk constants and name normalisation,
+  `integrity.py` the hashes, canonical JSON, manifest reader and signature pair,
+  `auth.py` the registry URL and read/private tokens, `catalog.py` the manifest reader,
+  local version listing and search, `archive.py` the reproducible archive and local
+  publish, `graph.py` the dependency graph, `lock.py` `agent.lock`, `install.py`
+  extraction and install-from-lock, and `remote.py` the only HTTP client. Imports point
+  only downwards - `layout`/`integrity` (0), `auth`/`catalog` (1),
+  `archive`/`graph`/`lock` (2), `install` (3), `remote` (4) - and the facade re-exports
+  exactly the 31 public names; the 11 helpers stay package-internal rather than
+  widening the old surface.
+- Also proven against `HEAD`: all 42 declarations are byte-identical and keep their AST;
+  every function keeps its code signature (with set constants normalised, since a
+  `frozenset`'s `repr` follows hash order). A 92-step battery - sign/verify, reproducible
+  archives with ignored files, publish twice, local and dir graphs, cycles, unsatisfied
+  dependencies, locks with and without manifests, installs from archive and copy, unsafe
+  and corrupt archives, frozen-lock drift in all three forms, auth through env and
+  config, and a canned HTTP registry with cache reuse, a checksum mismatch, a private
+  scope and a network failure - runs against both the monolith and the split package in
+  fresh temp trees and agrees step for step, 18 refusals and 2 raises included. The
+  battery executes every executable line of all 9 modules; the single exemption is the
+  second archive-path guard in `install.py`, which a zip member with no `..` component
+  cannot reach. `test_agent_registry_structure.py` carries the contract - member homes,
+  module sizes, one-way layering, the exported surface and its excluded helpers - in its
+  own file because `test_source_structure.py` sits at its declared 1,100-line ceiling.
+- Split `src/mellowlang/compiler/ir_lowering.py` (597 lines) into
+  `src/mellowlang/compiler/lowering/`, behind a 13-line imports-only facade that keeps
+  the `mellowlang.compiler.ir_lowering` path `compiler.py` uses. `tables.py` holds the
+  vocabulary (`STDLIB_CALLS` with 141 entries, `SYSCALL_ARGUMENTS` with 15), `errors.py`
+  `UnsupportedLoweringError`, and `syscalls.py` the module-call resolver and the
+  named-argument binder. `driver.py` owns the machine - `_LoopCtx`, the instruction
+  list, the label and temp counters, the loop stack and `lower()` - as
+  `LoweringDriverMixin`; `statements.py` and `expressions.py` hold one dispatch chain
+  each (`_stmt`, `_expr`); `lowerer.py` is a class header assembling the three, and
+  defines nothing else. Imports only point downwards - `tables`/`errors`/`driver` (0),
+  `syscalls` (1), `statements`/`expressions` (2), `lowerer` (3) - and no module outside
+  the facade may import the package. The unused `Optional` import was dropped rather
+  than re-exported.
+- Also proven against `HEAD`: the 10 functions and 2 classes are byte-identical with
+  equal code signatures (masking `CO_METHOD`, which a module-level re-compile of a
+  method cannot carry), both tables compare equal, and the assembled `IRLowerer` gets
+  every method from its declared mixin. 39 hand-built ASTs - the error paths no
+  maintained program reaches, from `TryStmt` and `foreach` unpacking to unknown
+  operators, anonymous f-string parts and allowlist misses - and 120 real `.mellow`
+  files (101 producing an `IRProgram`, 37 distinct opcodes) lower identically to the
+  monolith, down to every instruction's opcode, argument, line and column. The battery
+  executes every executable line of all 7 modules, needing no unreachable exemption,
+  and stubbing each of the 55 runtime imports, or patching a provider such as
+  `dataclasses.dataclass`, changes that battery; the other 9 are annotation-only because
+  `from __future__ import annotations` keeps them unevaluated.
+  `test_ir_lowering_structure.py` carries the contract - each member's home, the
+  assembler's empty body and bases, each module at 300 lines or fewer, the one-way
+  layering, the exported surface, and that no other module imports the package - in its
+  own file because `test_source_structure.py` sits at its declared 1,100-line ceiling.
+- Split `src/mellowlang/cli/commands/runtime.py` (661 lines) into
+  `src/mellowlang/cli/commands/runtime_groups/`, behind a 12-line imports-only
+  facade that keeps the import path `cli/main.py` already uses. `deps.py` holds the
+  lazy `pkg_auto_fetch_for_run` alias, `standalone.py` the standalone-binary lookup
+  and the guard that picks it, `run_config.py` `RunSettings` and
+  `build_run_config`, `run.py` `_cmd_run`, `suite.py` the per-script runner,
+  discovery and golden output, and `golden.py` record/replay/diff, the only module
+  that calls back into `run`. Imports only point downwards - `deps` (0),
+  `standalone`/`run_config`/`suite` (1), `run` (2), `golden` (3) - and no module
+  outside the facade may import the package. The 180-line `RunConfig` assembly
+  inside `_cmd_run` became the body of `build_run_config(s: RunSettings)`, opened by
+  one `name = s.name` line per field and closed by `return cfg`, so the assembly
+  text is byte-identical and the handler now calls it once with every field by
+  keyword. `_project_root` was dropped rather than moved: nothing in `src/` or
+  `tests/` referenced it.
+- Also proven against `HEAD`: the 9 moved definitions are byte-identical with equal
+  code signatures, and exactly one copied handler line differs - the lazy
+  `from ...fast_compiler` import, which sits a level deeper
+  (`from ....fast_compiler`). 97 differential cases agree on both sides (exit code,
+  stdout, stderr, escaping error, and `repr` of every constructed config), covering
+  34 distinct `RunConfig`s, 5 exit codes, 34 distinct outputs, 94 returned exit
+  codes, 3 escaping errors and 79 runs that reached the VM. Statement coverage
+  executed every line of all 7 modules; 4 lines are declared unreachable with
+  executable proofs - the native guard refuses `json_out`, so its own json branch
+  cannot run, and `FastRunner.run` swallows `SystemExit`, so the handler's `except`
+  is dead - and stubbing each of the 28 runtime imports, or patching the provider of
+  `dataclass`, changes that battery (4 more are annotation-only). Because
+  `test_source_structure.py` sits at its declared 1,100-line ceiling,
+  `tests/language/test_cli_runtime_structure.py` carries this unit's contract: each
+  member's home, the prologue/field/keyword agreement, every module at 300 lines or
+  fewer, the one-way layering, the exported surface, and that no other module
+  imports the package.
+- Split `src/mellowlang/fast_compiler.py` (662 lines) into `src/mellowlang/fastlang/`,
+  one module per concern of the compile-to-Python fast path: `builtins.py` holds
+  `_MELLOW_BUILTINS_SRC`, the Python prelude every transpiled program starts with,
+  `names.py` the `_py_name` mangler, `writer.py` `WriterMixin` (`_w`, `_w_raw`,
+  `_new_tmp`), `statements.py` `StatementMixin` (`_stmt`, `_skill_def`, `_import_stmt`),
+  `expressions.py` `ExpressionMixin` (`_expr`, `_call_expr`), `transpiler.py` assembling
+  the three mixins into `PyTranspiler` with only `__init__` and `transpile()`, and
+  `runner.py` `FastRunner` - behind a 17-line imports-only facade that keeps the
+  `mellowlang.fast_compiler` import path the CLI commands and tests already use. The
+  monolith's methods already sat at class indentation, so each move is verbatim: the
+  only text this split authors is a docstring, a future import, a mixin header and the
+  import block per module, and `symtable` free-name analysis resolves every name a
+  module reads from outside itself instead of a hand-written scope walk. Imports point
+  only at a lower layer - leaves, then the two emitters, then the assembled class, then
+  the runner - so an emitter cannot reach a peer, and only the facade imports `fastlang`.
+- Also proven against `HEAD`: all 4 module-level members and all 10 methods of the two
+  classes are the monolith's own code objects (same instruction stream, names, consts,
+  docstrings and signatures), `PyTranspiler` assembles
+  `WriterMixin/StatementMixin/ExpressionMixin`, and the instance state matches. 98 real
+  `.mellow` programs transpile to byte-identical Python (78 produced source, 20 raised
+  the same `ParseError`), 54 runnable ones produce identical output, and 86 hand-built
+  AST nodes - fed straight to `_stmt`/`_expr`, since the chains hold branches no
+  maintained program reaches - render identically including the writer's counters. The
+  facade keeps all 5 caller-visible names; the 58 that left are the monolith's own
+  import bindings and no file under `src/` or `tests/` imports any of them from
+  `fast_compiler`. Statement coverage executed all 320 statement lines of the 7 modules
+  (one `except Exception: pass` around a `sys.stdout` restore is declared unreachable,
+  docstring statements cannot be traced), and stubbing any of the 49 runtime imports in
+  the module that drew it changes that battery; 2 are annotation-only (`Expr`, `Stmt`)
+  and 3 are consumed once by a class header (`*Mixin`), which the MRO check covers.
+  `test_fast_compiler_is_split_by_concern()` now locks the module set, each member's and
+  method's home, the mixin assembly and driver shape, the one-way layering, the exported
+  surface, and that no other module imports `fastlang`; that gate file is now declared
+  in `LINE_CEILINGS` at 1,100, because each split adds its tables there and the next
+  overflow moves the split contracts to their own module rather than raising it again.
+- Split `src/mellowlang/standalone_image.py` (668 lines) into
+  `src/mellowlang/mvi/`, one module per concern of the `.mvi` file: `ops.py` holds
+  the three lookup tables, `format.py` the header, the four entry records and
+  `to_bytes`, `binary.py` the project-root anchor and the standalone-executable
+  paths, `consts.py` the constant-pool and span helpers, `state.py` the `Lowering`
+  accumulators with `slot_for`/`enter_scope`, `scopes.py` the `func_table` rebuild
+  and the per-function slot scan, `emit.py` the opcode chain, `entries.py` the
+  function entries, core-module seed and the address/jump/module fix-ups,
+  `lowering.py` the driver, and `compile.py` the compile-source, compile-file and
+  run entry points - behind a 23-line imports-only facade that keeps the
+  `mellowlang.standalone_image` import path. The 391-line
+  `lower_compiled_to_standalone_image` became that driver plus nine named steps,
+  with every enclosing local the blocks shared turned into a `Lowering` field, so
+  the cut is a rename and not a rewrite. Imports point only at a lower module in
+  that order, and only the facade reaches into the package.
+- Also proven against `HEAD`: the 19 module-level members are identical to the
+  monolith (instruction stream, names, consts, dataclass fields and values) with
+  exactly two declared edits - `_project_root` re-anchored from `parents[2]` to
+  `parents[3]`, and `compile_source_to_standalone_image`'s lazy `from .compiler`
+  deepened to `from ..compiler`; the 391 lines are accounted for, every non-blank
+  line claimed by exactly one emitted block, and each rewritten body's AST is
+  equal to the original's after the same rename. 121 differential cases produce
+  byte-for-byte identical images or the same error type and message (106
+  lowerings, 58 of them from real `.mellow` source, plus the compile/run surface
+  and the byte writer), and those images are 61 distinct files from 135 to 9,051
+  bytes. Statement coverage executed 336 of the 337 moved statement lines, the one
+  gap being unreachable in `HEAD` too, and stubbing any of the 26 runtime imports
+  drawn between the modules changes that battery; the other 6 are annotation-only
+  because `from __future__ import annotations` keeps them unevaluated.
+  `test_standalone_image_format_is_split_by_concern()` now locks each member's and
+  step's home, the 19 `Lowering` fields, the one-way layering, the exported surface
+  against the package, and that no other module imports `mvi`; the
+  `compiler.bytecode` absence check now spans the package rather than the facade.
+- Split `src/mellowlang/cli/commands/agents.py` (1,137 lines) into
+  `cli/commands/agent_groups/`: `deps.py` keeps the 81 lazy `_lazy_attr` aliases,
+  `support.py` the helpers shared across groups, and one module per subject of
+  `mellow agent ...` - `runtime.py`, `lifecycle.py`, `inspection.py`, `serve.py`,
+  `control_plane.py`, `automation.py` - behind a 52-line imports-only facade. A
+  group imports `deps` and `support`, never a sibling group.
+- Proven against `HEAD`, not reviewed: 43 definitions moved verbatim, the same
+  124-name surface with equal signatures, 127 command invocations with identical
+  scrubbed output, and stubbing each of the 107 borrowed bindings changes that
+  battery. `LINE_CEILINGS` lost the `agents.py` entry in the same commit, and
+  `test_cli_agent_commands_are_split_by_group()` now checks every handler's
+  subject module plus that each lazy alias still names an export its target
+  package provides.
+- Split `src/mellowlang/agents/scheduler.py` (789 lines) into
+  `src/mellowlang/agents/scheduling/`: `paths.py` owns `SCHEDULER_HOME`, the
+  state-file paths and the time and JSON primitives, `state.py` every paired
+  `_load_*`/`_save_*` reader of those files, `cron.py` and `backoff.py` stay pure,
+  and `jobs.py`, `webhooks.py`, `queue.py`, `drain.py`, `runner.py`, `http_api.py`
+  hold one subject each - behind a 93-line imports-only facade. Imports may only
+  point at a lower layer, so no subject can reach into the driver that calls it.
+- Also proven against `HEAD`: the 66 functions are byte-identical to the monolith
+  (code, names, consts, line spans, source text, signature) with only `__module__`
+  and each def's own line changed, the facade still hands out all 67 names the
+  monolith owned, 156 scheduler calls match on both sides with the 21 files left in
+  the state dir identical byte for byte, 64 of the 66 defs are named by a case and
+  the last two reached through one that is, and stubbing each of the 57 sibling
+  imports changes that battery. Proving it needed a frozen clock per module and a
+  stub `ThreadingHTTPServer` that captures the nested handler and pins
+  `date_time_string()`, because the HTTP surface otherwise reads the real wall
+  clock. `test_agents_scheduler_is_split_by_subject()` now locks each function's
+  home, the whole re-exported surface against `agents/__init__.py` and the tests,
+  and the one-way layering.
+
+### Removed
+- `src/mellowlang/fast_vm.py` (847 lines, the v1.4.9 compile-to-Python engine).
+  Nothing in the repository imported it - no source, test, script, doc, or
+  dynamic import string referenced `FastVM` or `mellowlang.fast_vm` - and its
+  `FastVM.run()` could not have worked: it catches `_MellowStop`, a class that
+  only exists in the source string the generator emits, so a program using
+  `stop` raised `NameError` in the host. No other module changed, so the engines
+  the project does ship are untouched.
+
+## 2.9.9 - 2026-11-03
+
+### Structure
+- Split `src/mellowlang/host/runtime.py` (1,470 lines) into `host/base.py`,
+  fourteen `host/families/<name>.py` registration modules, and a 66-line
+  assembler that keeps the original registration order. `families/support.py`
+  now holds the argument-shape predicates that were duplicated inline.
+- Split `native/standalone/src/mellowc.c` (1,210 lines) so the while-loop shape
+  recognizers and their fused emitters live in `mellowc_fastloops.inc`, included
+  by that one translation unit; CMake is unchanged.
+- Both splits are verbatim and proven by before/after equivalence: identical
+  204-syscall registry (names, order, costs, bounds) and 7,020 differential host
+  calls per side with identical results and errors.
+
+### Gates
+- `tests/language/test_source_structure.py` carries `LINE_CEILINGS`: any file
+  over 1,000 lines must be declared, and a declared file may not exceed its
+  ceiling. Ceilings only move down.
+- Added structure tests for the host family seam and the compiler fragment seam.
+- The workspace boundary gate now treats `native/standalone/**/*.inc` as C-only
+  surface.
+- `docs/PROJECT_STRUCTURE.md` documents module boundaries; the project skill
+  records the split seams and the rule that `native` requires an explicit
+  `cmake --build` before CTest.
+
+### Measured
+- Reran the cross-language comparison on optimizer-proof workloads and wrote
+  `benchmarks/native_vs_zig/RESULTS_2026-11-02_CROSS-LANGUAGE-HONEST.md`:
+  45.9 ns/iter for Mellow against 2.8 for gcc `-O3` on a serialized chain, plus
+  the startup floors and the shape cliff the previous table hid.
+- Root-caused the native money/ledger throughput defect to the linear
+  `heap_find()` scan and the absent GC trigger (553 microseconds per `money_add`
+  at 3,000 live blocks against 56 ns on the Python Decimal path).
+
+## 2.9.8 - 2026-11-02
+
+### Native Runtime Services
+- Storage, save, fs, and file APIs now lower to `std.*` syscalls and run in C on
+  the CPython extension and the standalone executable, so the save-path sandbox
+  applies to native programs too.
+- Ledger, money, server, and the SM CLI share the native syscall id table.
+- The Python VM re-enters its legacy builtins from the syscall instruction on a
+  VM-private bytecode copy, keeping the shared compile cache intact.
+
+### Parity Coverage
+- Added `tests/fixtures/storage_core.mellow` and the ledger core fixture as the
+  shared native/Python parity source.
+- Added `examples/native_server.mellow` as the maintained native HTTP example.
+
+### Workspace
+- The boundary gate rejects root build artifacts and undocumented `native/`
+  surfaces, and generated agent-package output is now ignored.
+
 ## 2.9.4 - 2026-06-21
 
 ### Runtime Structure

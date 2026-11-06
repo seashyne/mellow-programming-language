@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import io
 import json
 import sys
@@ -17,6 +18,7 @@ sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src")))
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 
+from mellowlang import save_core
 from mellowlang.compiler.compiler import Compiler
 from mellowlang.vm.vm import MellowVM, RunConfig
 
@@ -114,11 +116,14 @@ def signer_server():
         httpd.shutdown()
 
 
-def test_signed_save_roundtrip(signer_server, tmp_path: Path):
+def test_signed_save_roundtrip(signer_server, tmp_path: Path, monkeypatch):
     url, pub_b64 = signer_server
-    # Use unique app_id to avoid cross-test collisions in OS save dir
+    # SaveSystem resolves its root from the OS data dir, so redirect it here;
+    # storage_dir only namespaces the file/fs APIs.
+    monkeypatch.setattr(save_core, "_user_data_root", lambda: tmp_path)
     app_id = f"test.game.{tmp_path.name}"
     cfg = RunConfig(
+        engine="py",  # signed save lives in the Python VM, not the native engines
         allow_save=True,
         allow_net=True,
         net_http_allow=url.rsplit("/", 1)[0] + "/",
@@ -146,16 +151,18 @@ def test_http_post_basic(signer_server, tmp_path: Path):
     url, _pub_b64 = signer_server
     base = url.rsplit("/", 1)[0] + "/"
     cfg = RunConfig(
+        engine="py",  # net_http_post is a Python-VM service
         allow_net=True,
         net_http_allow=base,
         net_timeout_s=5.0,
         storage_dir=str(tmp_path),
     )
+    # A real digest rather than "0"*64: PUSH normalises all-digit strings into
+    # ints, which would post a number where the signer expects a hex string.
+    digest = hashlib.sha256(b"mellow-signed-save").hexdigest()
     out = run_source(
         f'''
-        # build map via json.decode (literal map syntax is not guaranteed)
-        import "json" as json
-        let r = net_http_post("{url}", call(json["decode"], "{{\\"hash_sha256\\":\\"{'0'*64}\\"}}"))
+        let r = net_http_post("{url}", {{"hash_sha256": "{digest}"}})
         print(r)
         ''',
         cfg=cfg,
@@ -166,6 +173,7 @@ def test_http_post_basic(signer_server, tmp_path: Path):
 def test_websocket_echo(ws_echo_server, tmp_path: Path):
     url = ws_echo_server
     cfg = RunConfig(
+        engine="py",  # the websocket client is a Python-VM service
         allow_net=True,
         net_ws_allow=url,
         net_max_bytes=1024,

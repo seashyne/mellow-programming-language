@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str((Path(__file__).resolve().parents[1] / "src")))
 
 from mellowlang.compiler.compiler import Compiler
+from mellowlang import save_core
 from mellowlang.vm.vm import MellowVM, RunConfig
 from mellowlang.error_core import MellowLangRuntimeError
 
@@ -18,13 +19,15 @@ def run_source(src: str, *, cfg: RunConfig | None = None):
     comp = Compiler()
     prog = comp.compile(src, filename="<test>")
     vm = MellowVM()
-    return vm.run(prog, config=cfg or RunConfig())
+    # The ChaCha20Poly1305 + HKDF envelope is still a Python-VM service; the
+    # native port is the open P1 item in docs/PY_TO_C_RUNTIME_MIGRATION.md.
+    return vm.run(prog, config=cfg or RunConfig(engine="py", allow_save=True))
 
 
 def test_secure_save_roundtrip_and_list(monkeypatch):
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
-        monkeypatch.setenv("XDG_DATA_HOME", str(td))
+        monkeypatch.setattr(save_core, "_user_data_root", lambda: td)
         src = """
         save_init("my.game")
         save_set("hp", 120)
@@ -46,7 +49,7 @@ def test_secure_save_roundtrip_and_list(monkeypatch):
 def test_secure_save_tamper_detected(monkeypatch):
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
-        monkeypatch.setenv("XDG_DATA_HOME", str(td))
+        monkeypatch.setattr(save_core, "_user_data_root", lambda: td)
 
         run_source('save_init("my.game")\nsave_set("hp", 1)\nsave_commit("slot1")\n')
         p = td / "my.game" / "saves" / "slot1.msav"
@@ -65,8 +68,8 @@ def test_secure_save_tamper_detected(monkeypatch):
 def test_secure_save_quota_bytes(monkeypatch):
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
-        monkeypatch.setenv("XDG_DATA_HOME", str(td))
-        cfg = RunConfig(save_bytes_max=64)
+        monkeypatch.setattr(save_core, "_user_data_root", lambda: td)
+        cfg = RunConfig(engine="py", allow_save=True, save_bytes_max=64)
         src = """
         save_init("my.game")
         # create a payload > 64 bytes

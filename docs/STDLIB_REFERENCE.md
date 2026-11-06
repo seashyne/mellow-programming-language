@@ -1,6 +1,6 @@
-# MellowLang Stdlib Reference (v2.9.7)
+# MellowLang Stdlib Reference (v2.9.10)
 
-This is a pragmatic reference for the stable 2.9 line plus the v2.9.7
+This is a pragmatic reference for the stable 2.9 line plus the v2.9.10
 native C I/O, system, builtin-module, and GC/concurrency foundation additions.
 
 > Note: Host modules are **allowlisted**. Use `mellow modules` to see what is available.
@@ -33,9 +33,9 @@ native C I/O, system, builtin-module, and GC/concurrency foundation additions.
 - `call(fn, ...args)` *(dynamic function call)*
 
 Full Native C supports these built-ins directly in the standalone runtime and
-is the authoritative implementation for new v2.9.7 runtime work.
+is the authoritative implementation for new v2.9.10 runtime work.
 
-The v2.9.7 GC API marks reachable native handles from the VM stack/locals and
+The v2.9.10 GC API marks reachable native handles from the VM stack/locals and
 sweeps unreachable channel handles. `gc_stats()["mode"]` reports
 `mark-sweep-native-handles`. Channels work as native FIFO handles. `spawn`,
 `yield`, `workers`, `worker_count`, and `scheduler_mode` expose the native M:N
@@ -64,6 +64,43 @@ print(thread.scheduler_mode())
 - `vec(x, y)`
 - `vec_add(a, b)`, `vec_sub(a, b)`
 - `vec_len(v)`
+
+The vector family resolves through `std.math.*` host services and runs on the
+Python VM, the `--engine=c` extension, and the standalone `mellow` executable,
+which implements the whole family in native C.
+
+### Standalone host coverage
+
+| Family | Standalone `mellow` |
+| --- | --- |
+| `std.string` | native and UTF-8 aware (`len`, `chr`, `ord`, padding, `format`) |
+| `std.list` | native; mutators return new lists |
+| `std.map` | native; `set` returns a new map |
+| `std.type` | native |
+| `std.json` | native encode/decode with Python-compatible separators |
+| `std.math` | native, including vectors, `distance`, `angle_between`, `sum` |
+| `std.time` | native `unix`, `ms`, and monotonic `now` |
+| `std.assert`, `std.event` | native; `AssertionError` messages match the Python VM |
+| `std.game` | native easing, tween, grid neighbors, A*, scene/entity, AABB, animation |
+| `std.ai` steering, perception, and decisions | native `seek`, `flee`, `arrive`, `wander`, `patrol`, `in_range`, `in_sight`, `nearest`, `filter_range`, `utility_choose`, `bt_tick`, `fsm_tick` |
+| `std.data` | native JSONL/CSV streams, `project`/`where`/`sum`, and SQLite through the vendored amalgamation |
+
+Native lists and maps are value types: `list.push`, `list.insert`, `list.remove`,
+`list.pop`, `list.sort`, and `map.set` return new collections and leave the
+receiver unchanged, while the Python VM mutates it. Code that uses the return
+value behaves the same on both engines. Game helpers follow the same rule: the
+native `entity.move` returns the updated entity map and `astar` returns a new
+path list.
+
+Callbacks stay Python-only for now: `list.map`, `list.filter`, `list.reduce`,
+`list.map_fn`, and `list.filter_fn` need to invoke a Mellow function and remain a
+compile error in the standalone runtime.
+
+`ai.bt_tick` and `ai.fsm_tick` invoke the syscall named in their tree or state
+map, so the standalone runtime resolves that name through the same builtin table
+the compiler uses. Unknown names fail with `SANDBOX: syscall not allowed: <name>`,
+and a missing `args` value means zero arguments while a non-list value is passed
+as the single argument, matching the Python VM.
 
 ## Money / decimal-safe rules
 
@@ -155,6 +192,16 @@ Parameterized SQLite:
 
 Writes require `--data-write`. Query values must use `?` or named placeholders.
 
+The standalone `mellow` executable implements the streaming helpers, the row
+transforms, and SQLite in native C; `tests/native/test_native_data_standalone.py`
+diffs the output against the Python VM, including quoted CSV fields, blank
+lines, missing columns, extra values, parameter binding, DDL row counts, and
+query row limits. Standalone limits mirror the defaults: batch sizes 1-1000, at
+most eight open streams, and 1 MiB per record. Paths obey the `fs` sandbox
+(relative only, no `..`). SQLite uses the vendored amalgamation under
+`native/standalone/vendor/sqlite/`; writes still require `--data-write` and
+`--data-max-rows N` overrides the 5000-row query limit.
+
 ## Interop
 
 External language interop is available through the allowlisted `interop` module.
@@ -181,6 +228,30 @@ JavaScript, Go, Rust, Java, C++, C#, TypeScript, COBOL, and other runtimes.
 ## Random (deterministic)
 
 - `random(min, max)` *(deterministic under seed / replay)*
+- `random()` returns a float in `[0, 1)`; `random(n)` returns an int in `[0, n]`.
+
+`std.random.range` is seeded from `RunConfig(seed=...)` per run, so the same seed
+gives the same sequence on the Python VM and on `--engine=c`. Record/replay
+capture is Python-VM only.
+
+The standalone `mellow` executable implements the same generator in native C:
+CPython's MT19937 with `random()`, `random(n)` (an inclusive `[0, n]` integer)
+and `random(a, b)` (swapping the bounds when `a > b`). Seed it with
+`--seed N` or `--seed=N` anywhere on the command line; the flag is stripped
+before argument dispatch, so the script never sees it.
+
+```mellow
+print(random())        # float in [0, 1)
+print(random(10))      # int in [0, 10]
+print(random(5, 15))   # int in [5, 15]
+```
+
+```bash
+mellow --seed 42 run game.mellow
+mellow run game.mellow --seed=42
+```
+
+The three engines produce byte-identical sequences for the same seed.
 
 ## Storage statements
 
@@ -254,6 +325,67 @@ call(ai["decide"], "tag", "event")
 
 When running with `--ai-timeline path.jsonl`, decisions are written as JSONL.
 
+### OpenAI-compatible completions
+
+`ai.api_complete(provider, prompt, options?)` answers from the built-in offline
+providers unless the provider is configured with a `base_url`:
+
+```mellow
+call ai.api_configure("openai", {
+  "base_url": "https://api.openai.com/v1",
+  "model": "gpt-4o-mini",
+  "api_key_env": "OPENAI_API_KEY"
+})
+let reply = call ai.api_complete("openai", "Summarize MellowLang", {"temperature": 0.2})
+print(reply["response"])
+```
+
+- `api_complete` POSTs to `{base_url}/chat/completions` with `model` and
+  `messages`; `options.system` becomes the system message and `options.messages`
+  replaces the generated ones.
+- The key is read from `api_key` or the environment variable named by
+  `api_key_env`. Returned configs and `api_providers()` redact it.
+- Networking is deny-by-default like `net_http_*`: set `allow_net` and put the
+  base URL under `net_http_allow` in project `permissions`. Timeouts are clamped
+  to 0.1-120 s and responses are capped by `net_max_bytes`.
+- Provider state is per host process, so `api_configure` must run before
+  `api_complete` in the same run.
+
+### Standalone C runtime
+
+The standalone `mellow` executable implements the `std.ai` surface in native C
+with no Python dependency. Calls use either the direct dotted form
+(`ai.train(...)`) or the `call` keyword (`call ai.train(...)`); the Python VM
+reaches the same functions through `get ai.train(...)`.
+
+- Models: `ai.model_create`, `ai.train`, `ai.predict`, `ai.model_save`,
+  `ai.model_load`, `ai.loss_history`, `ai.model_info`, `ai.models_list`,
+  `ai.embed`
+- LLMs: `ai.llm_create`, `ai.llm_train`, `ai.llm_eval`, `ai.llm_generate`,
+  `ai.llm_tokenize`, `ai.llm_complete`, `ai.llm_chat`, `ai.llm_dataset`,
+  `ai.llm_info`, `ai.llm_models`, `ai.llm_backends`, `ai.llm_device_plan`,
+  `ai.llm_save`, `ai.llm_load`
+- Retrieval, prompts and sessions: `ai.vector_search`, `ai.rag_answer`,
+  `ai.prompt_template`, `ai.session_open`, `ai.session_message`,
+  `ai.session_history`, `ai.chat`, `ai.decide`
+- Runtime and providers: `ai.runtime_boot`, `ai.runtime_info`,
+  `ai.api_providers`, `ai.api_configure`, `ai.api_complete`, `ai.api_embed`
+- Tensor kernels: `ai.llm_tensor` and `ai.llm_tensor_batch`, reported under the
+  `mellow-native-c` backend
+
+Trained checkpoints land in `mellow_models/` and are interchangeable across
+engines: a `.mmodel` trained by the Python VM loads in the standalone runtime
+and a `.mllm` trained by the standalone runtime loads in the Python VM. Model
+training draws from CPython's MT19937, so `--seed 42` reproduces Python's
+weights exactly. Container values that `ai.decide` or `prompt_template` render
+use Python's `str()`/`repr()` spelling (`['a', 'b']`, `{'k': v}`, `True`,
+`None`), so logs match across engines.
+
+`api_complete` uses the same offline providers and `local-rag` strategy as the
+Python VM. Only the network transport needs the Python host: in the standalone
+runtime an `openai`-configured provider fails with
+`AI_PROVIDER_ERROR: network transport is not available in the standalone runtime`.
+
 ---
 
 ## Game module (v1.4.0, allowlisted)
@@ -281,6 +413,14 @@ grid = [
 path = call(g["astar"], grid, [0,0], [3,2], false)
 print(path)
 ```
+
+The standalone `mellow` runtime implements these helpers in native C, together
+with `scene_create`, `entity_create`, `entity_move`, `collide_aabb`,
+`anim_frame`, and the allowlisted `ai.*` behaviour functions:
+`ai.seek`, `ai.flee`, `ai.arrive`, `ai.wander`, `ai.patrol`, `ai.in_range`,
+`ai.in_sight`, `ai.nearest`, and `ai.filter_range`. Results match the Python VM;
+`tests/native/test_native_game_standalone.py` diffs native stdout against the
+reference engine.
 
 ---
 
