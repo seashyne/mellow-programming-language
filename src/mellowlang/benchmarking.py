@@ -53,7 +53,7 @@ def _bench_vm(rounds: int) -> dict[str, Any]:
     for _ in range(rounds):
         vm = MellowVM()
         start = time.perf_counter()
-        vm.run(program, config=RunConfig(max_steps=100_000))
+        vm.run(program, config=RunConfig(engine="py", max_steps=100_000))
         samples.append(time.perf_counter() - start)
     return {
         "name": "python-vm",
