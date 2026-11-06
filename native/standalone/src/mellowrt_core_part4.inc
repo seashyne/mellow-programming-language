@@ -29,7 +29,9 @@
                 }
                 break;
             }
-            if (!vm->syscall.fn(vm->syscall.user,insn->a,vm->stack+(vm->stack_len-argc),argc,&result)){
+            if (argc > vm->stack_len) { set_error(out,"stack_underflow"); return 0; }
+            MValue *syscall_args = argc ? vm->stack+(vm->stack_len-argc) : NULL;
+            if (!vm->syscall.fn(vm->syscall.user,insn->a,syscall_args,argc,&result)){
                 for(size_t i=vm->stack_len-argc;i<vm->stack_len;++i) mvalue_free(&vm->stack[i]);
                 vm->stack_len-=argc;set_error(out,(rt_ctx&&rt_ctx->syscall_error[0])?rt_ctx->syscall_error:"syscall_failed");return 0;
             }
