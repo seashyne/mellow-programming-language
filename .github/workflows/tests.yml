@@ -231,11 +231,14 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install release dependencies
-        env:
-          MELLOW_NO_EXT: "1"
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .[dev,security]
+      - name: Build native CLI for release checks
+        run: |
+          cmake -S native/standalone -B build/standalone-release \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/standalone-release --parallel 2
       - name: Run package tests
         run: |
           python -m pytest -q \
