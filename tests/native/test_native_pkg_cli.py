@@ -1,0 +1,259 @@
+"""Standalone C parity for the native package CLI.
+
+The C package manager mirrors src/mellowlang/packages for the local registry:
+manifest shapes, lockfile and alias JSON, and the installed layout must match
+what the Python reference writes. These cases exercise the native binary end to
+end, so they also prove the CLI works with no Python on PATH.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+NATIVE = ROOT / "native" / "standalone"
+
+
+def _compiler() -> str | None:
+    return shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
+
+
+@pytest.fixture(scope="module")
+def native_binary(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    compiler = _compiler()
+    if not compiler:
+        pytest.skip("C compiler is not available")
+    build = tmp_path_factory.mktemp("mellow-pkg-native")
+    binary = build / ("mellow.exe" if os.name == "nt" else "mellow")
+    command = [
+        compiler,
+        "-std=c99",
+        "-I",
+        str(NATIVE / "include"),
+        "-I",
+        str(ROOT / "native" / "sm" / "include"),
+        "-I",
+        str(NATIVE / "vendor" / "sqlite"),
+        str(NATIVE / "src" / "mellowrt_core.c"),
+        str(NATIVE / "src" / "mellowrt_debug.c"),
+        str(NATIVE / "src" / "mellowrt_ledger.c"),
+        str(NATIVE / "src" / "mellowrt_money.c"),
+        str(NATIVE / "src" / "mellowrt_platform.c"),
+        str(NATIVE / "src" / "mellowrt_packages.c"),
+        str(NATIVE / "src" / "mellowrt_pkg.c"),
+        str(NATIVE / "src" / "mellowrt_scheduler.c"),
+        str(NATIVE / "src" / "mellowrt_server.c"),
+        str(NATIVE / "src" / "mellowrt_sm_cli.c"),
+        str(NATIVE / "src" / "mellowrt_storage.c"),
+        str(NATIVE / "src" / "mellowrt_syscalls.c"),
+        str(NATIVE / "src" / "mellowc.c"),
+        str(NATIVE / "src" / "mellowc_lexer.c"),
+        str(NATIVE / "src" / "mellowc_modules.c"),
+        str(NATIVE / "src" / "mellowc_parser.c"),
+        str(ROOT / "native" / "sm" / "src" / "sm_native.c"),
+        str(NATIVE / "vendor" / "sqlite" / "sqlite3.c"),
+        str(NATIVE / "src" / "mellowrt_main.c"),
+        "-o",
+        str(binary),
+        "-lm",
+    ]
+    if os.name == "nt":
+        command.append("-lws2_32")
+    built = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert built.returncode == 0, built.stderr
+    return binary
+
+
+def _run(binary: Path, cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(binary), *args], capture_output=True, text=True, cwd=cwd, check=False
+    )
+
+
+def _ok(binary: Path, cwd: Path, *args: str) -> str:
+    result = _run(binary, cwd, *args)
+    assert result.returncode == 0, result.stderr or result.stdout
+    return result.stdout
+
+
+def _write_package(
+    folder: Path, name: str, version: str, *, author: str | None = None, deps: dict[str, str] | None = None
+) -> Path:
+    (folder / "src").mkdir(parents=True, exist_ok=True)
+    lines = [f'name = "{name}"', f'version = "{version}"']
+    if author:
+        lines.append(f'authors = ["{author}"]')
+    lines.extend(["", "[dependencies]"])
+    for dep_name, spec in (deps or {}).items():
+        lines.append(f'{dep_name} = "{spec}"')
+    (folder / "mellow.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (folder / "src" / "main.mellow").write_text('print("package")\n', encoding="utf-8")
+    return folder
+
+
+def _manifest_shape(name: str, version: str, author: str | None) -> dict:
+    return {
+        "name": name,
+        "version": version,
+        "entry": "src/main.mellow",
+        "description": "Mellow package",
+        "authors": [author] if author else [],
+        "license": "MIT",
+        "keywords": ["mellow"],
+        "badges": [],
+        "official": False,
+        "deprecated": False,
+        "dependencies": {},
+        "visibility": "public",
+        "namespace": "",
+        "creator": author or "unknown",
+    }
+
+
+def test_init_writes_python_shaped_scaffold(native_binary: Path, tmp_path: Path) -> None:
+    out = _ok(native_binary, tmp_path, "pkg", "init", "demo", "--name", "demo-pkg", "--author", "Mellow Maker")
+    package = tmp_path / "demo"
+    assert "package initialized" in out
+    manifest = json.loads((package / "mellow.pkg.json").read_text(encoding="utf-8"))
+    assert list(manifest) == [
+        "name", "version", "entry", "description", "authors",
+        "license", "dependencies", "keywords", "visibility", "namespace",
+    ]
+    assert manifest == {
+        "name": "demo-pkg",
+        "version": "0.1.0",
+        "entry": "src/main.mellow",
+        "description": "Mellow package",
+        "authors": ["Mellow Maker"],
+        "license": "MIT",
+        "dependencies": {},
+        "keywords": ["mellow", "package"],
+        "visibility": "public",
+        "namespace": "",
+    }
+    assert (package / "mellow.toml").read_text(encoding="utf-8") == (
+        'name = "demo-pkg"\n'
+        'version = "0.1.0"\n'
+        'description = "Mellow package"\n'
+        'entry = "src/main.mellow"\n'
+        'license = "MIT"\n'
+        'visibility = "public"\n'
+        'authors = ["Mellow Maker"]\n'
+        'keywords = ["mellow", "package"]\n'
+        '\n'
+        '[dependencies]\n'
+        '# add package = "^1.0.0"\n'
+    )
+    assert (package / "src" / "main.mellow").read_text(encoding="utf-8") == (
+        'def hello():\n    print("Hello from demo-pkg")\n'
+    )
+    assert (package / "README.md").read_text(encoding="utf-8") == (
+        "# demo-pkg\n\nGenerated by Mellow package manager.\n"
+    )
+    assert (package / "tests" / "basic_test.mellow").read_text(encoding="utf-8") == (
+        'print("basic package test")\n'
+    )
+
+
+def test_publish_install_list_search_and_info(native_binary: Path, tmp_path: Path) -> None:
+    _write_package(tmp_path / "demo", "demo-pkg", "0.1.0", author="Mellow Maker")
+    published = _ok(native_binary, tmp_path, "pkg", "publish", "demo")
+    assert "package published: demo-pkg@0.1.0" in published
+    assert "creator : Mellow Maker" in published
+    assert (tmp_path / "mellow_packages" / "registry" / "demo-pkg" / "0.1.0" / "mellow.toml").is_file()
+
+    installed = _ok(native_binary, tmp_path, "install", "demo-pkg@0.1.0")
+    assert "package installed: demo-pkg@0.1.0" in installed
+    assert "entry   : src/main.mellow" in installed
+    assert "creator : Mellow Maker" in installed
+    current = tmp_path / "mellow_packages" / "installed" / "demo-pkg" / "current"
+    assert (current / "package" / "src" / "main.mellow").is_file()
+    manifest = json.loads((current / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest == _manifest_shape("demo-pkg", "0.1.0", "Mellow Maker")
+
+    listed = _ok(native_binary, tmp_path, "pkg", "list").strip()
+    assert listed.startswith("- demo-pkg@0.1.0 by Mellow Maker -> ")
+    assert listed.endswith("/mellow_packages/installed/demo-pkg/current")
+
+    searched = _ok(native_binary, tmp_path, "pkg", "search", "demo")
+    assert "Found 1 package(s) for 'demo'" in searched
+    assert "- demo-pkg  latest=0.1.0  creator=Mellow Maker" in searched
+    assert "versions=0.1.0" in searched
+
+    info = _ok(native_binary, tmp_path, "pkg", "info", "demo-pkg")
+    assert "name       : demo-pkg" in info
+    assert "latest     : 0.1.0" in info
+    assert "versions   : 0.1.0" in info
+    assert "creator    : Mellow Maker" in info
+    assert "install    : mellow install demo-pkg" in info
+
+
+def test_add_and_remove_keep_manifest_lock_and_aliases_in_sync(
+    native_binary: Path, tmp_path: Path
+) -> None:
+    _write_package(tmp_path / "lib", "lib-pkg", "0.3.0", author="Lib Author")
+    _ok(native_binary, tmp_path, "pkg", "publish", "lib")
+
+    added = _ok(native_binary, tmp_path, "pkg", "add", "lib-pkg")
+    assert "dependency added: lib-pkg (^0.3.0)" in added
+    assert "alias: lib_pkg" in added
+    assert (tmp_path / ".mellow_aliases.json").is_file()
+    project_manifest = (tmp_path / "mellow.toml").read_text(encoding="utf-8")
+    assert 'description = "Mellow project"' in project_manifest
+    assert 'lib-pkg = "^0.3.0"' in project_manifest
+    assert "keywords" not in project_manifest
+
+    aliases = json.loads((tmp_path / ".mellow_aliases.json").read_text(encoding="utf-8"))
+    assert aliases == {"aliases": {"lib_pkg": "lib-pkg"}, "packages": {"lib-pkg": "lib_pkg"}}
+    lock = json.loads((tmp_path / "mellow.lock").read_text(encoding="utf-8"))
+    assert list(lock) == ["lockfile_version", "registry", "packages", "root"]
+    assert lock["lockfile_version"] == 1
+    assert lock["registry"] == "local"
+    assert lock["packages"]["lib-pkg"]["version"] == "0.3.0"
+    assert lock["packages"]["lib-pkg"]["creator"] == "Lib Author"
+    assert lock["packages"]["lib-pkg"]["dependencies"] == {}
+    assert lock["packages"]["lib-pkg"]["sha256"] is None
+    assert lock["root"] == {"dependencies": {"lib-pkg": "0.3.0"}, "imports": []}
+
+    removed = _ok(native_binary, tmp_path, "pkg", "remove", "lib-pkg")
+    assert "dependency removed: lib-pkg" in removed
+    assert "alias removed: lib_pkg" in removed
+    assert "lib-pkg" not in (tmp_path / "mellow.toml").read_text(encoding="utf-8")
+    assert json.loads((tmp_path / ".mellow_aliases.json").read_text(encoding="utf-8")) == {
+        "aliases": {},
+        "packages": {},
+    }
+    lock = json.loads((tmp_path / "mellow.lock").read_text(encoding="utf-8"))
+    assert lock["packages"] == {}
+    assert lock["root"]["dependencies"] == {}
+    assert _ok(native_binary, tmp_path, "pkg", "list").strip() == "No packages installed."
+
+
+def test_install_resolves_dependencies_recursively(native_binary: Path, tmp_path: Path) -> None:
+    _write_package(tmp_path / "child", "child-pkg", "0.5.0")
+    _write_package(tmp_path / "parent", "parent-pkg", "0.2.0", deps={"child-pkg": "^0.5.0"})
+    _ok(native_binary, tmp_path, "pkg", "publish", "child")
+    _ok(native_binary, tmp_path, "pkg", "publish", "parent")
+    _ok(native_binary, tmp_path, "pkg", "install", "parent-pkg", "--project-dir", str(tmp_path))
+
+    lines = _ok(native_binary, tmp_path, "pkg", "list").strip().splitlines()
+    assert [line.split(" by ")[0] for line in lines] == [
+        "- child-pkg@0.5.0",
+        "- parent-pkg@0.2.0",
+    ]
+    lock = json.loads((tmp_path / "mellow.lock").read_text(encoding="utf-8"))
+    assert sorted(lock["packages"]) == ["child-pkg", "parent-pkg"]
+    assert lock["packages"]["parent-pkg"]["dependencies"] == {"child-pkg": "^0.5.0"}
+
+
+def test_unknown_package_reports_failure(native_binary: Path, tmp_path: Path) -> None:
+    result = _run(native_binary, tmp_path, "pkg", "install", "missing-pkg")
+    assert result.returncode != 0
+    assert "package not found in local registry: missing-pkg" in result.stderr

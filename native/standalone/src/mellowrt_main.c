@@ -3,6 +3,7 @@
    No Python dependency. Build: cmake -S . -B build && cmake --build build
 */
 #include "mellowrt.h"
+#include "mellowrt_pkg.h"
 #include "mellowrt_syscalls.h"
 #include "mellowrt_sm_cli.h"
 #include "mellowrt_server.h"

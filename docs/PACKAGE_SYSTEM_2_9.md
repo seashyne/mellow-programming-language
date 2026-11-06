@@ -150,6 +150,33 @@ The scoped standard-library package set contains:
 `@mellow/std-ai`, `@mellow/std-console`, `@mellow/std-game`,
 `@mellow/std-http`, `@mellow/std-json`, and `@mellow/std-storage`.
 
+## Native local package tooling
+
+The standalone C binary (`native/standalone/src/mellowrt_pkg.c`) implements the
+local half of this workflow with no Python dependency:
+
+```bash
+mellow pkg init ./my-package --name my-package --author "Your Name"
+mellow pkg publish ./my-package
+mellow pkg install my-package[@version] [--project-dir DIR] [--no-deps]
+mellow pkg list [--project-dir DIR]
+mellow pkg search QUERY
+mellow pkg info NAME
+mellow pkg add NAME [--alias A] [--project-dir DIR] [--no-deps]
+mellow pkg remove NAME [--project-dir DIR]
+mellow pkg uninstall NAME [--project-dir DIR]
+```
+
+`install`, `add`, `remove`, `uninstall`, `search`, and `publish` also work as
+top-level verbs. The native commands read and write the same `mellow.toml`,
+`mellow.pkg.json`, `mellow.lock`, and `.mellow_aliases.json` formats as the
+Python reference, including recursive dependency installs, `^`/`~`/range
+version selection, and creator metadata.
+
+Remote registry access is not part of the native surface yet: publishing writes
+to `mellow_packages/registry/` under the current directory, and installs resolve
+from that local registry plus bundled `starter_packages/`.
+
 ## Publishing an update
 
 1. Change the package version in `mellow.toml`.
@@ -169,8 +196,9 @@ or major version instead.
 
 ## Known boundaries
 
-- Package tooling is still implemented in Python and is outside the frozen
-  Full Native C Core Profile.
+- Package tooling is split: local init/publish/install/list/search/info/add/
+  remove run natively in the standalone C binary, while remote registry
+  fetches, `.mpkg` ZIP archives, and manifest signing remain Python-only.
 - The repository registry server is suitable for development and self-hosting;
   production deployment still needs durable database/object storage,
   operational monitoring, backups, rate limiting, and key rotation.

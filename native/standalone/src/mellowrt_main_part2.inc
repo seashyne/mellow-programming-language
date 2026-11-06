@@ -51,6 +51,11 @@ int main(int argc, char **argv){
         native_doctor(argv[0]);
         return 0;
     }
+    if(!strcmp(argv[1],"pkg")||!strcmp(argv[1],"install")||!strcmp(argv[1],"add")||
+       !strcmp(argv[1],"remove")||!strcmp(argv[1],"uninstall")||!strcmp(argv[1],"search")||
+       !strcmp(argv[1],"publish")){
+        return mellowrt_pkg_cli(argc,argv);
+    }
     if(!strcmp(argv[1],"sm")){
         return mellowrt_sm_cli(argc,argv);
     }

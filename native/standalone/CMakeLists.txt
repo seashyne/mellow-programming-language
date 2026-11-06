@@ -40,6 +40,7 @@ add_library(mellowrt_core STATIC
   src/mellowrt_money.c
   src/mellowrt_platform.c
   src/mellowrt_packages.c
+  src/mellowrt_pkg.c
   src/mellowrt_scheduler.c
   src/mellowrt_server.c
   src/mellowrt_sm_cli.c
